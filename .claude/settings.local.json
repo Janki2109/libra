@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir -Recurse -Directory)",
+      "Bash(grep -E \"^.*\\\\\\\\\\\\\\\\\\(backend|frontend|database|docker|docs\\).*$\")",
+      "Bash(Get-ChildItem -Recurse \"C:\\\\Users\\\\ABC\\\\Downloads\\\\libratry\\\\libra\\\\backend\" -Filter \"*.go\")",
+      "Bash(Select-Object FullName)"
+    ]
+  }
+}

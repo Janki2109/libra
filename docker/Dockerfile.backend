@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+#
+# Build context is the repository root:
+#   docker build -f docker/Dockerfile.backend -t libra-api .
+
+# ─── BUILD ───────────────────────────────────
+FROM golang:1.26-alpine AS build
+
+WORKDIR /src
+
+# Dependencies are copied and downloaded first so the module cache layer
+# survives every source-only change.
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+COPY backend/ ./
+
+# CGO_ENABLED=0 gives a static binary that runs on scratch/distroless.
+# -trimpath and the ldflags strip local paths, the symbol table and DWARF, so
+# the image does not carry the build machine's directory layout.
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o /out/libra-api .
+
+# ─── RUNTIME ─────────────────────────────────
+FROM alpine:3.20
+
+# ca-certificates: the server makes outbound TLS calls to Razorpay, SMTP and
+# the eCourts gateway — without these every one fails x509 verification.
+# tzdata: hearing dates and cause lists are Asia/Kolkata; the default UTC-only
+# image would report the wrong day for anything after 18:30 IST.
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S libra \
+    && adduser -S -G libra -H -s /sbin/nologin libra
+
+ENV TZ=Asia/Kolkata
+
+COPY --from=build /out/libra-api /usr/local/bin/libra-api
+
+# Never run as root.
+USER libra
+
+EXPOSE 8080
+
+# /ready checks the database too — /health only proves the process is alive.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8080/ready >/dev/null 2>&1 || exit 1
+
+ENTRYPOINT ["/usr/local/bin/libra-api"]

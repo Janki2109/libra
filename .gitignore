@@ -1,0 +1,69 @@
+# ─── SECRETS ─────────────────────────────────
+# backend/.env was committed to this repository with a real JWT signing key and
+# database password in it. Anyone with repo access could forge a token for any
+# user. It is untracked now, but the values remain in git history — rotate
+# every one of them.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# ─── GO ──────────────────────────────────────
+/backend/libra
+/backend/libra-api
+/backend/*.exe
+/backend/tmp/
+vendor/
+
+# ─── FLUTTER / DART ──────────────────────────
+/frontend/.dart_tool/
+/frontend/.packages
+/frontend/.flutter-plugins
+/frontend/.flutter-plugins-dependencies
+/frontend/build/
+/frontend/.pub-cache/
+/frontend/.pub/
+/frontend/coverage/
+
+# Android
+/frontend/android/.gradle/
+/frontend/android/.kotlin/
+/frontend/android/local.properties
+/frontend/android/app/release/
+/frontend/android/key.properties
+/frontend/android/app/upload-keystore.jks
+
+# iOS / macOS
+/frontend/ios/Pods/
+/frontend/ios/.symlinks/
+/frontend/ios/Flutter/Flutter.framework
+/frontend/ios/Flutter/Flutter.podspec
+/frontend/ios/Flutter/Generated.xcconfig
+/frontend/ios/Flutter/flutter_export_environment.sh
+/frontend/macos/Pods/
+
+# ─── IDE / OS ────────────────────────────────
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+
+.env
+.env.*
+!.env.example
+
+node_modules/
+build/
+dist/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.idea/
+.vscode/
+*.log

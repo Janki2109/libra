@@ -1,0 +1,84 @@
+# Local development stack.
+#
+#   cp .env.example .env      # then edit it
+#   docker compose -f docker/docker-compose.yml up --build
+#
+# The API applies its own migrations on startup, so the database is usable as
+# soon as the api service reports healthy.
+
+name: libra
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: ${DB_NAME:-libra_law}
+    volumes:
+      - libra_db:/var/lib/postgresql/data
+    ports:
+      # Bound to loopback only. Publishing 5432 on 0.0.0.0 would expose the
+      # database to the local network.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    healthcheck:
+      # The api service waits on this, so it never starts against a database
+      # that is still initialising.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-libra_law}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      APP_ENV: ${APP_ENV:-development}
+
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      DB_NAME: ${DB_NAME:-libra_law}
+      # Inside the compose network there is no TLS terminator in front of
+      # Postgres. In production this must be 'require' or stronger — see
+      # config.Validate, which refuses to start otherwise.
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env — do not reuse the repo default}
+      JWT_EXPIRY: ${JWT_EXPIRY:-24h}
+
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      RUN_MIGRATIONS: "true"
+
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+
+      ECOURTS_API_BASE: ${ECOURTS_API_BASE:-}
+      ECOURTS_API_KEY: ${ECOURTS_API_KEY:-}
+    ports:
+      - "${PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ready >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  libra_db:

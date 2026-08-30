@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The manifest previously set android:usesCleartextTraffic="true", which allows
+  the app to talk to ANY host over plain HTTP — in release builds, on customer
+  devices. This app carries privileged client case files and a bearer token, so
+  a shipped build must refuse plaintext outright.
+
+  This config keeps TLS mandatory everywhere and carves out only the loopback
+  addresses a developer needs for a local API:
+    10.0.2.2  — the host machine as seen from the Android emulator
+    127.0.0.1 / localhost — a device on a reverse-forwarded port (adb reverse)
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <!-- Dev machine's LAN IP, for a release APK built to test against a
+             backend running on the same Wi-Fi rather than a deployed server.
+             This changes whenever the dev machine reconnects to Wi-Fi/gets a
+             new DHCP lease — check with `ipconfig` before assuming it's
+             still current. -->
+        <domain includeSubdomains="false">192.168.1.32</domain>
+    </domain-config>
+</network-security-config>

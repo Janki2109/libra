@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "710262553308",
+    "project_id": "libra-768c1",
+    "storage_bucket": "libra-768c1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:710262553308:android:06fa5281d6eaae17ebd219",
+        "android_client_info": {
+          "package_name": "com.libra.law"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrCgTcIoyVZ5SYUQwJSUB4cWWZsWE8Jag"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
