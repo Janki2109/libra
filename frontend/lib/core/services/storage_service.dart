@@ -95,18 +95,4 @@ class StorageService {
     return prefs.getBool(AppConstants.onboardingSeenKey) ?? false;
   }
 
-  // The plan chosen on the "Choose Your Plan" onboarding slide, carried
-  // forward to the registration form. Cleared once consumed so it can't leak
-  // into an unrelated later signup on the same device.
-  static Future<void> savePendingPlan(String planKey) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.pendingPlanKey, planKey);
-  }
-
-  static Future<String?> takePendingPlan() async {
-    final prefs = await SharedPreferences.getInstance();
-    final plan = prefs.getString(AppConstants.pendingPlanKey);
-    await prefs.remove(AppConstants.pendingPlanKey);
-    return plan;
-  }
 }

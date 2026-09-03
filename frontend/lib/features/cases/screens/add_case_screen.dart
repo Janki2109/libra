@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -14,7 +13,10 @@ const _textPri = Color(0xFF2C1A0E);
 const _textMuted = Color(0xFF3D2C8D);
 
 class AddCaseScreen extends StatefulWidget {
-  const AddCaseScreen({super.key});
+  final String? initialClientId;
+  final String? initialClientName;
+  const AddCaseScreen(
+      {super.key, this.initialClientId, this.initialClientName});
   @override
   State<AddCaseScreen> createState() => _AddCaseScreenState();
 }
@@ -51,6 +53,10 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialClientId != null) {
+      _selectedClientId = widget.initialClientId;
+      _selectedClientName = widget.initialClientName;
+    }
     WidgetsBinding.instance.addPostFrameCallback(
         (_) => context.read<ClientProvider>().loadClients());
   }
@@ -70,6 +76,15 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedClientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please choose a client for this case'),
+        backgroundColor: Color(0xFFD9534F),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+      ));
+      return;
+    }
     HapticFeedback.lightImpact();
     setState(() => _loading = true);
     try {
@@ -102,7 +117,7 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Failed to create case'),
+          content: Text(DioClient.describeError(e)),
           backgroundColor: const Color(0xFFD9534F),
           behavior: SnackBarBehavior.floating,
           shape:
@@ -122,18 +137,6 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
       child: Scaffold(
         backgroundColor: _bg,
         body: Stack(children: [
-          // ── Faded background image ──────────────
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.50,
-              child: Image.asset(
-                'assets/imagies1/wrting case image.webp',
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          // ── Parchment overlay lines ──────────────
-          Positioned.fill(child: CustomPaint(painter: _ParchmentPainter())),
           Column(children: [
             // Brown AppBar
             Container(
@@ -177,7 +180,7 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
               child: ListView(padding: const EdgeInsets.all(16), children: [
                 // Client Selection
                 _SectionHeader(
-                    title: 'Select Client', icon: Icons.person_rounded),
+                    title: 'Select Client *', icon: Icons.person_rounded),
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -228,10 +231,6 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
                         color: _brown),
                     isExpanded: true,
                     items: [
-                      const DropdownMenuItem<String>(
-                          value: null,
-                          child: Text('No client selected',
-                              style: TextStyle(color: _textMuted))),
                       ...clients.map<DropdownMenuItem<String>>(
                           (cl) => DropdownMenuItem(
                                 value: cl['id'],
@@ -317,9 +316,11 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
                     title: 'Case Details', icon: Icons.gavel_rounded),
                 const SizedBox(height: 12),
                 _buildField(_titleCtrl, 'Case Title *', Icons.title_rounded,
-                    validator: (v) => v!.isEmpty ? 'Title required' : null),
+                    validator: (v) => v!.trim().isEmpty ? 'Title required' : null),
                 const SizedBox(height: 10),
-                _buildField(_caseNumCtrl, 'Case Number', Icons.numbers_rounded),
+                _buildField(_caseNumCtrl, 'Case Number *', Icons.numbers_rounded,
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'Case number required' : null),
                 const SizedBox(height: 10),
                 _buildDropdown(
                     label: 'Case Type',
@@ -343,32 +344,47 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
                     title: 'Court Details',
                     icon: Icons.account_balance_rounded),
                 const SizedBox(height: 12),
-                _buildField(_courtNameCtrl, 'Court Name',
-                    Icons.account_balance_rounded),
+                _buildField(_courtNameCtrl, 'Court Name *',
+                    Icons.account_balance_rounded,
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'Court name required' : null),
                 const SizedBox(height: 10),
-                _buildField(_courtLocationCtrl, 'Court Location',
-                    Icons.location_on_outlined),
+                _buildField(_courtLocationCtrl, 'Court Location *',
+                    Icons.location_on_outlined,
+                    validator: (v) => v!.trim().isEmpty
+                        ? 'Court location required'
+                        : null),
                 const SizedBox(height: 10),
                 _buildField(
-                    _judgeNameCtrl, 'Judge Name', Icons.person_outlined),
+                    _judgeNameCtrl, 'Judge Name *', Icons.person_outlined,
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'Judge name required' : null),
                 const SizedBox(height: 20),
 
                 _SectionHeader(
                     title: 'Opposite Party', icon: Icons.people_rounded),
                 const SizedBox(height: 12),
-                _buildField(_oppositePartyCtrl, 'Opposite Party Name',
-                    Icons.person_outline_rounded),
+                _buildField(_oppositePartyCtrl, 'Opposite Party Name *',
+                    Icons.person_outline_rounded,
+                    validator: (v) => v!.trim().isEmpty
+                        ? 'Opposite party name required'
+                        : null),
                 const SizedBox(height: 10),
                 _buildField(
-                    _oppLawyerCtrl, 'Opposite Lawyer', Icons.gavel_rounded),
+                    _oppLawyerCtrl, 'Opposite Lawyer *', Icons.gavel_rounded,
+                    validator: (v) => v!.trim().isEmpty
+                        ? 'Opposite lawyer required'
+                        : null),
                 const SizedBox(height: 20),
 
                 _SectionHeader(
-                    title: 'Description', icon: Icons.description_rounded),
+                    title: 'Description *', icon: Icons.description_rounded),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _descCtrl,
                   maxLines: 4,
+                  validator: (v) =>
+                      v!.trim().isEmpty ? 'Description required' : null,
                   style: const TextStyle(color: _textPri, fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Case description...',
@@ -486,60 +502,6 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
       )),
     );
   }
-}
-
-class _ParchmentPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final lp = Paint()
-      ..color = const Color(0xFF3D2C8D).withValues(alpha: 0.05)
-      ..strokeWidth = 0.7
-      ..style = PaintingStyle.stroke;
-    for (double y = 60; y < size.height; y += 28)
-      canvas.drawLine(Offset(20, y), Offset(size.width - 20, y), lp);
-    final mp = Paint()
-      ..color = const Color(0xFF3D2C8D).withValues(alpha: 0.09)
-      ..strokeWidth = 1.0;
-    canvas.drawLine(const Offset(44, 0), Offset(44, size.height), mp);
-    final wp = Paint()
-      ..color = const Color(0xFF150E3D).withValues(alpha: 0.04)
-      ..strokeWidth = 1.8
-      ..style = PaintingStyle.stroke;
-    final cx = size.width * 0.82;
-    final cy = size.height * 0.42;
-    final s = size.width * 0.14;
-    canvas.drawLine(Offset(cx, cy - s * 0.9), Offset(cx, cy + s * 0.2), wp);
-    canvas.drawLine(Offset(cx - s, cy), Offset(cx + s, cy), wp);
-    canvas.drawLine(
-        Offset(cx - s, cy), Offset(cx - s * 1.35, cy + s * 0.85), wp);
-    canvas.drawLine(
-        Offset(cx - s, cy), Offset(cx - s * 0.65, cy + s * 0.85), wp);
-    canvas.drawArc(
-        Rect.fromCenter(
-            center: Offset(cx - s, cy + s * 0.85),
-            width: s * 0.7,
-            height: s * 0.22),
-        math.pi,
-        math.pi,
-        false,
-        wp);
-    canvas.drawLine(
-        Offset(cx + s, cy), Offset(cx + s * 1.35, cy + s * 0.75), wp);
-    canvas.drawLine(
-        Offset(cx + s, cy), Offset(cx + s * 0.65, cy + s * 0.75), wp);
-    canvas.drawArc(
-        Rect.fromCenter(
-            center: Offset(cx + s, cy + s * 0.75),
-            width: s * 0.7,
-            height: s * 0.22),
-        math.pi,
-        math.pi,
-        false,
-        wp);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter o) => false;
 }
 
 class _SectionHeader extends StatelessWidget {

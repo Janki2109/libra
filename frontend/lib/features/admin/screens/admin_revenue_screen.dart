@@ -1,16 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '../../../core/services/dio_client.dart';
+import 'package:intl/intl.dart';
 
-const _bg = Color(0xFFF5ECD7);
-const _bgCard = Color(0xFFFFFFFF);
-const _brown = Color(0xFF5C3317);
-const _brownDark = Color(0xFF3D2008);
-const _gold = Color(0xFFB8860B);
-const _border = Color(0xFFD4B896);
-const _textPri = Color(0xFF2C1A0E);
-const _green = Color(0xFF2E8B57);
-const _blue = Color(0xFF4A90D9);
+import '../repositories/admin_repository.dart';
+import '../widgets/admin_shell.dart';
+import '../widgets/admin_widgets.dart';
 
 class AdminRevenueScreen extends StatefulWidget {
   const AdminRevenueScreen({super.key});
@@ -19,259 +12,248 @@ class AdminRevenueScreen extends StatefulWidget {
 }
 
 class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
-  Map<String, dynamic> _revenue = {};
+  final _repo = AdminRepository();
   bool _loading = true;
+  String? _error;
+  Map<String, dynamic> _summary = {};
+  Map<String, dynamic> _buckets = {};
+  List<dynamic> _trend = [];
+  DateTimeRange? _range;
+
+  List<dynamic> _invoices = [];
+  bool _invoicesLoading = true;
+  String _invoiceStatus = '';
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadInvoices();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  Future<void> _loadInvoices() async {
+    setState(() => _invoicesLoading = true);
     try {
-      final res = await DioClient.instance.get('/admin/revenue');
+      final res = await _repo.invoices(status: _invoiceStatus);
       setState(() {
-        _revenue = res.data['data'] ?? {};
-        _loading = false;
+        _invoices = (res['data'] as List?) ?? [];
+        _invoicesLoading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
+    } on AdminException catch (_) {
+      setState(() => _invoicesLoading = false);
     }
   }
 
-  String _fmt(dynamic v) {
-    final n = (v as num?)?.toDouble() ?? 0;
-    if (n >= 100000) return '₹${(n / 100000).toStringAsFixed(1)}L';
-    if (n >= 1000) return '₹${(n / 1000).toStringAsFixed(1)}K';
-    return '₹${n.toStringAsFixed(0)}';
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final res = await _repo.revenue(
+        from: _range != null ? DateFormat('yyyy-MM-dd').format(_range!.start) : null,
+        to: _range != null ? DateFormat('yyyy-MM-dd').format(_range!.end) : null,
+      );
+      final data = res['data'] as Map<String, dynamic>? ?? {};
+      setState(() {
+        _summary = (data['summary'] as Map<String, dynamic>?) ?? {};
+        _buckets = (data['consultation_revenue_period_buckets'] as Map<String, dynamic>?) ?? {};
+        _trend = (data['revenue_30d'] as List?) ?? [];
+        _loading = false;
+      });
+    } on AdminException catch (e) {
+      setState(() {
+        _loading = false;
+        _error = e.message;
+      });
+    }
+  }
+
+  num _n(String k) => (_summary[k] as num?) ?? 0;
+
+  Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+        context: context, firstDate: DateTime(now.year - 2), lastDate: DateTime(now.year + 1), initialDateRange: _range);
+    if (picked != null) {
+      setState(() => _range = picked);
+      _load();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      body: Column(children: [
-        Container(
-          decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [_brown, _brownDark],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight)),
-          child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 16, 16),
-                child: Row(children: [
-                  IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded,
-                          color: Colors.white),
-                      onPressed: () => context.pop()),
-                  const Expanded(
-                      child: Text('Revenue Analytics',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700))),
-                  IconButton(
-                      icon: const Icon(Icons.refresh_rounded,
-                          color: Colors.white),
-                      onPressed: _load),
+    return AdminShell(
+      activeRoute: '/admin/revenue',
+      title: 'Billing / Revenue',
+      actions: [
+        TextButton.icon(
+            onPressed: _pickRange,
+            icon: const Icon(Icons.date_range_rounded, size: 16),
+            label: Text(_range == null
+                ? 'Date range'
+                : '${DateFormat('d MMM').format(_range!.start)} - ${DateFormat('d MMM').format(_range!.end)}')),
+        if (_range != null)
+          IconButton(
+              icon: const Icon(Icons.close_rounded, size: 18),
+              onPressed: () {
+                setState(() => _range = null);
+                _load();
+              }),
+        IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
+      ],
+      child: _loading
+          ? const Padding(padding: EdgeInsets.only(top: 100), child: Center(child: CircularProgressIndicator()))
+          : _error != null
+              ? AdminEmptyState(message: _error!)
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  AdminSectionCard(
+                    title: 'Revenue Summary',
+                    child: Column(children: [
+                      Row(children: [
+                        Expanded(child: AdminStatCard(label: 'Gross Revenue', value: fmtRupees(_n('gross_revenue')), icon: Icons.trending_up_rounded, color: kAdminGreen)),
+                        const SizedBox(width: 12),
+                        Expanded(child: AdminStatCard(label: 'Net Revenue', value: fmtRupees(_n('net_revenue')), icon: Icons.account_balance_wallet_rounded, color: kAdminAccent)),
+                        const SizedBox(width: 12),
+                        Expanded(child: AdminStatCard(label: 'Refunds', value: fmtRupees(_n('refund_amount')), icon: Icons.replay_rounded, color: kAdminRed)),
+                        const SizedBox(width: 12),
+                        Expanded(child: AdminStatCard(label: 'Successful Payments', value: '${_n('successful_consultation_payments') + _n('successful_subscription_payments')}', icon: Icons.check_circle_rounded, color: kAdminGreen)),
+                      ]),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        Expanded(child: AdminStatCard(label: 'Lawyer Earnings (gross)', value: fmtRupees(_n('lawyer_earnings_gross')), icon: Icons.gavel_rounded, color: kAdminGold, subtitle: '100% — no commission split exists')),
+                        const SizedBox(width: 12),
+                        Expanded(child: AdminStatCard(label: 'Platform Revenue', value: fmtRupees(_n('platform_revenue')), icon: Icons.business_center_rounded, color: kAdminAccent, subtitle: 'Subscriptions + invoice platform fees')),
+                        const SizedBox(width: 12),
+                        Expanded(child: AdminStatCard(label: 'Firm Invoice Revenue', value: fmtRupees(_n('firm_invoice_revenue')), icon: Icons.receipt_long_rounded, color: kAdminGreen, subtitle: 'Service amount only, excl. GST/fee')),
+                        const SizedBox(width: 12),
+                        Expanded(child: AdminStatCard(label: 'GST Collected', value: fmtRupees(_n('gst_collected')), icon: Icons.receipt_rounded, color: kAdminAmber, subtitle: 'Pass-through — not platform revenue')),
+                      ]),
+                    ]),
+                  ),
+                  const SizedBox(height: 20),
+                  _invoicesSection(),
+                  const SizedBox(height: 20),
+                  AdminSectionCard(
+                    title: 'Consultation Revenue by Period',
+                    child: Row(children: [
+                      Expanded(child: _bucketTile('Today', _buckets['today'])),
+                      Expanded(child: _bucketTile('This Week', _buckets['week'])),
+                      Expanded(child: _bucketTile('This Month', _buckets['month'])),
+                      Expanded(child: _bucketTile('This Year', _buckets['year'])),
+                    ]),
+                  ),
+                  const SizedBox(height: 20),
+                  AdminSectionCard(
+                    title: 'Consultation Revenue — last 30 days',
+                    child: SizedBox(
+                      height: 90,
+                      child: _trend.isEmpty
+                          ? const AdminEmptyState()
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: _trend.map((d) {
+                                final v = ((d['value'] as num?) ?? 0).toDouble();
+                                final maxV = _trend
+                                    .map((e) => ((e['value'] as num?) ?? 0).toDouble())
+                                    .reduce((a, b) => a > b ? a : b)
+                                    .clamp(1, double.infinity);
+                                final h = (v / maxV) * 80 + 2;
+                                return Expanded(
+                                  child: Tooltip(
+                                    message: '${d['date']}: ${fmtRupees(v)}',
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 1),
+                                      child: Container(
+                                          height: h,
+                                          decoration: BoxDecoration(
+                                              color: v > 0 ? kAdminGreen : kAdminBorder,
+                                              borderRadius: BorderRadius.circular(2))),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No refund-issuing feature exists yet — refund figures reflect the schema being ready, not an active flow.',
+                    style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5, fontStyle: FontStyle.italic),
+                  ),
                 ]),
-              )),
-        ),
-        Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: _brown))
-                : RefreshIndicator(
-                    color: _brown,
-                    backgroundColor: _bgCard,
-                    onRefresh: _load,
-                    child:
-                        ListView(padding: const EdgeInsets.all(16), children: [
-                      // Total revenue card
-                      Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                  colors: [_brown, _brownDark]),
-                              borderRadius: BorderRadius.circular(16)),
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Total Revenue',
-                                    style: TextStyle(
-                                        color: Colors.white70, fontSize: 12)),
-                                Text(_fmt(_revenue['total_revenue'] ?? 0),
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.w900)),
-                                const SizedBox(height: 10),
-                                Row(children: [
-                                  _RevPill(
-                                      'This Month',
-                                      _fmt(_revenue['monthly_revenue'] ?? 0),
-                                      _gold),
-                                  const SizedBox(width: 10),
-                                  _RevPill(
-                                      'This Week',
-                                      _fmt(_revenue['weekly_revenue'] ?? 0),
-                                      const Color(0xFF90EE90)),
-                                ]),
-                              ])),
-                      const SizedBox(height: 16),
-
-                      // Revenue breakdown
-                      const Text('Revenue Sources',
-                          style: TextStyle(
-                              color: _textPri,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 12),
-                      _RevCard(
-                          '💳 Subscription Revenue',
-                          _fmt(_revenue['subscription_revenue'] ?? 0),
-                          _green,
-                          Icons.subscriptions_rounded),
-                      _RevCard(
-                          '🤝 Consultation Commission',
-                          _fmt(_revenue['consultation_revenue'] ?? 0),
-                          _blue,
-                          Icons.handshake_rounded),
-                      _RevCard(
-                          '⭐ Featured Listings',
-                          _fmt(_revenue['featured_revenue'] ?? 0),
-                          _gold,
-                          Icons.star_rounded),
-                      _RevCard(
-                          '🎓 Certification Sales',
-                          _fmt(_revenue['certification_revenue'] ?? 0),
-                          const Color(0xFF7C3AED),
-                          Icons.workspace_premium_rounded),
-                      _RevCard(
-                          '🏢 Law Firm Plans',
-                          _fmt(_revenue['firm_revenue'] ?? 0),
-                          _brown,
-                          Icons.business_rounded),
-                      const SizedBox(height: 20),
-
-                      // Subscription breakdown
-                      const Text('Subscriptions by Plan',
-                          style: TextStyle(
-                              color: _textPri,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 12),
-                      ...([
-                        [
-                          'Student Pro - ₹99',
-                          _revenue['student_pro_count'] ?? 0,
-                          _blue
-                        ],
-                        [
-                          'Student Premium - ₹199',
-                          _revenue['student_premium_count'] ?? 0,
-                          const Color(0xFF7C3AED)
-                        ],
-                        [
-                          'Lawyer Pro - ₹499',
-                          _revenue['lawyer_pro_count'] ?? 0,
-                          _brown
-                        ],
-                        [
-                          'Lawyer Premium - ₹999',
-                          _revenue['lawyer_premium_count'] ?? 0,
-                          _gold
-                        ],
-                        [
-                          'Law Firm - ₹2999',
-                          _revenue['firm_count'] ?? 0,
-                          _green
-                        ],
-                      ])
-                          .map((item) => Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                  color: _bgCard,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border:
-                                      Border.all(color: _border, width: 0.8)),
-                              child: Row(children: [
-                                Expanded(
-                                    child: Text(item[0] as String,
-                                        style: const TextStyle(
-                                            color: _textPri,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500))),
-                                Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 4),
-                                    decoration: BoxDecoration(
-                                        color:
-                                            (item[2] as Color).withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(8)),
-                                    child: Text('${item[1]} users',
-                                        style: TextStyle(
-                                            color: item[2] as Color,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12))),
-                              ]))),
-                      const SizedBox(height: 40),
-                    ]))),
-      ]),
     );
   }
 
-  Widget _RevPill(String label, String value, Color color) => Expanded(
-      child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-          decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(10)),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label,
-                style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 9)),
-            Text(value,
-                style: TextStyle(
-                    color: color, fontSize: 15, fontWeight: FontWeight.w800)),
-          ])));
+  Widget _bucketTile(String label, dynamic value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(fmtRupees(value as num?), style: const TextStyle(color: kAdminTextPri, fontSize: 18, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5)),
+      ]);
 
-  Widget _RevCard(String label, String value, Color color, IconData icon) =>
-      Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-              color: _bgCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: color.withValues(alpha: 0.2)),
-              boxShadow: [
-                BoxShadow(
-                    color: _brown.withValues(alpha: 0.04),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2))
-              ]),
-          child: Row(children: [
-            Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, color: color, size: 20)),
-            const SizedBox(width: 14),
-            Expanded(
-                child: Text(label,
-                    style: const TextStyle(
-                        color: _textPri,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500))),
-            Text(value,
-                style: TextStyle(
-                    color: color, fontSize: 16, fontWeight: FontWeight.w800)),
-          ]));
+  /// Bills (invoices) with their full mandatory GST/platform-fee breakdown —
+  /// reads straight from `invoices` (see AdminGetInvoices' doc comment) so
+  /// every bill shows up here regardless of whether it was ever paid
+  /// through Razorpay or the manual UPI/bank-transfer proof flow.
+  Widget _invoicesSection() => AdminSectionCard(
+        title: 'Invoices — GST & Platform Fee Breakdown',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(spacing: 10, children: [
+            for (final s in const [
+              ('', 'All'),
+              ('unpaid', 'Unpaid'),
+              ('partial', 'Partial'),
+              ('paid', 'Paid'),
+              ('pending_verification', 'Pending Verification'),
+            ])
+              AdminFilterChip(
+                  label: s.$2,
+                  selected: _invoiceStatus == s.$1,
+                  onTap: () {
+                    setState(() => _invoiceStatus = s.$1);
+                    _loadInvoices();
+                  }),
+          ]),
+          const SizedBox(height: 14),
+          if (_invoicesLoading)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
+          else if (_invoices.isEmpty)
+            const AdminEmptyState()
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(kAdminBg),
+                columns: const [
+                  DataColumn(label: Text('Invoice #')),
+                  DataColumn(label: Text('Lawyer')),
+                  DataColumn(label: Text('Client')),
+                  DataColumn(label: Text('Base Amount')),
+                  DataColumn(label: Text('GST')),
+                  DataColumn(label: Text('Platform Fee')),
+                  DataColumn(label: Text('Total')),
+                  DataColumn(label: Text('Paid')),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('Date')),
+                ],
+                rows: _invoices.map((inv) {
+                  return DataRow(cells: [
+                    DataCell(Text(inv['invoice_number'] ?? '')),
+                    DataCell(Text((inv['lawyer_name'] ?? '').toString().isEmpty ? '—' : inv['lawyer_name'])),
+                    DataCell(Text((inv['client_name'] ?? '').toString().isEmpty ? '—' : inv['client_name'])),
+                    DataCell(Text(fmtRupees(inv['subtotal'] as num?))),
+                    DataCell(Text(
+                        '${fmtRupees(inv['gst_amount'] as num?)} (${(inv['gst_rate'] as num? ?? 0).toStringAsFixed(0)}%)',
+                        style: const TextStyle(color: kAdminAmber))),
+                    DataCell(Text(fmtRupees(inv['platform_fee'] as num?), style: const TextStyle(color: kAdminAccent))),
+                    DataCell(Text(fmtRupees(inv['total_amount'] as num?), style: const TextStyle(fontWeight: FontWeight.w700))),
+                    DataCell(Text(fmtRupees(inv['paid_amount'] as num?), style: const TextStyle(color: kAdminGreen))),
+                    DataCell(AdminBadge(inv['status'] ?? '', AdminBadge.colorFor(inv['status'] ?? ''))),
+                    DataCell(Text(fmtDate(inv['created_at']))),
+                  ]);
+                }).toList(),
+              ),
+            ),
+        ]),
+      );
 }

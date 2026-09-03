@@ -338,7 +338,8 @@ class _EmptyState extends StatelessWidget {
           style: TextStyle(color: _textMuted, fontSize: 13)),
       const SizedBox(height: 24),
       ElevatedButton.icon(
-        onPressed: () => context.push('/clients/add'),
+        onPressed: () => context.push('/clients/add').then(
+            (_) => context.read<ClientProvider>().loadClients()),
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text('Add Client',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),

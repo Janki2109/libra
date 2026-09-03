@@ -71,6 +71,23 @@ services:
 
       ECOURTS_API_BASE: ${ECOURTS_API_BASE:-}
       ECOURTS_API_KEY: ${ECOURTS_API_KEY:-}
+
+      # Smart Draft / AI Tools — services/groq_service.go rotates across
+      # whichever of these are set. Without them GenerateDraft/GenerateAITool
+      # fail with "AI drafting is not configured" no matter what's in .env,
+      # since compose only forwards variables it explicitly lists here.
+      GROQ_API_KEY_1: ${GROQ_API_KEY_1:-}
+      GROQ_API_KEY_2: ${GROQ_API_KEY_2:-}
+      GROQ_API_KEY_3: ${GROQ_API_KEY_3:-}
+      GROQ_API_KEY_4: ${GROQ_API_KEY_4:-}
+      GROQ_API_KEY_5: ${GROQ_API_KEY_5:-}
+      GROQ_API_KEY_6: ${GROQ_API_KEY_6:-}
+      GROQ_API_KEY_7: ${GROQ_API_KEY_7:-}
+      GROQ_API_KEY_8: ${GROQ_API_KEY_8:-}
+      GROQ_API_KEY_9: ${GROQ_API_KEY_9:-}
+      GROQ_API_KEY_10: ${GROQ_API_KEY_10:-}
+      ONEAI_API_KEY: ${ONEAI_API_KEY:-}
+      ONEAI_BASE_URL: ${ONEAI_BASE_URL:-}
     ports:
       - "${PORT:-8080}:8080"
     healthcheck:

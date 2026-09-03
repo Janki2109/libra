@@ -112,6 +112,66 @@ func (r *Razorpay) CreateOrder(
 	return &order, nil
 }
 
+// Refund is a Razorpay refund of a previously captured payment.
+type Refund struct {
+	ID     string `json:"id"`
+	Amount int64  `json:"amount"`
+	Status string `json:"status"`
+}
+
+// CreateRefund refunds a captured payment via Razorpay's
+// POST /v1/payments/{id}/refund. amountPaise is required (rather than
+// omitted for "refund everything") so the caller — which already knows the
+// exact amount of the payment row being refunded — can't accidentally
+// refund more than that payment, and so this stays testable without
+// depending on Razorpay's own default-amount behavior.
+func (r *Razorpay) CreateRefund(ctx context.Context, razorpayPaymentID string, amountPaise int64) (*Refund, error) {
+	if !r.Configured() {
+		return nil, ErrGatewayNotConfigured
+	}
+	if razorpayPaymentID == "" {
+		return nil, errors.New("razorpay payment id is required")
+	}
+	if amountPaise <= 0 {
+		return nil, errors.New("refund amount must be positive")
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"amount": amountPaise,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		"https://api.razorpay.com/v1/payments/"+razorpayPaymentID+"/refund", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(r.keyID, r.keySecret)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := r.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("gateway unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("gateway returned %d: %s", resp.StatusCode, string(raw))
+	}
+
+	var refund Refund
+	if err := json.Unmarshal(raw, &refund); err != nil {
+		return nil, fmt.Errorf("unexpected gateway response: %w", err)
+	}
+	if refund.ID == "" {
+		return nil, errors.New("gateway returned no refund id")
+	}
+	return &refund, nil
+}
+
 // VerifyPaymentSignature checks the handshake the checkout sheet returns.
 //
 // hmac.Equal, not string comparison: `==` on strings short-circuits at the

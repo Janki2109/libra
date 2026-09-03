@@ -1,8 +1,11 @@
-import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '../../../core/services/dio_client.dart';
+import '../../../core/utils/validators.dart';
 import '../providers/client_provider.dart';
 
 // ── Theme Colors ───────────────────────────────────
@@ -34,6 +37,8 @@ class _AddClientScreenState extends State<AddClientScreen> {
   final _idProofNumCtrl = TextEditingController();
   String _idProofType = 'Aadhaar';
   bool _loading = false;
+  Uint8List? _idProofBytes;
+  String _idProofMimeType = 'image/jpeg';
 
   final List<String> _idProofTypes = [
     'Aadhaar',
@@ -59,6 +64,49 @@ class _AddClientScreenState extends State<AddClientScreen> {
     super.dispose();
   }
 
+  Future<void> _pickIdProof() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 12),
+          Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take Photo'),
+            onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from Gallery'),
+            onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (source == null) return;
+
+    final picker = ImagePicker();
+    final picked =
+        await picker.pickImage(source: source, imageQuality: 80, maxWidth: 1600);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final ext = picked.name.split('.').last.toLowerCase();
+    setState(() {
+      _idProofBytes = bytes;
+      _idProofMimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
+    });
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     HapticFeedback.lightImpact();
@@ -77,6 +125,26 @@ class _AddClientScreenState extends State<AddClientScreen> {
       'id_proof_number': _idProofNumCtrl.text.trim(),
       'notes': _notesCtrl.text.trim(),
     });
+
+    // Uploaded as a regular client document, tagged by ID proof type, so it
+    // shows up in the client's Documents list like anything else — there is
+    // no separate "ID proof" storage slot on the client record itself.
+    if (result != null && _idProofBytes != null) {
+      try {
+        await DioClient.instance.post('/documents/upload', data: {
+          'file_name': '$_idProofType - ${_nameCtrl.text.trim()}',
+          'file_content': base64Encode(_idProofBytes!),
+          'file_type': _idProofMimeType == 'image/png' ? 'png' : 'jpg',
+          'mime_type': _idProofMimeType,
+          'category': 'ID Proof',
+          'client_id': result['id'],
+          'description': '$_idProofType (${_idProofNumCtrl.text.trim()})',
+        });
+      } catch (_) {
+        // Client is already created; a failed document upload shouldn't
+        // block that — it can be uploaded again from the client's page.
+      }
+    }
 
     setState(() => _loading = false);
 
@@ -100,8 +168,10 @@ class _AddClientScreenState extends State<AddClientScreen> {
       }
     } else if (mounted) {
       HapticFeedback.vibrate();
+      final message =
+          context.read<ClientProvider>().error ?? 'Failed to add client';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Failed to add client'),
+        content: Text(message),
         backgroundColor: const Color(0xFFD9534F),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -192,19 +262,6 @@ class _AddClientScreenState extends State<AddClientScreen> {
       child: Scaffold(
         backgroundColor: _bg,
         body: Stack(children: [
-          Positioned.fill(
-              child: Opacity(
-                  opacity: 0.50,
-                  child: Image.asset('assets/imagies1/add cilent images.png',
-                      fit: BoxFit.cover))),
-          Positioned.fill(
-              child: Opacity(
-                  opacity: 0.50,
-                  child: Image.asset('assets/imagies1/add cilent images.png',
-                      fit: BoxFit.cover))),
-          // ent background ──
-          Positioned.fill(child: CustomPaint(painter: _ParchmentPainter())),
-
           Column(children: [
             // ── Brown AppBar ──
             Container(
@@ -293,24 +350,38 @@ class _AddClientScreenState extends State<AddClientScreen> {
                     const SizedBox(height: 10),
                     _buildField(
                         controller: _emailCtrl,
-                        label: 'Email Address (for portal access)',
+                        label: 'Email Address (for portal access) *',
                         icon: Icons.email_outlined,
-                        keyboardType: TextInputType.emailAddress),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (v) => v!.trim().isEmpty
+                            ? 'Email is required'
+                            : null),
                     const SizedBox(height: 10),
                     Row(children: [
                       Expanded(
                           child: _buildField(
                               controller: _phoneCtrl,
-                              label: 'Phone Number',
+                              label: 'Phone Number *',
                               icon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone)),
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(10),
+                              ],
+                              validator: (v) => Validators.phone(v))),
                       const SizedBox(width: 10),
                       Expanded(
                           child: _buildField(
                               controller: _altPhoneCtrl,
                               label: 'Alternate Phone',
                               icon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone)),
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(10),
+                              ],
+                              validator: (v) =>
+                                  Validators.phone(v, required: false))),
                     ]),
                     const SizedBox(height: 20),
 
@@ -320,29 +391,38 @@ class _AddClientScreenState extends State<AddClientScreen> {
                     const SizedBox(height: 12),
                     _buildField(
                         controller: _addressCtrl,
-                        label: 'Full Address',
+                        label: 'Full Address *',
                         icon: Icons.home_outlined,
-                        maxLines: 2),
+                        maxLines: 2,
+                        validator: (v) =>
+                            v!.trim().isEmpty ? 'Address required' : null),
                     const SizedBox(height: 10),
                     Row(children: [
                       Expanded(
                           child: _buildField(
                               controller: _cityCtrl,
-                              label: 'City',
-                              icon: Icons.location_city_outlined)),
+                              label: 'City *',
+                              icon: Icons.location_city_outlined,
+                              validator: (v) =>
+                                  v!.trim().isEmpty ? 'City required' : null)),
                       const SizedBox(width: 10),
                       Expanded(
                           child: _buildField(
                               controller: _stateCtrl,
-                              label: 'State',
-                              icon: Icons.map_outlined)),
+                              label: 'State *',
+                              icon: Icons.map_outlined,
+                              validator: (v) => v!.trim().isEmpty
+                                  ? 'State required'
+                                  : null)),
                     ]),
                     const SizedBox(height: 10),
                     _buildField(
                         controller: _pincodeCtrl,
-                        label: 'Pincode',
+                        label: 'Pincode *',
                         icon: Icons.pin_outlined,
-                        keyboardType: TextInputType.number),
+                        keyboardType: TextInputType.number,
+                        validator: (v) =>
+                            v!.trim().isEmpty ? 'Pincode required' : null),
                     const SizedBox(height: 20),
 
                     _SectionHeader(
@@ -380,8 +460,50 @@ class _AddClientScreenState extends State<AddClientScreen> {
                     const SizedBox(height: 10),
                     _buildField(
                         controller: _idProofNumCtrl,
-                        label: 'ID Proof Number',
-                        icon: Icons.numbers_outlined),
+                        label: 'ID Proof Number *',
+                        icon: Icons.numbers_outlined,
+                        validator: (v) => v!.trim().isEmpty
+                            ? 'ID proof number required'
+                            : null),
+                    const SizedBox(height: 10),
+                    _idProofBytes == null
+                        ? OutlinedButton.icon(
+                            onPressed: _pickIdProof,
+                            icon: const Icon(Icons.upload_file_rounded,
+                                color: _brown, size: 18),
+                            label: const Text('Upload ID Proof Document',
+                                style: TextStyle(color: _textPri)),
+                            style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: _border),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12))))
+                        : Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                                color: _bgCard,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: _brown, width: 1.2)),
+                            child: Row(children: [
+                              ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(_idProofBytes!,
+                                      width: 48, height: 48, fit: BoxFit.cover)),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                  child: Text('ID proof document selected',
+                                      style: TextStyle(
+                                          color: _textPri,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13))),
+                              TextButton(
+                                  onPressed: _pickIdProof,
+                                  child: const Text('Replace',
+                                      style: TextStyle(
+                                          color: _gold,
+                                          fontWeight: FontWeight.w700))),
+                            ])),
                     const SizedBox(height: 20),
 
                     _SectionHeader(
@@ -436,11 +558,13 @@ class _AddClientScreenState extends State<AddClientScreen> {
     TextInputType? keyboardType,
     int maxLines = 1,
     String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      inputFormatters: inputFormatters,
       style: const TextStyle(color: _textPri, fontSize: 14),
       validator: validator,
       decoration: InputDecoration(
@@ -466,130 +590,6 @@ class _AddClientScreenState extends State<AddClientScreen> {
       ),
     );
   }
-}
-
-// ── Parchment / Writing Background Painter ─────────
-class _ParchmentPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = const Color(0xFF3D2C8D).withValues(alpha: 0.06)
-      ..strokeWidth = 0.8
-      ..style = PaintingStyle.stroke;
-
-    // Horizontal ruled lines like parchment paper
-    for (double y = 60; y < size.height; y += 28) {
-      canvas.drawLine(Offset(20, y), Offset(size.width - 20, y), linePaint);
-    }
-
-    // Left red margin line like legal paper
-    final marginPaint = Paint()
-      ..color = const Color(0xFF3D2C8D).withValues(alpha: 0.1)
-      ..strokeWidth = 1.2;
-    canvas.drawLine(const Offset(44, 0), Offset(44, size.height), marginPaint);
-
-    // Faded scales of justice watermark center
-    _drawScalesWatermark(canvas, size);
-
-    // Faded "LEGAL DOCUMENT" text-like strokes top right
-    _drawLegalStrokes(canvas, size);
-  }
-
-  void _drawScalesWatermark(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF150E3D).withValues(alpha: 0.04)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    final cx = size.width * 0.75;
-    final cy = size.height * 0.38;
-    final s = size.width * 0.18;
-
-    // Center rod
-    canvas.drawLine(Offset(cx, cy - s * 0.9), Offset(cx, cy + s * 0.15), paint);
-    // Horizontal bar
-    canvas.drawLine(Offset(cx - s, cy), Offset(cx + s, cy), paint);
-
-    // Left pan strings + pan
-    canvas.drawLine(
-        Offset(cx - s, cy), Offset(cx - s * 1.35, cy + s * 0.85), paint);
-    canvas.drawLine(
-        Offset(cx - s, cy), Offset(cx - s * 0.65, cy + s * 0.85), paint);
-    canvas.drawArc(
-        Rect.fromCenter(
-            center: Offset(cx - s, cy + s * 0.85),
-            width: s * 0.7,
-            height: s * 0.22),
-        math.pi,
-        math.pi,
-        false,
-        paint);
-
-    // Right pan strings + pan
-    canvas.drawLine(
-        Offset(cx + s, cy), Offset(cx + s * 1.35, cy + s * 0.75), paint);
-    canvas.drawLine(
-        Offset(cx + s, cy), Offset(cx + s * 0.65, cy + s * 0.75), paint);
-    canvas.drawArc(
-        Rect.fromCenter(
-            center: Offset(cx + s, cy + s * 0.75),
-            width: s * 0.7,
-            height: s * 0.22),
-        math.pi,
-        math.pi,
-        false,
-        paint);
-
-    // Base/stand
-    canvas.drawLine(Offset(cx - s * 0.3, cy + s * 0.15),
-        Offset(cx + s * 0.3, cy + s * 0.15), paint);
-    canvas.drawLine(
-        Offset(cx, cy + s * 0.15), Offset(cx, cy + s * 0.55), paint);
-    canvas.drawLine(Offset(cx - s * 0.25, cy + s * 0.55),
-        Offset(cx + s * 0.25, cy + s * 0.55), paint);
-
-    // Crown on top
-    final crownPath = Path();
-    crownPath.moveTo(cx - s * 0.18, cy - s * 0.9);
-    crownPath.lineTo(cx - s * 0.12, cy - s * 1.05);
-    crownPath.lineTo(cx - s * 0.04, cy - s * 0.95);
-    crownPath.lineTo(cx, cy - s * 1.1);
-    crownPath.lineTo(cx + s * 0.04, cy - s * 0.95);
-    crownPath.lineTo(cx + s * 0.12, cy - s * 1.05);
-    crownPath.lineTo(cx + s * 0.18, cy - s * 0.9);
-    canvas.drawPath(crownPath, paint);
-  }
-
-  void _drawLegalStrokes(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF150E3D).withValues(alpha: 0.035)
-      ..strokeWidth = 1.0
-      ..style = PaintingStyle.stroke;
-
-    // Simulate faded handwriting lines top area
-    final rand = math.Random(42);
-    for (int i = 0; i < 6; i++) {
-      final y = 80.0 + i * 22;
-      final startX = 60.0 + rand.nextDouble() * 20;
-      final endX = size.width * 0.55 + rand.nextDouble() * 40;
-      final path = Path();
-      path.moveTo(startX, y);
-      for (double x = startX + 10; x < endX; x += 8) {
-        path.cubicTo(
-          x,
-          y - rand.nextDouble() * 3,
-          x + 4,
-          y + rand.nextDouble() * 3,
-          x + 8,
-          y,
-        );
-      }
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ── Section Header ─────────────────────────────────

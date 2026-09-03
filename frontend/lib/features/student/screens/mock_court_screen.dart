@@ -63,6 +63,54 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
       'color': Color(0xFF7C3AED),
       'desc': 'Fundamental rights violations'
     },
+    {
+      'name': 'Property Dispute',
+      'icon': '🏠',
+      'color': Color(0xFF8D6E63),
+      'desc': 'Title, possession, partition disputes'
+    },
+    {
+      'name': 'Corporate Law',
+      'icon': '🏢',
+      'color': Color(0xFF1976D2),
+      'desc': 'Company, shareholder, contract disputes'
+    },
+    {
+      'name': 'Labour Dispute',
+      'icon': '👷',
+      'color': Color(0xFFEF6C00),
+      'desc': 'Wrongful termination, wages, workplace rights'
+    },
+    {
+      'name': 'Cyber Crime',
+      'icon': '💻',
+      'color': Color(0xFF0097A7),
+      'desc': 'Hacking, fraud, data theft cases'
+    },
+    {
+      'name': 'Tax Dispute',
+      'icon': '💰',
+      'color': Color(0xFF388E3C),
+      'desc': 'Income tax, GST assessment disputes'
+    },
+    {
+      'name': 'Intellectual Property',
+      'icon': '©️',
+      'color': Color(0xFF5E35B1),
+      'desc': 'Patent, trademark, copyright infringement'
+    },
+    {
+      'name': 'Motor Accident Claim',
+      'icon': '🚗',
+      'color': Color(0xFFC62828),
+      'desc': 'Compensation for road accident injuries'
+    },
+    {
+      'name': 'Environmental Law',
+      'icon': '🌳',
+      'color': Color(0xFF2E7D32),
+      'desc': 'Pollution, land use, environmental clearance'
+    },
   ];
 
   // The Groq key(s) and rotation live on the backend only (services/
@@ -443,18 +491,20 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
             const SizedBox(height: 14),
             // Parties
             if (c['parties'] != null) ...[
-              Row(children: [
-                _PartyChip(
-                    '⚔️ ${(c['parties'] as Map)['plaintiff'] ?? 'Plaintiff'}',
-                    _red),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Flexible(
+                    child: _PartyChip(
+                        '⚔️ ${(c['parties'] as Map)['plaintiff'] ?? 'Plaintiff'}',
+                        _red)),
                 const SizedBox(width: 8),
                 const Text('vs',
                     style: TextStyle(
                         color: _textMuted, fontWeight: FontWeight.w700)),
                 const SizedBox(width: 8),
-                _PartyChip(
-                    '🛡️ ${(c['parties'] as Map)['defendant'] ?? 'Defendant'}',
-                    _blue),
+                Flexible(
+                    child: _PartyChip(
+                        '🛡️ ${(c['parties'] as Map)['defendant'] ?? 'Defendant'}',
+                        _blue)),
               ]),
               const SizedBox(height: 14),
             ],
@@ -741,6 +791,8 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: color.withValues(alpha: 0.3))),
         child: Text(name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
                 color: color, fontSize: 11, fontWeight: FontWeight.w600)),
       );

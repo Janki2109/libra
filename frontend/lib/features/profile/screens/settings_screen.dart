@@ -1,8 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/fcm_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../auth/providers/auth_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,6 +23,115 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _obscureNew = true;
   bool _obscureConfirm = true;
   bool _loading = false;
+
+  static const _pushPrefKey = 'pref_push_notifications';
+  static const _hapticPrefKey = 'pref_haptic_feedback';
+  bool _pushEnabled = true;
+  bool _hapticEnabled = true;
+  bool _prefsLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _pushEnabled = prefs.getBool(_pushPrefKey) ?? true;
+      _hapticEnabled = prefs.getBool(_hapticPrefKey) ?? true;
+      _prefsLoaded = true;
+    });
+  }
+
+  Future<void> _setPushEnabled(bool value) async {
+    setState(() => _pushEnabled = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_pushPrefKey, value);
+    // Actually registers/unregisters this device's token server-side —
+    // toggling this off genuinely stops push delivery, not just the switch.
+    if (value) {
+      await FcmService.instance.syncToken();
+    } else {
+      await FcmService.instance.clearToken();
+    }
+  }
+
+  Future<void> _setHapticEnabled(bool value) async {
+    setState(() => _hapticEnabled = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_hapticPrefKey, value);
+  }
+
+  Future<void> _exportMyData() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+    final data = {
+      'name': user.name,
+      'email': user.email,
+      'phone': user.phone,
+      'designation': user.designation,
+      'role': user.roleName,
+      'account_created': user.createdAt,
+    };
+    final json = const JsonEncoder.withIndent('  ').convert(data);
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Your Data',
+            style: TextStyle(color: AppColors.textPrimary)),
+        content: SingleChildScrollView(
+          child: SelectableText(json,
+              style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontFamily: 'monospace',
+                  fontSize: 12)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: json));
+              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                  content: Text('Copied to clipboard'),
+                  backgroundColor: AppColors.success));
+            },
+            child: const Text('Copy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTextDialog(String title, String body) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title:
+            Text(title, style: const TextStyle(color: AppColors.textPrimary)),
+        content: SingleChildScrollView(
+          child: Text(body,
+              style: const TextStyle(
+                  color: AppColors.textSecondary, height: 1.5)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -40,10 +154,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       return;
     }
-    if (_newPassCtrl.text.length < 6) {
+    if (_newPassCtrl.text.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Password must be at least 6 characters'),
+          content: const Text('Password must be at least 8 characters'),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape:
@@ -58,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       await DioClient.instance.post('/auth/change-password', data: {
-        'old_password': _oldPassCtrl.text,
+        'current_password': _oldPassCtrl.text,
         'new_password': _newPassCtrl.text,
       });
       if (mounted) {
@@ -80,7 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Failed to change password'),
+            content: Text(DioClient.describeError(e)),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
             shape:
@@ -89,7 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     }
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -177,15 +291,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.border),
             ),
-            child: Column(
+            child: !_prefsLoaded
+                ? const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.gold, strokeWidth: 2)))
+                : Column(
               children: [
                 _ToggleTile(
                   icon: Icons.notifications_rounded,
                   label: 'Push Notifications',
                   subtitle: 'Receive hearing and case alerts',
                   color: AppColors.info,
-                  value: true,
-                  onChanged: (v) {},
+                  value: _pushEnabled,
+                  onChanged: _setPushEnabled,
                 ),
                 const Divider(color: AppColors.border, height: 1, indent: 56),
                 _ToggleTile(
@@ -193,17 +313,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   label: 'Haptic Feedback',
                   subtitle: 'Vibration on interactions',
                   color: AppColors.warning,
-                  value: true,
-                  onChanged: (v) {},
-                ),
-                const Divider(color: AppColors.border, height: 1, indent: 56),
-                _ToggleTile(
-                  icon: Icons.dark_mode_rounded,
-                  label: 'Dark Mode',
-                  subtitle: 'Use dark theme',
-                  color: AppColors.purple,
-                  value: true,
-                  onChanged: (v) {},
+                  value: _hapticEnabled,
+                  onChanged: _setHapticEnabled,
                 ),
               ],
             ),
@@ -223,21 +334,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.download_rounded,
                   label: 'Export My Data',
                   color: AppColors.success,
-                  onTap: () {},
+                  onTap: _exportMyData,
                 ),
                 const Divider(color: AppColors.border, height: 1, indent: 56),
                 _ActionTile(
                   icon: Icons.privacy_tip_outlined,
                   label: 'Privacy Policy',
                   color: AppColors.info,
-                  onTap: () {},
+                  onTap: () => _showTextDialog('Privacy Policy',
+                      'Libra Law collects only the information needed to provide the '
+                      'service: your account details, case and client records you '
+                      'enter, and documents you upload. Data is stored securely and '
+                      'is never sold to third parties. Case and client information is '
+                      'visible only to your firm. Contact your firm administrator to '
+                      'request deletion of your account data.'),
                 ),
                 const Divider(color: AppColors.border, height: 1, indent: 56),
                 _ActionTile(
                   icon: Icons.description_outlined,
                   label: 'Terms of Service',
                   color: AppColors.textMuted,
-                  onTap: () {},
+                  onTap: () => _showTextDialog('Terms of Service',
+                      'By using Libra Law, you agree to use the platform only for '
+                      'lawful legal practice management. You are responsible for the '
+                      'accuracy of case, client and billing information you enter. '
+                      'Libra Law is a practice management tool and does not provide '
+                      'legal advice. Subscription fees are billed according to the '
+                      'plan you select and are non-refundable except as required by '
+                      'law.'),
                 ),
               ],
             ),

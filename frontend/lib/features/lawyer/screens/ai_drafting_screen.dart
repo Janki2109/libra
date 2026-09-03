@@ -1,10 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/dio_client.dart';
+import '../utils/browser_download.dart';
 
 // OneLegal theme — matches the splash screen and login screen exactly
 // (AppColors is the same palette those already use), so this page visually
@@ -35,20 +40,35 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
   bool _loading = false;
   bool _generated = false;
 
-  // ── AI Tools (Generate Summary / Translator / OCR / Timeline / Ask /
-  // Compare / Citation Verifier) — Drafter above is the existing flow and
-  // stays untouched; these share the same backend + Groq key rotation via a
-  // single new /ai/tool endpoint.
+  // ── AI Tools (Drafter / Generate Summary / Translator / OCR / Timeline /
+  // Ask / Compare / Citation Verifier) — Drafter runs through /ai/draft (the
+  // same endpoint the template flow below already uses); the other seven
+  // share /ai/tool, dispatched server-side by the 'tool' field.
   String? _activeTool;
   final _toolTextCtrl = TextEditingController();
   final _toolSecondTextCtrl = TextEditingController();
   final _toolQuestionCtrl = TextEditingController();
-  final _toolLanguageCtrl = TextEditingController();
+  String? _toolLanguage;
   String _toolResult = '';
   bool _toolLoading = false;
   bool _toolGenerated = false;
   Uint8List? _ocrImageBytes;
   String _ocrMimeType = 'image/jpeg';
+  bool _exporting = false;
+  bool _exportingPdf = false;
+
+  static const List<String> _translateLanguages = [
+    'English',
+    'Hindi',
+    'Marathi',
+    'Gujarati',
+    'Tamil',
+    'Telugu',
+    'Kannada',
+    'Bengali',
+    'Punjabi',
+    'Urdu',
+  ];
 
   final List<Map<String, dynamic>> _aiTools = [
     {
@@ -244,22 +264,16 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
   }
 
   void _selectTool(String key) {
-    if (key == 'drafter') {
-      setState(() {
-        _activeTool = null;
-        _selectedTemplate = null;
-      });
-      return;
-    }
     HapticFeedback.lightImpact();
     setState(() {
       _activeTool = key;
+      _selectedTemplate = null;
       _toolResult = '';
       _toolGenerated = false;
       _toolTextCtrl.clear();
       _toolSecondTextCtrl.clear();
       _toolQuestionCtrl.clear();
-      _toolLanguageCtrl.clear();
+      _toolLanguage = null;
       _ocrImageBytes = null;
     });
   }
@@ -270,6 +284,52 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
       _toolResult = '';
       _toolGenerated = false;
     });
+  }
+
+  // Which text controller is currently mid-extraction, so its own "Upload
+  // Document" button can show a spinner without blocking the others (used
+  // by Compare, which has two independent upload slots).
+  TextEditingController? _extractingInto;
+
+  /// Lets a tool be run against an actual uploaded document instead of
+  /// requiring the text to be pasted in by hand. Extraction happens
+  /// server-side and needs no AI call — it just reads the PDF/DOCX/TXT's
+  /// own text layer — so it works even without any AI provider configured.
+  /// A scanned/image-only PDF has no text layer to pull from; that's what
+  /// the separate OCR tool is for.
+  Future<void> _pickAndExtractDocument(TextEditingController target) async {
+    final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf', 'docx', 'txt'],
+        withData: true);
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    if (file.bytes == null) {
+      _showToolError('Could not read the selected file. Please try again.');
+      return;
+    }
+    final ext = file.name.split('.').last.toLowerCase();
+
+    setState(() => _extractingInto = target);
+    try {
+      final res = await DioClient.instance.post('/ai/extract-text', data: {
+        'file_content': base64Encode(file.bytes!),
+        'file_type': ext,
+      });
+      final text = res.data['data']?['text'] as String? ?? '';
+      setState(() {
+        target.text = text;
+        _extractingInto = null;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Extracted text from ${file.name}'),
+            backgroundColor: const Color(0xFF2E8B57)));
+      }
+    } catch (e) {
+      setState(() => _extractingInto = null);
+      _showToolError(DioClient.describeError(e));
+    }
   }
 
   Future<void> _pickOcrImage(ImageSource source) async {
@@ -299,6 +359,26 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
     final tool = _activeTool;
     if (tool == null) return;
 
+    // Drafter goes through /ai/draft — the same freeform-prompt endpoint the
+    // template flow below already uses — since /ai/tool's dispatch only
+    // covers the other seven tools; everything else shares /ai/tool.
+    if (tool == 'drafter') {
+      if (_toolTextCtrl.text.trim().isEmpty) {
+        _showToolError('Please enter what you need drafted');
+        return;
+      }
+      await _runGenerate(
+        request: () => DioClient.instance.post('/ai/draft', data: {
+          'prompt':
+              'Generate a professional Indian legal document based on the '
+                  'following instructions/content. Follow Indian legal '
+                  'format and conventions, use formal legal language, and '
+                  'make it court-ready:\n\n${_toolTextCtrl.text.trim()}',
+        }),
+      );
+      return;
+    }
+
     final data = <String, dynamic>{'tool': tool};
     switch (tool) {
       case 'summary':
@@ -311,13 +391,12 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
         data['text'] = _toolTextCtrl.text.trim();
         break;
       case 'translate':
-        if (_toolTextCtrl.text.trim().isEmpty ||
-            _toolLanguageCtrl.text.trim().isEmpty) {
-          _showToolError('Please provide the text and target language');
+        if (_toolTextCtrl.text.trim().isEmpty || _toolLanguage == null) {
+          _showToolError('Please provide the text and select a target language');
           return;
         }
         data['text'] = _toolTextCtrl.text.trim();
-        data['target_language'] = _toolLanguageCtrl.text.trim();
+        data['target_language'] = _toolLanguage!;
         break;
       case 'ask':
         if (_toolTextCtrl.text.trim().isEmpty ||
@@ -347,15 +426,31 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
         break;
     }
 
+    await _runGenerate(
+        request: () => DioClient.instance.post('/ai/tool', data: data));
+  }
+
+  /// Shared request/loading/result plumbing for every AI Tool (Drafter
+  /// included) — one place that sets the loading state, unpacks `content`,
+  /// catches a failed request, and treats an empty-but-"successful" response
+  /// as a failure too instead of silently showing a blank result.
+  Future<void> _runGenerate(
+      {required Future<dynamic> Function() request}) async {
     setState(() {
       _toolLoading = true;
       _toolGenerated = false;
     });
     HapticFeedback.lightImpact();
     try {
-      final response = await DioClient.instance.post('/ai/tool', data: data);
+      final response = await request();
+      final content = (response.data['data']?['content'] ?? '') as String;
+      if (content.trim().isEmpty) {
+        setState(() => _toolLoading = false);
+        _showToolError('The AI returned an empty result. Please try again.');
+        return;
+      }
       setState(() {
-        _toolResult = response.data['data']?['content'] ?? '';
+        _toolResult = content;
         _toolLoading = false;
         _toolGenerated = true;
       });
@@ -363,7 +458,7 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
       setState(() => _toolLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('AI service is temporarily unavailable. Please try again.'),
+            content: Text(DioClient.describeError(e)),
             backgroundColor: _error));
       }
     }
@@ -374,6 +469,122 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
         .showSnackBar(SnackBar(content: Text(msg), backgroundColor: _error));
   }
 
+  /// Shared by the Word and PDF buttons on every result (Drafter, every
+  /// other AI Tool, and the template flow) — one implementation instead of
+  /// two near-identical copies, so a fix here fixes both everywhere they're
+  /// used.
+  ///
+  /// dart:io's File and path_provider's getTemporaryDirectory() have no real
+  /// filesystem to work with on Flutter Web — constructing a File there
+  /// throws at runtime (it compiles fine, so this wasn't caught until it ran
+  /// in a browser), which is what made every "Word"/"PDF" button fail with
+  /// "Could not export document: Something went wrong" — a non-network
+  /// error, so DioClient.describeError fell through to its generic message.
+  /// triggerBrowserDownload handles the actual file delivery on web (a
+  /// browser "Save As" via Blob + <a download>); everywhere else this falls
+  /// back to the original temp-file + OS share sheet flow, unchanged.
+  Future<void> _exportFile({
+    required String endpoint,
+    required String title,
+    required String content,
+    required String mimeType,
+    required bool isExporting,
+    required void Function(bool) setExporting,
+  }) async {
+    if (content.trim().isEmpty) {
+      _showToolError('Nothing to export yet — generate a result first.');
+      return;
+    }
+    if (isExporting) return;
+    setExporting(true);
+    try {
+      final res = await DioClient.instance
+          .post(endpoint, data: {'title': title, 'content': content});
+      final data = res.data['data'];
+      final base64File = data?['file_base64'] as String?;
+      final fileName = data?['file_name'] as String?;
+      if (base64File == null || fileName == null) {
+        throw Exception('The server did not return a file');
+      }
+      final bytes = base64Decode(base64File);
+
+      if (triggerBrowserDownload(bytes, fileName, mimeType)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('$fileName downloaded'),
+            backgroundColor: const Color(0xFF2E8B57),
+            behavior: SnackBarBehavior.floating));
+        return;
+      }
+
+      // Non-web: no bare filesystem download, so save to a temp file and
+      // hand it to the OS share sheet (Save to Files, send to another app)
+      // — that stands in for "download" there.
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsBytes(bytes);
+      if (!mounted) return;
+      await Share.shareXFiles([XFile(file.path)],
+          text: 'Exported from OneLegal Smart Draft');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not export document: ${DioClient.describeError(e)}'),
+          backgroundColor: _error));
+    } finally {
+      if (mounted) setExporting(false);
+    }
+  }
+
+  Future<void> _exportAsWord(String title, String content) => _exportFile(
+        endpoint: '/ai/export-docx',
+        title: title,
+        content: content,
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        isExporting: _exporting,
+        setExporting: (v) => setState(() => _exporting = v),
+      );
+
+  /// /ai/export-pdf renders every Indian-language script in the Translator's
+  /// dropdown (Devanagari, Bengali, Gurmukhi, Gujarati, Tamil, Telugu,
+  /// Kannada) with an embedded Unicode font. Arabic/Urdu is the one
+  /// exception still rejected with a clear message — surfaced via the catch
+  /// block above — since it's a cursive script that needs real shaping to
+  /// join letters, which the PDF library can't do; Word/LibreOffice do their
+  /// own shaping on open, so that one script is still pointed there.
+  Future<void> _exportAsPdf(String title, String content) => _exportFile(
+        endpoint: '/ai/export-pdf',
+        title: title,
+        content: content,
+        mimeType: 'application/pdf',
+        isExporting: _exportingPdf,
+        setExporting: (v) => setState(() => _exportingPdf = v),
+      );
+
+  /// Falls back to a clipboard copy instead of surfacing a raw error when
+  /// the browser has no native share target available (desktop browsers
+  /// commonly don't implement the Web Share API) — the previous unguarded
+  /// call is what produced "Could not export document: Something went
+  /// wrong" on the Share button, which doesn't even touch file export.
+  Future<void> _shareText(String content) async {
+    if (content.trim().isEmpty) {
+      _showToolError('Nothing to share yet — generate a result first.');
+      return;
+    }
+    try {
+      await Share.share(content);
+    } catch (_) {
+      Clipboard.setData(ClipboardData(text: content));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text("Sharing isn't available here — copied to clipboard instead."),
+          backgroundColor: Color(0xFF2E8B57),
+          behavior: SnackBarBehavior.floating));
+    }
+  }
+
   void _copyToolResult() {
     Clipboard.setData(ClipboardData(text: _toolResult));
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -381,6 +592,62 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
         backgroundColor: Color(0xFF2E8B57),
         behavior: SnackBarBehavior.floating));
   }
+
+  /// The Word / PDF / Share action row shown under every result — the
+  /// template-generated document and every AI Tool's result — so both
+  /// places stay in sync instead of keeping two copies of the same row.
+  Widget _exportActionsRow(String title, String content) => Row(children: [
+        Expanded(
+            child: OutlinedButton.icon(
+          onPressed: _exporting ? null : () => _exportAsWord(title, content),
+          icon: _exporting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: _goldLight))
+              : const Icon(Icons.description_rounded,
+                  color: _goldLight, size: 18),
+          label: const Text('Word', style: TextStyle(color: _textPri, fontSize: 13)),
+          style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: _border),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12))),
+        )),
+        const SizedBox(width: 8),
+        Expanded(
+            child: OutlinedButton.icon(
+          onPressed:
+              _exportingPdf ? null : () => _exportAsPdf(title, content),
+          icon: _exportingPdf
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: _goldLight))
+              : const Icon(Icons.picture_as_pdf_rounded,
+                  color: _goldLight, size: 18),
+          label: const Text('PDF', style: TextStyle(color: _textPri, fontSize: 13)),
+          style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: _border),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12))),
+        )),
+        const SizedBox(width: 8),
+        Expanded(
+            child: OutlinedButton.icon(
+          onPressed: () => _shareText(content),
+          icon: const Icon(Icons.share_rounded, color: _goldLight, size: 18),
+          label: const Text('Share', style: TextStyle(color: _textPri, fontSize: 13)),
+          style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: _border),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12))),
+        )),
+      ]);
 
   Future<void> _generate() async {
     if (_selectedTemplate == null) return;
@@ -448,9 +715,37 @@ Generate the complete document now:''';
         behavior: SnackBarBehavior.floating));
   }
 
+  /// Steps back one level at a time — result/form → template or tool list →
+  /// tool grid → leave the screen — instead of the header arrow (and the
+  /// system/gesture back button) always leaving Smart Draft outright no
+  /// matter how deep the user was in a tool.
+  bool get _atTopLevel => _activeTool == null && _selectedTemplate == null;
+
+  void _handleBack() {
+    if (_activeTool != null) {
+      _closeTool();
+      return;
+    }
+    if (_selectedTemplate != null) {
+      setState(() {
+        _selectedTemplate = null;
+        _generatedDoc = '';
+        _generated = false;
+        _fieldCtrls.clear();
+      });
+      return;
+    }
+    context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _atTopLevel,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       backgroundColor: _bg,
       body: Column(children: [
         // Header — same navy/purple gradient + gold accent as the OneLegal
@@ -465,7 +760,7 @@ Generate the complete document now:''';
                   IconButton(
                       icon: const Icon(Icons.arrow_back_rounded,
                           color: Colors.white),
-                      onPressed: () => context.pop()),
+                      onPressed: _handleBack),
                   Container(
                     width: 34,
                     height: 34,
@@ -529,6 +824,7 @@ Generate the complete document now:''';
                         ? _buildGeneratedDoc()
                         : _buildForm()),
       ]),
+      ),
     );
   }
 
@@ -954,6 +1250,8 @@ Generate the complete document now:''';
                       borderRadius: BorderRadius.circular(14))),
             ),
           ),
+          const SizedBox(height: 10),
+          _exportActionsRow(_selectedTemplate!['name'], _generatedDoc),
           const SizedBox(height: 40),
         ])),
       ]);
@@ -1060,15 +1358,71 @@ Generate the complete document now:''';
                   height: 1.6,
                   fontFamily: 'monospace')),
         ),
+        const SizedBox(height: 10),
+        _exportActionsRow(
+            _activeTool == 'translate' ? 'Translated Document' : tool['name'],
+            _toolResult),
+      ] else if (!_toolLoading) ...[
+        const SizedBox(height: 20),
+        _toolEmptyState(_activeTool!),
       ],
       const SizedBox(height: 40),
     ]);
   }
 
+  /// Shown before a result exists (and never once one does), so the panel
+  /// never sits blank and never shows stale/placeholder content mistaken for
+  /// real output — only ever the actual generated/translated text once
+  /// _generateTool succeeds.
+  Widget _toolEmptyState(String toolKey) {
+    final message = toolKey == 'translate'
+        ? 'Your translated text will appear here.'
+        : 'Your result will appear here once generated.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+      decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _border, width: 0.8)),
+      child: Column(children: [
+        Icon(Icons.translate_rounded,
+            color: _textMuted.withValues(alpha: 0.5), size: 36),
+        const SizedBox(height: 12),
+        Text(message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _textMuted, fontSize: 13)),
+      ]),
+    );
+  }
+
   List<Widget> _buildToolInputs(String tool) {
-    Widget textArea(TextEditingController ctrl, String label) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: TextField(
+    Widget textArea(TextEditingController ctrl, String label) {
+      final extracting = _extractingInto == ctrl;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          OutlinedButton.icon(
+            onPressed:
+                extracting ? null : () => _pickAndExtractDocument(ctrl),
+            icon: extracting
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: _goldLight))
+                : const Icon(Icons.upload_file_rounded,
+                    color: _goldLight, size: 16),
+            label: Text(extracting ? 'Extracting…' : 'Upload Document (PDF/DOCX/TXT)',
+                style: const TextStyle(color: _textPri, fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: _border),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+          ),
+          const SizedBox(height: 8),
+          TextField(
             controller: ctrl,
             maxLines: 8,
             minLines: 4,
@@ -1089,7 +1443,9 @@ Generate the complete document now:''';
                   borderSide: const BorderSide(color: _gold, width: 1.5)),
             ),
           ),
-        );
+        ]),
+      );
+    }
 
     Widget shortField(TextEditingController ctrl, String label) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -1114,7 +1470,46 @@ Generate the complete document now:''';
           ),
         );
 
+    Widget languageDropdown() => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: DropdownButtonFormField<String>(
+            initialValue: _toolLanguage,
+            isExpanded: true,
+            dropdownColor: _bgCard,
+            style: const TextStyle(color: _textPri, fontSize: 14),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                color: _goldLight),
+            decoration: InputDecoration(
+              labelText: 'Target Language',
+              labelStyle: const TextStyle(color: _textMuted, fontSize: 13),
+              filled: true,
+              fillColor: _surface,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _border)),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _border, width: 0.8)),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _gold, width: 1.5)),
+            ),
+            hint: const Text('Select Language',
+                style: TextStyle(color: _textMuted, fontSize: 14)),
+            items: _translateLanguages
+                .map((lang) =>
+                    DropdownMenuItem(value: lang, child: Text(lang)))
+                .toList(),
+            onChanged: (v) => setState(() => _toolLanguage = v),
+          ),
+        );
+
     switch (tool) {
+      case 'drafter':
+        return [
+          textArea(_toolTextCtrl,
+              'Describe what you need drafted, or paste reference content'),
+        ];
       case 'summary':
       case 'timeline':
       case 'citation':
@@ -1122,7 +1517,7 @@ Generate the complete document now:''';
       case 'translate':
         return [
           textArea(_toolTextCtrl, 'Paste the document/text'),
-          shortField(_toolLanguageCtrl, 'Target language (e.g. Hindi)'),
+          languageDropdown(),
         ];
       case 'ask':
         return [

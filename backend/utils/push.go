@@ -2,7 +2,9 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"os"
 	"strings"
 
 	firebase "firebase.google.com/go/v4"
@@ -27,7 +29,23 @@ func InitFCM() {
 	}
 
 	ctx := context.Background()
-	app, err := firebase.NewApp(ctx, nil, option.WithCredentialsFile(credPath))
+
+	// The Admin SDK's Messaging() client needs a project ID up front and
+	// doesn't reliably pull one from the credentials file on its own — read
+	// it directly from the same service-account JSON rather than requiring
+	// a second, separate env var just to repeat a value already in the file.
+	var projectID string
+	if raw, readErr := os.ReadFile(credPath); readErr == nil {
+		var cred struct {
+			ProjectID string `json:"project_id"`
+		}
+		if json.Unmarshal(raw, &cred) == nil {
+			projectID = cred.ProjectID
+		}
+	}
+
+	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: projectID},
+		option.WithCredentialsFile(credPath))
 	if err != nil {
 		log.Printf("[fcm] failed to initialize Firebase app: %v", err)
 		return

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../constants/app_constants.dart';
+import 'dio_client.dart';
 import 'storage_service.dart';
 
 enum CallState { connecting, ringing, connected, ended, failed }
@@ -30,6 +31,8 @@ class WebRTCCallSession extends ChangeNotifier {
   bool _madeOffer = false;
   bool _closed = false;
   String? _error;
+  DateTime? _connectedAt;
+  bool isSpeakerOn = false;
 
   final RTCVideoRenderer localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
@@ -72,6 +75,14 @@ class WebRTCCallSession extends ChangeNotifier {
           remoteStream = event.streams[0];
           remoteRenderer.srcObject = remoteStream;
           state = CallState.connected;
+          _connectedAt ??= DateTime.now();
+          // Video calls default to the earpiece speaker like a normal call
+          // otherwise, so switch to the loud speaker automatically once
+          // connected — matches how every other calling app behaves.
+          if (video) {
+            isSpeakerOn = true;
+            Helper.setSpeakerphoneOn(true);
+          }
           notifyListeners();
         }
       };
@@ -205,9 +216,36 @@ class WebRTCCallSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  void toggleSpeaker() {
+    isSpeakerOn = !isSpeakerOn;
+    Helper.setSpeakerphoneOn(isSpeakerOn);
+    notifyListeners();
+  }
+
+  /// Seconds spent actually connected — 0 before the peer ever joined, still
+  /// counting up live once connected (the UI timer reads this every second).
+  int get elapsedSeconds =>
+      _connectedAt == null ? 0 : DateTime.now().difference(_connectedAt!).inSeconds;
+
+  /// Persists the connected duration against the consultation once the call
+  /// ends, so consultation history has a real number to show instead of
+  /// nothing — this was never recorded anywhere before.
+  Future<void> _saveDuration() async {
+    if (_connectedAt == null) return;
+    final seconds = DateTime.now().difference(_connectedAt!).inSeconds;
+    try {
+      await DioClient.instance.post(
+          '/consultations/$consultationId/call/duration',
+          data: {'duration_seconds': seconds});
+    } catch (_) {
+      // Best-effort — a failed save shouldn't block ending the call.
+    }
+  }
+
   Future<void> hangup() async {
     if (_closed) return;
     _closed = true;
+    await _saveDuration();
     _send({'type': 'hangup'});
     await _wsSub?.cancel();
     try {

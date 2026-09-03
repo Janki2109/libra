@@ -29,7 +29,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   List<Map<String, dynamic>> _items = [
     {'description': '', 'amount': 0.0}
   ];
-  double _taxPercent = 0;
+  // GST and the platform fee are mandatory and fixed — the lawyer cannot
+  // remove or change either. These mirror the backend's
+  // services.ComputeInvoiceBreakdown constants for display only; the
+  // authoritative calculation happens server-side in CreateInvoice, which
+  // recomputes both from the submitted subtotal and ignores any tax/total
+  // figure a client might send.
+  static const double _gstPercent = 18;
+  static const double _platformFee = 100;
   final _upiIdCtrl = TextEditingController();
   final _accountNameCtrl = TextEditingController();
   final _accountNumberCtrl = TextEditingController();
@@ -81,8 +88,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   }
 
   double get _subtotal => _items.fold(0, (s, i) => s + (i['amount'] as double));
-  double get _taxAmount => _subtotal * _taxPercent / 100;
-  double get _total => _subtotal + _taxAmount;
+  double get _taxAmount => double.parse((_subtotal * _gstPercent / 100).toStringAsFixed(2));
+  double get _total => double.parse((_subtotal + _taxAmount + _platformFee).toStringAsFixed(2));
   String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -100,14 +107,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     HapticFeedback.lightImpact();
     setState(() => _loading = true);
     try {
+      // Only 'subtotal' (the service amount the lawyer entered) is sent as a
+      // money figure. GST and the platform fee are computed and applied by
+      // the backend — CreateInvoice ignores any tax/total the client sends,
+      // exactly so this request can never understate what the client owes.
       await DioClient.instance.post('/invoices', data: {
         'client_id': _selectedClientId,
         'invoice_number': _invoiceNumCtrl.text.trim(),
         'items': _items,
         'subtotal': _subtotal,
-        'tax_percent': _taxPercent,
-        'tax_amount': _taxAmount,
-        'total_amount': _total,
         'due_date': _formatDate(_dueDate),
         'notes': _notesCtrl.text.trim(),
         'upi_id': _upiIdCtrl.text.trim(),
@@ -460,30 +468,34 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Tax
-                    Row(children: [
-                      const Text('Tax (%)',
-                          style: TextStyle(color: _textPri, fontSize: 14)),
-                      Expanded(
-                          child: SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                            activeTrackColor: _brown,
-                            thumbColor: _brown,
-                            inactiveTrackColor: _border),
-                        child: Slider(
-                            value: _taxPercent,
-                            min: 0,
-                            max: 28,
-                            divisions: 28,
-                            label: '${_taxPercent.toInt()}%',
-                            onChanged: (v) => setState(() => _taxPercent = v)),
-                      )),
-                      Text('${_taxPercent.toInt()}%',
-                          style: const TextStyle(
-                              color: _brown, fontWeight: FontWeight.w700)),
-                    ]),
+                    // Mandatory charges note
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFD4A017).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: const Color(0xFFD4A017).withValues(alpha: 0.3))),
+                      child: const Row(children: [
+                        Icon(Icons.info_outline_rounded,
+                            color: Color(0xFFD4A017), size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                            child: Text(
+                                '18% GST and ₹100 platform fee are mandatory charges.',
+                                style: TextStyle(
+                                    color: Color(0xFFD4A017),
+                                    fontSize: 12,
+                                    height: 1.4))),
+                      ]),
+                    ),
+                    const SizedBox(height: 16),
 
-                    // Total
+                    // Total — Consultation/Service Amount, GST (18%, fixed),
+                    // Platform Fee (₹100, fixed), Total Payable. Neither
+                    // charge is editable: there is no input here, only the
+                    // computed display — the actual enforcement is
+                    // server-side in CreateInvoice.
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -494,15 +506,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Column(children: [
-                        _TotalRow('Subtotal',
+                        _TotalRow('Consultation / Service Amount',
                             '₹${_subtotal.toStringAsFixed(2)}', Colors.white),
-                        if (_taxPercent > 0)
-                          _TotalRow(
-                              'Tax (${_taxPercent.toInt()}%)',
-                              '₹${_taxAmount.toStringAsFixed(2)}',
-                              Colors.white70),
+                        _TotalRow('GST (18%) · mandatory',
+                            '₹${_taxAmount.toStringAsFixed(2)}', Colors.white70),
+                        _TotalRow('Platform Fee · mandatory',
+                            '₹${_platformFee.toStringAsFixed(2)}', Colors.white70),
                         Divider(color: Colors.white.withValues(alpha: 0.3)),
-                        _TotalRow('Total Amount',
+                        _TotalRow('TOTAL PAYABLE',
                             '₹${_total.toStringAsFixed(2)}', Colors.white,
                             bold: true),
                       ]),

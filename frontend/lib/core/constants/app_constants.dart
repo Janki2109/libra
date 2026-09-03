@@ -25,7 +25,6 @@ class AppConstants {
   static const String userKey = 'user_data';
   static const String themeKey = 'theme_mode';
   static const String onboardingSeenKey = 'onboarding_seen';
-  static const String pendingPlanKey = 'pending_selected_plan';
 
   // ─── App Info ────────────────────────────
   static const String appName = 'Libra Law Practice';

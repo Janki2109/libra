@@ -27,6 +27,10 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   flutter_webrtc: ^1.6.0
   web_socket_channel: ^3.0.1
+  share_plus: ^10.1.2
+  path_provider: ^2.1.4
+  web: ^1.1.1
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
+import '../utils/hearing_status.dart';
 
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
@@ -22,6 +23,9 @@ class HearingDetailsScreen extends StatefulWidget {
 class _HearingDetailsScreenState extends State<HearingDetailsScreen> {
   Map<String, dynamic>? _hearing;
   bool _loading = true;
+  String? _error;
+  List<dynamic> _caseHearings = [];
+  List<dynamic> _caseDocuments = [];
 
   @override
   void initState() {
@@ -30,15 +34,60 @@ class _HearingDetailsScreenState extends State<HearingDetailsScreen> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final res = await DioClient.instance.get('/hearings/${widget.hearingId}');
+      final hearing = res.data['data'] as Map<String, dynamic>;
       setState(() {
-        _hearing = res.data['data'];
+        _hearing = hearing;
         _loading = false;
       });
+      final caseId = (hearing['case_id'] ?? '').toString();
+      if (caseId.isNotEmpty) {
+        _loadCaseContext(caseId);
+      }
     } catch (e) {
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _error = DioClient.describeError(e);
+      });
     }
+  }
+
+  // Previous/next hearing timeline and relevant documents both live under
+  // the case, not the hearing itself — loaded separately (and best-effort:
+  // a failure here shouldn't block the hearing's own details from showing).
+  Future<void> _loadCaseContext(String caseId) async {
+    try {
+      final res = await DioClient.instance.get('/cases/$caseId/hearings');
+      if (mounted) setState(() => _caseHearings = res.data['data'] ?? []);
+    } catch (_) {}
+    try {
+      final res =
+          await DioClient.instance.get('/documents', queryParameters: {
+        'case_id': caseId,
+      });
+      if (mounted) setState(() => _caseDocuments = res.data['data'] ?? []);
+    } catch (_) {}
+  }
+
+  /// The case hearing immediately before this one by date — "what happened
+  /// last time" context a lawyer would otherwise have to hunt for across the
+  /// whole case's hearing list.
+  Map? get _previousHearing {
+    if (_hearing == null) return null;
+    final thisDate = (_hearing!['hearing_date'] ?? '').toString();
+    final earlier = _caseHearings
+        .where((h) =>
+            h['id'] != _hearing!['id'] &&
+            (h['hearing_date'] ?? '').toString().compareTo(thisDate) < 0)
+        .toList()
+      ..sort((a, b) =>
+          (b['hearing_date'] ?? '').toString().compareTo((a['hearing_date'] ?? '').toString()));
+    return earlier.isNotEmpty ? earlier.first as Map : null;
   }
 
   Color _statusColor(String s) {
@@ -394,13 +443,7 @@ class _HearingDetailsScreenState extends State<HearingDetailsScreen> {
       child: Scaffold(
         backgroundColor: _bg,
         body: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/imagies1/hearning data.webp'),
-              fit: BoxFit.cover,
-              opacity: 0.50,
-            ),
-          ),
+          color: _bg,
           child: Column(children: [
             // Brown header
             Container(
@@ -447,9 +490,43 @@ class _HearingDetailsScreenState extends State<HearingDetailsScreen> {
                   ? const Center(
                       child: CircularProgressIndicator(color: _brown))
                   : _hearing == null
-                      ? const Center(
-                          child: Text('Hearing not found',
-                              style: TextStyle(color: _textMuted)))
+                      ? Center(
+                          child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                    _error != null
+                                        ? Icons.wifi_off_rounded
+                                        : Icons.event_busy_rounded,
+                                    color: _textMuted.withValues(alpha: 0.5),
+                                    size: 40),
+                                const SizedBox(height: 12),
+                                Text(
+                                    _error != null
+                                        ? 'Could not load this hearing'
+                                        : 'Hearing not found',
+                                    style: const TextStyle(
+                                        color: _textPri,
+                                        fontWeight: FontWeight.w600)),
+                                if (_error != null) ...[
+                                  const SizedBox(height: 6),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 32),
+                                    child: Text(_error!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                            color: _textMuted, fontSize: 12)),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  OutlinedButton.icon(
+                                    onPressed: _load,
+                                    icon: const Icon(Icons.refresh_rounded,
+                                        size: 16),
+                                    label: const Text('Retry'),
+                                  ),
+                                ],
+                              ]))
                       : RefreshIndicator(
                           color: _brown,
                           backgroundColor: _bgCard,
@@ -458,57 +535,70 @@ class _HearingDetailsScreenState extends State<HearingDetailsScreen> {
                               padding: const EdgeInsets.all(16),
                               children: [
                                 // Status banner
-                                Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: _statusColor(
-                                            _hearing!['status'] ?? 'scheduled')
-                                        .withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                        color: _statusColor(
-                                                _hearing!['status'] ??
-                                                    'scheduled')
-                                            .withValues(alpha: 0.3)),
-                                  ),
-                                  child: Row(children: [
-                                    Icon(
-                                        _statusIcon(
-                                            _hearing!['status'] ?? 'scheduled'),
-                                        color: _statusColor(
-                                            _hearing!['status'] ?? 'scheduled'),
-                                        size: 22),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                        (_hearing!['status'] ?? 'scheduled')
-                                            .toString()
-                                            .toUpperCase(),
-                                        style: TextStyle(
-                                            color: _statusColor(
-                                                _hearing!['status'] ??
-                                                    'scheduled'),
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 14)),
-                                    const Spacer(),
-                                    GestureDetector(
-                                      onTap: _showUpdateSheet,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 10, vertical: 5),
-                                        decoration: BoxDecoration(
-                                            color: _brown,
-                                            borderRadius:
-                                                BorderRadius.circular(8)),
-                                        child: const Text('Update',
-                                            style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700)),
-                                      ),
+                                Builder(builder: (context) {
+                                  final info = hearingStatusInfo(_hearing!);
+                                  return Container(
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: info.color.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color:
+                                              info.color.withValues(alpha: 0.3)),
                                     ),
-                                  ]),
-                                ),
+                                    child: Row(children: [
+                                      Icon(
+                                          _statusIcon(_hearing!['status'] ??
+                                              'scheduled'),
+                                          color: info.color,
+                                          size: 22),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                          child: Text(info.label.toUpperCase(),
+                                              style: TextStyle(
+                                                  color: info.color,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 14))),
+                                      GestureDetector(
+                                        onTap: _showUpdateSheet,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                              color: _brown,
+                                              borderRadius:
+                                                  BorderRadius.circular(8)),
+                                          child: const Text('Update',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700)),
+                                        ),
+                                      ),
+                                    ]),
+                                  );
+                                }),
                                 const SizedBox(height: 14),
+
+                                // Case / client context
+                                if (_nonempty(_hearing!['case_title']) ||
+                                    _nonempty(_hearing!['client_name'])) ...[
+                                  _Card(
+                                      title: 'Case',
+                                      icon: Icons.folder_rounded,
+                                      children: [
+                                        if (_nonempty(_hearing!['case_title']))
+                                          _Row(Icons.gavel_rounded, 'Case',
+                                              _hearing!['case_title']),
+                                        if (_nonempty(_hearing!['case_number']))
+                                          _Row(Icons.tag_rounded, 'Case Number',
+                                              _hearing!['case_number']),
+                                        if (_nonempty(_hearing!['client_name']))
+                                          _Row(Icons.person_rounded, 'Client',
+                                              _hearing!['client_name']),
+                                      ]),
+                                  const SizedBox(height: 10),
+                                ],
 
                                 // Date & Time
                                 _Card(
@@ -556,6 +646,41 @@ class _HearingDetailsScreenState extends State<HearingDetailsScreen> {
                                             _hearing!['notes']),
                                     ]),
 
+                                // Previous Hearing — what happened last time,
+                                // so a lawyer opening this screen doesn't have
+                                // to hunt through the case's full history.
+                                if (_previousHearing != null) ...[
+                                  const SizedBox(height: 10),
+                                  _Card(
+                                      title: 'Previous Hearing',
+                                      icon: Icons.history_rounded,
+                                      accentColor: const Color(0xFF7B7594),
+                                      children: [
+                                        _Row(
+                                            Icons.calendar_today_rounded,
+                                            'Date',
+                                            _safe(_previousHearing![
+                                                'hearing_date'])),
+                                        if (_nonempty(
+                                            _previousHearing!['purpose']))
+                                          _Row(Icons.topic_rounded, 'Purpose',
+                                              _previousHearing!['purpose']),
+                                        _Row(
+                                            Icons.flag_rounded,
+                                            'Status',
+                                            hearingStatusInfo(
+                                                    _previousHearing!)
+                                                .label),
+                                        if (_nonempty(_previousHearing![
+                                            'order_summary']))
+                                          _Row(
+                                              Icons.gavel_rounded,
+                                              'Order Summary',
+                                              _previousHearing![
+                                                  'order_summary']),
+                                      ]),
+                                ],
+
                                 // Order Summary (after hearing)
                                 if (_nonempty(_hearing!['order_summary'])) ...[
                                   const SizedBox(height: 10),
@@ -600,6 +725,57 @@ class _HearingDetailsScreenState extends State<HearingDetailsScreen> {
                                                 fontSize: 13,
                                                 height: 1.5)),
                                       ]),
+                                ],
+
+                                // Relevant Documents — the case's documents,
+                                // since a hearing has no file store of its
+                                // own; this is what "relevant documents" maps
+                                // to without inventing a separate attachment
+                                // system just for hearings.
+                                if (_caseDocuments.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  _Card(
+                                      title: 'Relevant Documents',
+                                      icon: Icons.attach_file_rounded,
+                                      children: _caseDocuments
+                                          .take(5)
+                                          .map<Widget>((d) => InkWell(
+                                                onTap: () => context
+                                                    .push('/documents/${d['id']}'),
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          vertical: 6),
+                                                  child: Row(children: [
+                                                    const Icon(
+                                                        Icons
+                                                            .description_outlined,
+                                                        color: _gold,
+                                                        size: 16),
+                                                    const SizedBox(width: 10),
+                                                    Expanded(
+                                                        child: Text(
+                                                            d['file_name'] ??
+                                                                'Document',
+                                                            style: const TextStyle(
+                                                                color: _textPri,
+                                                                fontSize: 13,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis)),
+                                                    const Icon(
+                                                        Icons
+                                                            .chevron_right_rounded,
+                                                        color: _textMuted,
+                                                        size: 16),
+                                                  ]),
+                                                ),
+                                              ))
+                                          .toList()),
                                 ],
 
                                 const SizedBox(height: 20),

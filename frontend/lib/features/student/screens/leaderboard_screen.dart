@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/dio_client.dart';
 
-const _bg = Color(0xFFFFF0F5);
+// Matches the palette the rest of the student panel (dashboard, quiz, mock
+// court) already uses — this screen previously used a pink scheme that
+// belonged to nothing else in the app.
+const _bg = Color(0xFFF0F4FF);
 const _bgCard = Color(0xFFFFFFFF);
-const _pink = Color(0xFFE91E8C);
-const _border = Color(0xFFFFD6EB);
-const _textPri = Color(0xFF1A1A2E);
-const _textMuted = Color(0xFF6B6B8A);
+const _blue = Color(0xFF1565C0);
+const _border = Color(0xFFBBDEFB);
+const _textPri = Color(0xFF0A1628);
+const _textMuted = Color(0xFF546E7A);
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -51,7 +54,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _pink,
+        backgroundColor: _blue,
         title: const Text('🏆 Leaderboard',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         leading: IconButton(
@@ -64,9 +67,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         ],
       ),
       body: _loading
-          ? Center(child: CircularProgressIndicator(color: _pink))
+          ? Center(child: CircularProgressIndicator(color: _blue))
           : RefreshIndicator(
-              color: _pink,
+              color: _blue,
               backgroundColor: _bgCard,
               onRefresh: _load,
               child: ListView(padding: const EdgeInsets.all(16), children: [
@@ -75,22 +78,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(colors: [
-                      Color(0xFFB5166E),
-                      Color(0xFFE91E8C),
-                      Color(0xFFFF6BB3)
+                      Color(0xFF0D47A1),
+                      Color(0xFF1565C0),
+                      Color(0xFF42A5F5)
                     ]),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                          color: _pink.withValues(alpha: 0.3),
+                          color: _blue.withValues(alpha: 0.3),
                           blurRadius: 16,
                           offset: const Offset(0, 6))
                     ],
                   ),
                   child: Column(children: [
                     const Text('My Stats',
-                        style: TextStyle(
-                            color: const Color(0xFF546E7A), fontSize: 12)),
+                        style: TextStyle(color: Colors.white70, fontSize: 12)),
                     const SizedBox(height: 8),
                     Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -199,7 +201,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                 width: 0.8),
                             boxShadow: [
                               BoxShadow(
-                                  color: _pink.withValues(alpha: 0.04),
+                                  color: _blue.withValues(alpha: 0.04),
                                   blurRadius: 6,
                                   offset: const Offset(0, 2))
                             ]),

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"libra/utils"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +28,8 @@ func GetDocuments(c *gin.Context) {
 	// to every firm on the platform whenever the scoped query errored — client
 	// case files included.
 	page := ParsePagination(c)
+	clientID := c.Query("client_id")
+	caseID := c.Query("case_id")
 
 	// file_content is deliberately NOT selected. It holds the whole file as
 	// base64 inline in the row, so listing 25 documents used to drag up to
@@ -39,9 +43,11 @@ func GetDocuments(c *gin.Context) {
 		       COALESCE(uploaded_by_role,''), is_archived, created_at
 		FROM documents
 		WHERE firm_id = $1::uuid AND is_archived = false
+		  AND ($4 = '' OR client_id = $4::uuid)
+		  AND ($5 = '' OR case_id = $5::uuid)
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
-	`, firmID, page.Limit, page.Offset)
+	`, firmID, page.Limit, page.Offset, clientID, caseID)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to fetch documents", err.Error())
 		return
@@ -206,8 +212,15 @@ func GetDocument(c *gin.Context) {
 		FROM documents WHERE id=$1::uuid AND firm_id=$2::uuid
 	`, id, firmID).Scan(&d.ID, &d.FileName, &d.FileURL, &d.FileContent,
 		&d.FileType, &d.Category, &d.FileSize, &d.MimeType)
+	// A real DB/connection failure was previously reported as "Document not
+	// found" too, which told a user staring at a network blip that their
+	// file had been deleted.
+	if err == sql.ErrNoRows {
+		utils.Error(c, http.StatusNotFound, "Document not found", "")
+		return
+	}
 	if err != nil {
-		utils.Error(c, http.StatusNotFound, "Document not found", err.Error())
+		utils.Error(c, http.StatusInternalServerError, "Failed to load document", err.Error())
 		return
 	}
 	utils.Success(c, http.StatusOK, "Document fetched", d)
@@ -275,6 +288,15 @@ func GetInvoices(c *gin.Context) {
 	utils.SuccessWithMeta(c, http.StatusOK, "Invoices fetched", invoices, page.Meta(len(invoices)))
 }
 
+// CreateInvoice — GST (18%) and the ₹100 platform fee are mandatory and
+// computed here, never accepted from the request. The old version trusted
+// req.TotalAmount outright (whatever the Flutter app's local slider/subtotal
+// math produced), which is exactly the "modify the frontend request
+// manually" gap: nothing stopped a caller from POSTing any total at all.
+// Now the lawyer's Subtotal is the only money value this endpoint reads from
+// the client; tax_percent/tax_amount/total_amount in the request (if a
+// caller sends them) are ignored and recomputed via
+// services.ComputeInvoiceBreakdown.
 func CreateInvoice(c *gin.Context) {
 	firmID, ok := utils.RequireFirm(c)
 	if !ok {
@@ -288,9 +310,7 @@ func CreateInvoice(c *gin.Context) {
 		InvoiceNumber     string  `json:"invoice_number" binding:"required"`
 		IssueDate         string  `json:"issue_date"`
 		DueDate           string  `json:"due_date"`
-		TotalAmount       float64 `json:"total_amount" binding:"gte=0"`
-		TaxPercent        float64 `json:"tax_percent"`
-		TaxAmount         float64 `json:"tax_amount"`
+		Subtotal          float64 `json:"subtotal" binding:"gte=0"`
 		Notes             string  `json:"notes"`
 		UPIID             string  `json:"upi_id"`
 		BankAccountName   string  `json:"bank_account_name"`
@@ -318,15 +338,20 @@ func CreateInvoice(c *gin.Context) {
 		req.IssueDate = time.Now().Format("2006-01-02")
 	}
 
+	gstRate, gstAmount, platformFee, total := services.ComputeInvoiceBreakdown(req.Subtotal)
+
 	id := uuid.New().String()
 	_, err := config.DB.Exec(`
 		INSERT INTO invoices (id, firm_id, client_id, case_id, invoice_number,
-		issue_date, due_date, total_amount, notes, created_by,
+		issue_date, due_date, subtotal, tax_percent, tax_amount, platform_fee,
+		total_amount, notes, created_by,
 		upi_id, bank_account_name, bank_account_number, bank_ifsc, bank_name)
-		VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10::uuid,
-		$11, $12, $13, $14, $15)
+		VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+		$12, $13, $14::uuid,
+		$15, $16, $17, $18, $19)
 	`, id, fID, nullIfEmpty(req.ClientID), nullIfEmpty(req.CaseID), req.InvoiceNumber,
-		req.IssueDate, nullIfEmpty(req.DueDate), req.TotalAmount, req.Notes, userID,
+		req.IssueDate, nullIfEmpty(req.DueDate), req.Subtotal, gstRate, gstAmount, platformFee,
+		total, req.Notes, userID,
 		req.UPIID, req.BankAccountName, req.BankAccountNumber,
 		req.BankIFSC, req.BankName)
 	if err != nil {
@@ -346,13 +371,16 @@ func CreateInvoice(c *gin.Context) {
 		if clientUserID != "" {
 			utils.NotifyWithRef(clientUserID, fID,
 				"💰 New Invoice Received",
-				fmt.Sprintf("Invoice %s for ₹%.2f is pending payment. Due: %s",
-					req.InvoiceNumber, req.TotalAmount, req.DueDate),
+				fmt.Sprintf("Invoice %s: ₹%.2f (incl. 18%% GST + ₹100 platform fee) is pending payment. Due: %s",
+					req.InvoiceNumber, total, req.DueDate),
 				"payment_reminder", id, "invoice")
 		}
 	}
 
-	utils.Success(c, http.StatusCreated, "Invoice created!", gin.H{"id": id})
+	utils.Success(c, http.StatusCreated, "Invoice created!", gin.H{
+		"id": id, "subtotal": req.Subtotal, "gst_rate": gstRate, "gst_amount": gstAmount,
+		"platform_fee": platformFee, "total_amount": total,
+	})
 }
 
 func GetInvoice(c *gin.Context) {
@@ -364,6 +392,10 @@ func GetInvoice(c *gin.Context) {
 	var inv struct {
 		ID                string  `json:"id"`
 		InvoiceNumber     string  `json:"invoice_number"`
+		Subtotal          float64 `json:"subtotal"`
+		GSTRate           float64 `json:"gst_rate"`
+		GSTAmount         float64 `json:"gst_amount"`
+		PlatformFee       float64 `json:"platform_fee"`
 		TotalAmount       float64 `json:"total_amount"`
 		PaidAmount        float64 `json:"paid_amount"`
 		Status            string  `json:"status"`
@@ -380,7 +412,9 @@ func GetInvoice(c *gin.Context) {
 		PaymentSlipURL    string  `json:"payment_slip_url"`
 	}
 	err := config.DB.QueryRow(`
-		SELECT i.id, i.invoice_number, i.total_amount, i.paid_amount,
+		SELECT i.id, i.invoice_number,
+		       COALESCE(i.subtotal,0), COALESCE(i.tax_percent,0), COALESCE(i.tax_amount,0),
+		       COALESCE(i.platform_fee,0), i.total_amount, i.paid_amount,
 		       i.status, i.issue_date::text, COALESCE(i.due_date::text,''),
 		       COALESCE(i.notes,''), COALESCE(cl.name,''),
 		       COALESCE(i.upi_id, f.upi_id, ''),
@@ -395,7 +429,8 @@ func GetInvoice(c *gin.Context) {
 		LEFT JOIN firms f ON i.firm_id = f.id
 		WHERE i.id = $1::uuid AND i.firm_id = $2::uuid
 	`, id, firmID).Scan(
-		&inv.ID, &inv.InvoiceNumber, &inv.TotalAmount, &inv.PaidAmount,
+		&inv.ID, &inv.InvoiceNumber, &inv.Subtotal, &inv.GSTRate, &inv.GSTAmount,
+		&inv.PlatformFee, &inv.TotalAmount, &inv.PaidAmount,
 		&inv.Status, &inv.IssueDate, &inv.DueDate, &inv.Notes, &inv.ClientName,
 		&inv.UPIID, &inv.BankAccountName, &inv.BankAccountNumber,
 		&inv.BankIFSC, &inv.BankName, &inv.TransactionID, &inv.PaymentSlipURL)
@@ -455,13 +490,26 @@ func GetPayments(c *gin.Context) {
 		return
 	}
 	page := ParsePagination(c)
+	// status filters against verification_status ('verified'/'rejected'/
+	// 'pending') so the Payment Verification screen's "Verified" tab (where
+	// the Pay Back button lives) can ask for only payments it's actually
+	// allowed to refund, instead of pulling every payment and filtering
+	// client-side.
+	status := c.Query("status")
 	rows, err := config.DB.Query(`
-		SELECT id, amount, payment_date::text,
-		COALESCE(payment_method,''), COALESCE(notes,'')
-		FROM payments WHERE firm_id=$1::uuid
-		ORDER BY created_at DESC
+		SELECT p.id, p.amount, p.payment_date::text,
+		COALESCE(p.payment_method,''), COALESCE(p.notes,''),
+		COALESCE(p.transaction_id,''), COALESCE(cl.name,''),
+		COALESCE(i.invoice_number,''), COALESCE(p.verification_status,'verified'),
+		COALESCE(p.refund_status,''), COALESCE(p.refunded_amount,0)
+		FROM payments p
+		LEFT JOIN invoices i ON p.invoice_id = i.id
+		LEFT JOIN clients cl ON p.client_id = cl.id
+		WHERE p.firm_id=$1::uuid
+		  AND ($4 = '' OR COALESCE(p.verification_status,'verified') = $4)
+		ORDER BY p.created_at DESC
 		LIMIT $2 OFFSET $3
-	`, firmID, page.Limit, page.Offset)
+	`, firmID, page.Limit, page.Offset, status)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to fetch payments", err.Error())
 		return
@@ -469,16 +517,27 @@ func GetPayments(c *gin.Context) {
 	defer rows.Close()
 
 	type Payment struct {
-		ID            string  `json:"id"`
-		Amount        float64 `json:"amount"`
-		PaymentDate   string  `json:"payment_date"`
-		PaymentMethod string  `json:"payment_method"`
-		Notes         string  `json:"notes"`
+		ID                string  `json:"id"`
+		Amount            float64 `json:"amount"`
+		PaymentDate       string  `json:"payment_date"`
+		PaymentMethod     string  `json:"payment_method"`
+		Notes             string  `json:"notes"`
+		TransactionID     string  `json:"transaction_id"`
+		ClientName        string  `json:"client_name"`
+		InvoiceNumber     string  `json:"invoice_number"`
+		VerificationState string  `json:"verification_status"`
+		RefundStatus      string  `json:"refund_status"`
+		RefundedAmount    float64 `json:"refunded_amount"`
 	}
 	payments := []Payment{}
 	for rows.Next() {
 		var p Payment
-		rows.Scan(&p.ID, &p.Amount, &p.PaymentDate, &p.PaymentMethod, &p.Notes)
+		if err := rows.Scan(&p.ID, &p.Amount, &p.PaymentDate, &p.PaymentMethod, &p.Notes,
+			&p.TransactionID, &p.ClientName, &p.InvoiceNumber, &p.VerificationState,
+			&p.RefundStatus, &p.RefundedAmount); err != nil {
+			utils.Error(c, http.StatusInternalServerError, "Failed to read payments", err.Error())
+			return
+		}
 		payments = append(payments, p)
 	}
 	utils.SuccessWithMeta(c, http.StatusOK, "Payments fetched", payments, page.Meta(len(payments)))
@@ -517,6 +576,51 @@ func CreatePayment(c *gin.Context) {
 	if !belongsToFirm(tblClients, req.ClientID, fID) {
 		utils.Error(c, http.StatusBadRequest, "Unknown client", "client not in caller's firm")
 		return
+	}
+
+	// This endpoint is now reachable by the client themselves, not just firm
+	// staff (see routes.go) — so a client-role caller must be restricted to
+	// their own client record, or one client could submit a payment claim
+	// against any other client's invoice in the same firm.
+	if !firmStaffRole(utils.Role(c)) {
+		callerEmail, ok := portalClientEmail(c)
+		if !ok {
+			utils.Error(c, http.StatusForbidden, "Not authorized", "")
+			return
+		}
+		var ownClientID string
+		config.DB.QueryRow(`
+			SELECT id::text FROM clients WHERE lower(email) = $1 AND firm_id = $2::uuid
+		`, callerEmail, fID).Scan(&ownClientID)
+		if ownClientID == "" || ownClientID != req.ClientID {
+			utils.Error(c, http.StatusForbidden, "You can only submit payment for your own invoice", "")
+			return
+		}
+	}
+
+	// The claimed amount used to be trusted outright and credited to the
+	// invoice immediately (see the paid_amount update below) — before any
+	// lawyer verification — so a client (or a hand-crafted request) could
+	// claim any figure at all, including far more than the invoice's actual
+	// remaining balance, and have it marked paid on the spot. This is the
+	// same "never trust an amount from the frontend" rule CreateInvoice now
+	// enforces for GST/platform fee, applied at the other end of the same
+	// invoice: nothing here may push paid_amount past total_amount.
+	if req.InvoiceID != "" {
+		var total, paid float64
+		if err := config.DB.QueryRow(`
+			SELECT total_amount, COALESCE(paid_amount,0) FROM invoices WHERE id=$1::uuid AND firm_id=$2::uuid
+		`, req.InvoiceID, fID).Scan(&total, &paid); err != nil {
+			utils.Error(c, http.StatusBadRequest, "Unknown invoice", err.Error())
+			return
+		}
+		due := services.RoundMoney(total - paid)
+		if req.Amount > due+0.01 {
+			utils.Error(c, http.StatusBadRequest,
+				fmt.Sprintf("Amount exceeds the invoice's remaining balance of ₹%.2f", due),
+				"claimed amount is greater than what is actually due")
+			return
+		}
 	}
 
 	id := uuid.New().String()
@@ -760,6 +864,11 @@ func CreateStaff(c *gin.Context) {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
 		return
 	}
+	req.Phone = strings.TrimSpace(req.Phone)
+	if req.Phone != "" && !utils.ValidPhone(req.Phone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid phone")
+		return
+	}
 
 	role := req.Role
 	switch role {
@@ -893,6 +1002,11 @@ func UpdateStaffMember(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	req.Phone = strings.TrimSpace(req.Phone)
+	if req.Phone != "" && !utils.ValidPhone(req.Phone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid phone")
 		return
 	}
 
@@ -1115,7 +1229,7 @@ func GetAllLawyers(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT u.id, u.name,
 		       COALESCE(u.designation,'Advocate'), COALESCE(f.name,'') as firm_name,
-		       COALESCE(f.city,''), COALESCE(f.state,'')
+		       COALESCE(f.city,''), COALESCE(f.state,''), COALESCE(u.avatar_url,'')
 		FROM users u
 		LEFT JOIN firms f ON u.firm_id = f.id
 		LEFT JOIN roles r ON u.role_id = r.id
@@ -1136,13 +1250,14 @@ func GetAllLawyers(c *gin.Context) {
 		FirmName    string `json:"firm_name"`
 		City        string `json:"city"`
 		State       string `json:"state"`
+		AvatarURL   string `json:"avatar_url"`
 	}
 
 	lawyers := []Lawyer{}
 	for rows.Next() {
 		var l Lawyer
 		if err := rows.Scan(&l.ID, &l.Name, &l.Designation,
-			&l.FirmName, &l.City, &l.State); err != nil {
+			&l.FirmName, &l.City, &l.State, &l.AvatarURL); err != nil {
 			utils.Error(c, http.StatusInternalServerError, "Failed to read lawyers", err.Error())
 			return
 		}
@@ -1317,6 +1432,136 @@ func VerifyPayment(c *gin.Context) {
 	utils.Success(c, http.StatusOK, "Payment "+req.Status, nil)
 }
 
+// RefundPayment pays a client back for a payment that was already verified.
+// For a payment that came in through Razorpay (payment_method='razorpay',
+// transaction_id holding the gateway's payment id) this calls Razorpay's
+// real refund API — no refund is ever faked. A manually-recorded payment
+// (cash/bank-transfer/UPI proof) has no gateway transaction to reverse, so
+// it's a bookkeeping-only refund: the invoice balance is corrected and the
+// firm settles the money back to the client outside the app, same as how
+// that payment was originally received outside the app.
+func RefundPayment(c *gin.Context) {
+	paymentID := c.Param("id")
+	firmID, ok := requireFirmResource(c, tblPayments, paymentID)
+	if !ok {
+		return
+	}
+	userID := utils.UserID(c)
+
+	var p struct {
+		Amount            float64
+		PaymentMethod     string
+		TransactionID     string
+		InvoiceID         sql.NullString
+		VerificationState string
+		RefundStatus      sql.NullString
+	}
+	err := config.DB.QueryRow(`
+		SELECT amount, COALESCE(payment_method,''), COALESCE(transaction_id,''),
+		       invoice_id::text, COALESCE(verification_status,'verified'), refund_status
+		FROM payments WHERE id=$1::uuid AND firm_id=$2::uuid
+	`, paymentID, firmID).Scan(&p.Amount, &p.PaymentMethod, &p.TransactionID,
+		&p.InvoiceID, &p.VerificationState, &p.RefundStatus)
+	if err == sql.ErrNoRows {
+		utils.Error(c, http.StatusNotFound, "Payment not found", "")
+		return
+	}
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Database error", err.Error())
+		return
+	}
+	if p.RefundStatus.Valid && p.RefundStatus.String == "refunded" {
+		utils.Error(c, http.StatusConflict, "Payment already refunded", "duplicate refund")
+		return
+	}
+	if p.VerificationState == "rejected" {
+		utils.Error(c, http.StatusBadRequest, "A rejected payment cannot be refunded", "")
+		return
+	}
+
+	reference := "manual"
+	if p.PaymentMethod == "razorpay" && p.TransactionID != "" {
+		refund, err := razorpayClient().CreateRefund(context.Background(), p.TransactionID, services.ToPaise(p.Amount))
+		if err != nil {
+			if errors.Is(err, services.ErrGatewayNotConfigured) {
+				utils.Error(c, http.StatusServiceUnavailable,
+					"Online payments are not configured, so this refund can't be processed automatically", err.Error())
+				return
+			}
+			utils.Error(c, http.StatusBadGateway, "Refund failed at the payment gateway", err.Error())
+			return
+		}
+		reference = refund.ID
+	}
+
+	tx, err := config.DB.Begin()
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to record refund", err.Error())
+		return
+	}
+	defer tx.Rollback()
+
+	// The refund_status IS NULL guard makes this safe against a second,
+	// near-simultaneous tap: only the first request can move the row, and a
+	// concurrent Razorpay refund (if any) already succeeded above, so this
+	// only protects the local bookkeeping from double-adjusting the invoice.
+	res, err := tx.Exec(`
+		UPDATE payments SET
+		  refund_status = 'refunded',
+		  refunded_amount = $1,
+		  refunded_at = NOW(),
+		  refunded_by = $2::uuid,
+		  refund_reference = $3
+		WHERE id=$4::uuid AND firm_id=$5::uuid AND refund_status IS NULL
+	`, p.Amount, userID, reference, paymentID, firmID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to record refund", err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		utils.Error(c, http.StatusConflict, "Payment already refunded", "duplicate refund")
+		return
+	}
+
+	if p.InvoiceID.Valid && p.InvoiceID.String != "" {
+		tx.Exec(`
+			UPDATE invoices SET
+			  paid_amount = GREATEST(COALESCE(paid_amount,0) - $1, 0),
+			  status = CASE
+			    WHEN GREATEST(COALESCE(paid_amount,0) - $1, 0) >= total_amount THEN 'paid'
+			    WHEN GREATEST(COALESCE(paid_amount,0) - $1, 0) > 0 THEN 'partial'
+			    ELSE 'unpaid'
+			  END,
+			  updated_at = NOW()
+			WHERE id=$2::uuid AND firm_id=$3::uuid
+		`, p.Amount, p.InvoiceID.String, firmID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to record refund", err.Error())
+		return
+	}
+
+	var clientUserID string
+	config.DB.QueryRow(`
+		SELECT u.id::text
+		FROM payments p
+		JOIN invoices i ON p.invoice_id = i.id
+		JOIN clients cl ON i.client_id = cl.id
+		JOIN users u ON lower(u.email) = lower(cl.email)
+		WHERE p.id = $1::uuid LIMIT 1
+	`, paymentID).Scan(&clientUserID)
+	if clientUserID != "" {
+		utils.Notify(clientUserID, firmID, "Payment refunded",
+			fmt.Sprintf("₹%.2f has been paid back to you.", p.Amount), "payment_reminder")
+	}
+
+	utils.Success(c, http.StatusOK, "Payment refunded", gin.H{
+		"amount":           p.Amount,
+		"refund_reference": reference,
+	})
+}
+
 // ─── LAWYER PROFILE FOR STUDENTS ─────────────
 
 func GetLawyerProfile(c *gin.Context) {
@@ -1327,7 +1572,7 @@ func GetLawyerProfile(c *gin.Context) {
 		return
 	}
 
-	var id, name, designation, firmName, city, state, barCouncil string
+	var id, name, designation, firmName, city, state, barCouncil, avatarURL string
 	var totalCases, wonCases, expYears int
 
 	// Email and phone are deliberately not part of the public profile — see
@@ -1336,7 +1581,7 @@ func GetLawyerProfile(c *gin.Context) {
 	err := config.DB.QueryRow(`
 		SELECT u.id, u.name, COALESCE(u.designation,'Advocate'),
 		COALESCE(f.name,''), COALESCE(f.city,''), COALESCE(f.state,''),
-		COALESCE(u.bar_council_number,''),
+		COALESCE(u.bar_council_number,''), COALESCE(u.avatar_url,''),
 		(SELECT COUNT(*) FROM cases WHERE firm_id=u.firm_id) as total_cases,
 		(SELECT COUNT(*) FROM cases WHERE firm_id=u.firm_id AND status='won') as won_cases,
 		0 as exp_years
@@ -1346,7 +1591,7 @@ func GetLawyerProfile(c *gin.Context) {
 		WHERE u.id = $1::uuid AND u.is_active = true
 		  AND r.name IN ('admin','lawyer')
 	`, lawyerID).Scan(&id, &name, &designation,
-		&firmName, &city, &state, &barCouncil,
+		&firmName, &city, &state, &barCouncil, &avatarURL,
 		&totalCases, &wonCases, &expYears)
 
 	if err != nil {
@@ -1362,6 +1607,7 @@ func GetLawyerProfile(c *gin.Context) {
 		"city":               city,
 		"state":              state,
 		"bar_council_number": barCouncil,
+		"avatar_url":         avatarURL,
 		"total_cases":        totalCases,
 		"won_cases_count":    wonCases,
 		"experience_years":   expYears,

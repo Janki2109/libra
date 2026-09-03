@@ -56,6 +56,14 @@ func loadGroqKeyPool() *groqKeyPool {
 	return &groqKeyPool{keys: keys, cooldowns: make([]time.Time, len(keys))}
 }
 
+// hasKeys reports whether any Groq key is configured at all, regardless of
+// cooldown state — used to decide whether falling back to Groq after OneAI
+// fails is a real second attempt or just a guaranteed repeat of "not
+// configured" that would bury OneAI's actual failure reason.
+func (p *groqKeyPool) hasKeys() bool {
+	return len(p.keys) > 0
+}
+
 // availableKeyIndexes returns key indexes not currently in cooldown, in
 // rotation order (1, 2, 3, ...).
 func (p *groqKeyPool) availableKeyIndexes() []int {
@@ -87,24 +95,71 @@ const (
 	groqRequestTimeout   = 30 * time.Second
 )
 
-// GenerateLegalDraft tries each configured Groq key in order, skipping any
-// currently in cooldown, until one succeeds or all are exhausted. Every call
-// is a fresh HTTP request to Groq — nothing here is cached, so the caller
-// always gets a new generation for the current prompt.
+// GenerateLegalDraft tries OneAI first when it's configured — it has no
+// system/user split, so both prompts are folded into one message. If OneAI
+// is not configured or its call fails, this falls back to the Groq key pool,
+// trying each configured key in order, skipping any currently in cooldown,
+// until one succeeds or all are exhausted. Every Groq call is a fresh HTTP
+// request — nothing here is cached, so the caller always gets a new
+// generation for the current prompt.
 func GenerateLegalDraft(systemPrompt, userPrompt string, maxTokens int, temperature float64) (string, error) {
+	if oneAIConfigured() {
+		reply, err := callOneAI(systemPrompt + "\n\n" + userPrompt)
+		if err == nil {
+			return reply, nil
+		}
+		log.Printf("[oneai] request failed, falling back to Groq: %v", err)
+		// A real Groq pool is worth trying; an empty one would just repeat
+		// "not configured" and hide the actual (OneAI) failure reason from
+		// the caller, which is what's misleading a user into thinking the
+		// service is unconfigured when it's actually rate-limited or down.
+		if !getGroqPool().hasKeys() {
+			return "", err
+		}
+	}
 	return rotateAndCall(func(apiKey string) (string, time.Duration, error) {
 		return callGroq(apiKey, systemPrompt, userPrompt, maxTokens, temperature)
 	})
 }
 
 // GenerateChat is GenerateLegalDraft's counterpart for a multi-turn
-// conversation (used by the AI Legal Advisor chat) — same key pool, same
-// rotation/cooldown behaviour, just a full message history instead of a
-// single system+user pair.
+// conversation (used by the AI Legal Advisor chat). OneAI has no message-
+// history concept, so the transcript is flattened into one string when
+// routing there; otherwise this uses the same Groq key pool and
+// rotation/cooldown behaviour as GenerateLegalDraft, passing the full
+// message history through as-is.
 func GenerateChat(messages []map[string]string, maxTokens int, temperature float64) (string, error) {
+	if oneAIConfigured() {
+		reply, err := callOneAI(flattenMessages(messages))
+		if err == nil {
+			return reply, nil
+		}
+		log.Printf("[oneai] request failed, falling back to Groq: %v", err)
+		if !getGroqPool().hasKeys() {
+			return "", err
+		}
+	}
 	return rotateAndCall(func(apiKey string) (string, time.Duration, error) {
 		return callGroqChat(apiKey, messages, maxTokens, temperature)
 	})
+}
+
+// flattenMessages turns a chat-completions-style message array into a single
+// transcript string, for the OneAI path — it takes one "message", not a
+// conversation history.
+func flattenMessages(messages []map[string]string) string {
+	var b strings.Builder
+	for _, m := range messages {
+		role := m["role"]
+		if role == "" {
+			role = "user"
+		}
+		b.WriteString(strings.ToUpper(role[:1]) + role[1:])
+		b.WriteString(": ")
+		b.WriteString(m["content"])
+		b.WriteString("\n\n")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // GenerateVisionText is GenerateLegalDraft's counterpart for image input

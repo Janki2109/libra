@@ -108,7 +108,18 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                     ),
                     const SizedBox(height: 16),
                     _Card(children: [
-                      _AmountRow('Total Amount',
+                      _AmountRow('Service Amount',
+                          '₹${_amount(inv['subtotal'])}',
+                          AppColors.textSecondary),
+                      _AmountRow(
+                          'GST (${_amount(inv['gst_rate']).toStringAsFixed(0)}%)',
+                          '₹${_amount(inv['gst_amount'])}',
+                          AppColors.textSecondary),
+                      _AmountRow('Platform Fee',
+                          '₹${_amount(inv['platform_fee'])}',
+                          AppColors.textSecondary),
+                      const Divider(color: AppColors.border),
+                      _AmountRow('Total Payable',
                           '₹${_amount(inv['total_amount'])}',
                           AppColors.textPrimary),
                       const Divider(color: AppColors.border),
@@ -121,6 +132,23 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                               ? AppColors.textMuted
                               : AppColors.error),
                     ]),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                          color: AppColors.gold.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const Row(children: [
+                        Icon(Icons.info_outline_rounded,
+                            color: AppColors.gold, size: 14),
+                        SizedBox(width: 6),
+                        Expanded(
+                            child: Text(
+                                '18% GST and ₹100 platform fee are mandatory charges.',
+                                style: TextStyle(
+                                    color: AppColors.gold, fontSize: 11))),
+                      ]),
+                    ),
                     if ((inv['description'] ?? '').isNotEmpty) ...[
                       const SizedBox(height: 12),
                       _Card(children: [

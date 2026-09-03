@@ -14,7 +14,8 @@ const _textPri = Color(0xFF2C1A0E);
 const _textMuted = Color(0xFF3D2C8D);
 
 class AddHearingScreen extends StatefulWidget {
-  const AddHearingScreen({super.key});
+  final String? initialCaseId;
+  const AddHearingScreen({super.key, this.initialCaseId});
   @override
   State<AddHearingScreen> createState() => _AddHearingScreenState();
 }
@@ -33,8 +34,26 @@ class _AddHearingScreenState extends State<AddHearingScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => context.read<CaseProvider>().loadCases());
+    // _selectedCaseId is only ever set once `cases` has loaded and actually
+    // contains a matching id: the dropdown always renders a "No case
+    // selected" placeholder item, so assigning a non-null value before the
+    // list loads (when it's the only item) trips Flutter's DropdownButton
+    // "value must appear in items" assertion.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<CaseProvider>().loadCases();
+      if (!mounted || widget.initialCaseId == null) return;
+      final cases = context.read<CaseProvider>().cases;
+      final cs = cases.firstWhere((c) => c['id'] == widget.initialCaseId,
+          orElse: () => {});
+      if (cs.isEmpty) return;
+      setState(() {
+        _selectedCaseId = widget.initialCaseId;
+        if ((cs['court_name'] ?? '').isNotEmpty)
+          _courtNameCtrl.text = cs['court_name'];
+        if ((cs['judge_name'] ?? '').isNotEmpty)
+          _judgeNameCtrl.text = cs['judge_name'];
+      });
+    });
   }
 
   @override

@@ -272,6 +272,13 @@ class _AILegalResearchScreenState extends State<AILegalResearchScreen>
                               TextStyle(color: Colors.white54, fontSize: 10)),
                     ])),
                     IconButton(
+                      icon: const Icon(Icons.history_rounded,
+                          color: Colors.white),
+                      tooltip: 'Research History',
+                      onPressed: () =>
+                          context.push('/lawyer/ai-research/history'),
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.refresh_rounded,
                           color: Colors.white),
                       onPressed: () => setState(() {
@@ -314,6 +321,7 @@ class _AILegalResearchScreenState extends State<AILegalResearchScreen>
                           ),
                         ),
                         border: InputBorder.none,
+                        filled: false,
                         contentPadding:
                             const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -328,10 +336,24 @@ class _AILegalResearchScreenState extends State<AILegalResearchScreen>
                   indicatorWeight: 3,
                   labelColor: const Color(0xFFFFD700),
                   unselectedLabelColor: Colors.white60,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  // Non-scrollable equal-width tabs wrap these emoji+text
+                  // labels to 2 lines on narrow screens, overflowing the
+                  // TabBar's fixed height — FittedBox scales the label down
+                  // to fit its tab instead of wrapping it.
                   tabs: const [
-                    Tab(text: '💬 Research'),
-                    Tab(text: '📋 Acts & Laws'),
-                    Tab(text: '⚖️ Case Laws'),
+                    Tab(
+                        child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('💬 Research', maxLines: 1))),
+                    Tab(
+                        child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('📋 Acts & Laws', maxLines: 1))),
+                    Tab(
+                        child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('⚖️ Case Laws', maxLines: 1))),
                   ],
                 ),
               ])),

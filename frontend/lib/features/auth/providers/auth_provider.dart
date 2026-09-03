@@ -164,6 +164,7 @@ class AuthProvider extends ChangeNotifier {
     String city = '',
     String state = '',
     String plan = '',
+    String designation = '',
   }) async {
     _loading = true;
     _error = null;
@@ -179,6 +180,7 @@ class AuthProvider extends ChangeNotifier {
         'city': city,
         'state': state,
         'plan': plan,
+        'designation': designation,
       });
 
       if (response.data['success'] == true) {
@@ -325,25 +327,76 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  // ─── UPDATE PROFILE ──────────────────────
+  // name/phone/designation. Empty strings leave the existing value alone —
+  // matches the backend's UpdateProfile, which does the same server-side so
+  // a partial edit never blanks out fields the form didn't touch.
+  Future<bool> updateProfile(
+      {String name = '', String phone = '', String designation = ''}) async {
+    if (_user == null) return false;
+    try {
+      await DioClient.instance.put('/auth/profile', data: {
+        'name': name,
+        'phone': phone,
+        'designation': designation,
+      });
+      final previous = _user!;
+      _user = UserModel(
+        id: previous.id,
+        name: name.isNotEmpty ? name : previous.name,
+        email: previous.email,
+        phone: phone.isNotEmpty ? phone : previous.phone,
+        roleId: previous.roleId,
+        roleName: previous.roleName,
+        firmId: previous.firmId,
+        avatarUrl: previous.avatarUrl,
+        profilePhoto: previous.profilePhoto,
+        designation: designation.isNotEmpty ? designation : previous.designation,
+        isActive: previous.isActive,
+        createdAt: previous.createdAt,
+      );
+      await StorageService.saveUser(jsonEncode(_user!.toJson()));
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ─── UPDATE PROFILE PHOTO ────────────────
-  Future<void> updateProfilePhoto(String base64Photo) async {
-    if (_user == null) return;
+  // Persisted server-side (not just cached on this device) so other users —
+  // a client viewing a lawyer's profile, a lawyer viewing a client's — can
+  // actually see it, and it survives reinstall/relogin.
+  Future<bool> updateProfilePhoto(String base64Photo) async {
+    if (_user == null) return false;
+
+    final previous = _user!;
     _user = UserModel(
-      id: _user!.id,
-      name: _user!.name,
-      email: _user!.email,
-      phone: _user!.phone,
-      roleId: _user!.roleId,
-      roleName: _user!.roleName,
-      firmId: _user!.firmId,
-      avatarUrl: _user!.avatarUrl,
+      id: previous.id,
+      name: previous.name,
+      email: previous.email,
+      phone: previous.phone,
+      roleId: previous.roleId,
+      roleName: previous.roleName,
+      firmId: previous.firmId,
+      avatarUrl: base64Photo,
       profilePhoto: base64Photo,
-      designation: _user!.designation,
-      isActive: _user!.isActive,
-      createdAt: _user!.createdAt,
+      designation: previous.designation,
+      isActive: previous.isActive,
+      createdAt: previous.createdAt,
     );
     await StorageService.saveUser(jsonEncode(_user!.toJson()));
     notifyListeners();
+
+    try {
+      await DioClient.instance
+          .put('/auth/avatar', data: {'avatar_url': base64Photo});
+      return true;
+    } catch (_) {
+      // Keep the local update — it still improves this device's own view —
+      // but the caller should tell the user it did not sync.
+      return false;
+    }
   }
 
   // ─── LOGOUT ──────────────────────────────

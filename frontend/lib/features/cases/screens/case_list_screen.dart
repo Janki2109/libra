@@ -260,7 +260,7 @@ class _CaseListScreenState extends State<CaseListScreen> {
                   ? const Center(
                       child: CircularProgressIndicator(color: _brown))
                   : _filtered.isEmpty
-                      ? _EmptyState()
+                      ? _EmptyState(onAdded: _loadCases)
                       : RefreshIndicator(
                           color: _brown,
                           backgroundColor: _bgCard,
@@ -435,6 +435,9 @@ class _CaseCard extends StatelessWidget {
 
 // ── Empty State ────────────────────────────────────
 class _EmptyState extends StatelessWidget {
+  final VoidCallback onAdded;
+  const _EmptyState({required this.onAdded});
+
   @override
   Widget build(BuildContext context) => Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -456,7 +459,7 @@ class _EmptyState extends StatelessWidget {
             style: TextStyle(color: _textMuted, fontSize: 13)),
         const SizedBox(height: 24),
         ElevatedButton.icon(
-          onPressed: () => context.push('/cases/add'),
+          onPressed: () => context.push('/cases/add').then((_) => onAdded()),
           icon: const Icon(Icons.add_rounded, color: Colors.white),
           label: const Text('Add Case',
               style:

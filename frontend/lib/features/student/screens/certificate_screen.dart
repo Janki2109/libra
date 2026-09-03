@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/services/dio_client.dart';
+import '../../auth/providers/auth_provider.dart';
 
 const _bg = Color(0xFFF0F4FF);
 const _bgCard = Color(0xFFFFFFFF);
@@ -10,17 +13,27 @@ const _textPri = Color(0xFF0A1628);
 const _textMuted = Color(0xFF546E7A);
 const _gold = Color(0xFFFFD700);
 
-class CertificateScreen extends StatelessWidget {
+class CertificateScreen extends StatefulWidget {
   const CertificateScreen({super.key});
+  @override
+  State<CertificateScreen> createState() => _CertificateScreenState();
+}
 
+class _CertificateScreenState extends State<CertificateScreen> {
+  // 'key' matches a key returned by GET /student/certificates — that's how
+  // each card's real earned/progress state gets matched up below. Two of
+  // these used to require lawyer-only, subscription-gated features
+  // ('Legal Researcher' → 10 AI Legal Research sessions, 'Legal Drafter' →
+  // 5 AI Drafting exercises) that no student account can ever reach, so
+  // they were renamed to features a student actually has.
   final List<Map<String, dynamic>> _certificates = const [
     {
+      'key': 'constitutional_law',
       'title': 'Constitutional Law Expert',
       'icon': '📜',
       'color': Color(0xFF1565C0),
       'requirement': 'Score 80%+ in Constitutional Law Quiz',
       'xp': 500,
-      'earned': false,
       'skills': [
         'Fundamental Rights',
         'DPSP',
@@ -29,54 +42,82 @@ class CertificateScreen extends StatelessWidget {
       ],
     },
     {
+      'key': 'criminal_law',
       'title': 'Criminal Law Specialist',
       'icon': '⚖️',
       'color': Color(0xFFD9534F),
       'requirement': 'Score 80%+ in BNS/IPC Quiz',
       'xp': 500,
-      'earned': false,
       'skills': ['BNS Sections', 'Bail Laws', 'Offences', 'Criminal Procedure'],
     },
     {
-      'title': 'Legal Researcher',
-      'icon': '🔍',
+      'key': 'ai_study_partner',
+      'title': 'AI Study Partner',
+      'icon': '💬',
       'color': Color(0xFF7C3AED),
-      'requirement': 'Complete 10 AI Legal Research sessions',
+      'requirement': 'Send 10 messages to the AI Legal Advisor',
       'xp': 300,
-      'earned': false,
-      'skills': ['Case Law Research', 'Act Interpretation', 'Legal Analysis'],
+      'skills': ['Legal Q&A', 'Case Law Lookup', 'Concept Clarification'],
     },
     {
+      'key': 'contract_law',
       'title': 'Contract Law Expert',
       'icon': '🤝',
       'color': Color(0xFF2E8B57),
       'requirement': 'Score 80%+ in Contract Law Quiz',
       'xp': 400,
-      'earned': false,
       'skills': ['Essential Elements', 'Void Contracts', 'Breach & Remedies'],
     },
     {
+      'key': 'mock_court_champion',
       'title': 'Mock Court Champion',
       'icon': '🏆',
       'color': Color(0xFFD4A017),
       'requirement': 'Win 5 Mock Court sessions',
       'xp': 600,
-      'earned': false,
       'skills': ['Oral Arguments', 'Written Submission', 'Case Strategy'],
     },
     {
-      'title': 'Legal Drafter',
-      'icon': '✍️',
+      'key': 'case_solver',
+      'title': 'Case Solver',
+      'icon': '🕵️',
       'color': Color(0xFF0288D1),
-      'requirement': 'Complete 5 AI Drafting exercises',
+      'requirement': 'Complete 5 Case Challenges',
       'xp': 400,
-      'earned': false,
-      'skills': ['Legal Notice', 'Affidavit', 'Petition Drafting'],
+      'skills': ['Evidence Analysis', 'Legal Reasoning', 'Case Strategy'],
     },
   ];
 
+  Map<String, dynamic> _status = {}; // key -> {earned, progress, target}
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await DioClient.instance.get('/student/certificates');
+      final list = res.data['data'] as List<dynamic>? ?? [];
+      setState(() {
+        _status = {for (final c in list) c['key']: c};
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final earnedCerts = _certificates
+        .where((cert) => _status[cert['key']]?['earned'] == true)
+        .toList();
+    final earnedXP =
+        earnedCerts.fold<int>(0, (sum, cert) => sum + (cert['xp'] as int));
+
     return Scaffold(
       backgroundColor: _bg,
       body: Column(children: [
@@ -110,16 +151,18 @@ class CertificateScreen extends StatelessWidget {
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _Stat('0', 'Earned', _gold),
+                        _Stat('${earnedCerts.length}', 'Earned', _gold),
                         _Stat('${_certificates.length}', 'Available',
                             Colors.white),
-                        _Stat('0', 'XP from Certs', Colors.white70),
+                        _Stat('$earnedXP', 'XP from Certs', Colors.white70),
                       ]),
                 ]),
               )),
         ),
         Expanded(
-            child: ListView(padding: const EdgeInsets.all(16), children: [
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: _blue))
+                : ListView(padding: const EdgeInsets.all(16), children: [
           Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -140,7 +183,10 @@ class CertificateScreen extends StatelessWidget {
           const SizedBox(height: 16),
           ..._certificates.map((cert) {
             final color = cert['color'] as Color;
-            final earned = cert['earned'] as bool;
+            final status = _status[cert['key']];
+            final earned = status?['earned'] == true;
+            final progress = status?['progress'] as int? ?? 0;
+            final target = status?['target'] as int? ?? 0;
             return Container(
               margin: const EdgeInsets.only(bottom: 14),
               decoration: BoxDecoration(
@@ -236,6 +282,22 @@ class CertificateScreen extends StatelessWidget {
                                     style: const TextStyle(
                                         color: _textMuted, fontSize: 12))),
                           ]),
+                          if (!earned && target > 0) ...[
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                    value: (progress / target).clamp(0.0, 1.0),
+                                    minHeight: 5,
+                                    backgroundColor: _border,
+                                    color: color)),
+                            const SizedBox(height: 4),
+                            Text('$progress / $target',
+                                style: TextStyle(
+                                    color: color.withValues(alpha: 0.8),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600)),
+                          ],
                           const SizedBox(height: 10),
                           Wrap(
                               spacing: 6,
@@ -308,6 +370,7 @@ class CertificateScreen extends StatelessWidget {
 
   void _showCertificate(
       BuildContext context, Map<String, dynamic> cert, Color color) {
+    final studentName = context.read<AuthProvider>().user?.name ?? 'Student';
     showDialog(
         context: context,
         builder: (_) => AlertDialog(
@@ -337,6 +400,20 @@ class CertificateScreen extends StatelessWidget {
                               color: Colors.white,
                               fontWeight: FontWeight.w900,
                               fontSize: 18)),
+                      const SizedBox(height: 14),
+                      const Text('AWARDED TO',
+                          style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 9,
+                              letterSpacing: 2)),
+                      const SizedBox(height: 2),
+                      Text(studentName,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 20,
+                              fontStyle: FontStyle.italic)),
                       const SizedBox(height: 8),
                       const Text('This certifies successful completion',
                           style:

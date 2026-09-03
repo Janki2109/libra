@@ -99,6 +99,7 @@ func Register(c *gin.Context) {
 		BarCouncilNumber string `json:"bar_council_number"`
 		City             string `json:"city"`
 		State            string `json:"state"`
+		Designation      string `json:"designation"`
 		// Plan is the name of one of the plans row (lawyer/lawyer_pro/
 		// lawyer_premium) the signer chose on the "Choose Your Plan" screen.
 		// Optional and defaults to the base 'lawyer' plan so existing callers
@@ -108,6 +109,12 @@ func Register(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	req.Phone = strings.TrimSpace(req.Phone)
+	if !utils.ValidPhone(req.Phone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid phone")
 		return
 	}
 
@@ -180,9 +187,9 @@ func Register(c *gin.Context) {
 
 	userID := uuid.New().String()
 	_, err = tx.Exec(`
-		INSERT INTO users (id, name, email, phone, password_hash, role_id, firm_id, is_active, email_verified, verification_status, bar_council_number)
-		VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, true, false, 'pending', $8)
-	`, userID, req.Name, email, req.Phone, hash, roleID, firmID, req.BarCouncilNumber)
+		INSERT INTO users (id, name, email, phone, password_hash, role_id, firm_id, is_active, email_verified, verification_status, bar_council_number, designation)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, true, false, 'pending', $8, $9)
+	`, userID, req.Name, email, req.Phone, hash, roleID, firmID, req.BarCouncilNumber, req.Designation)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to create user", err.Error())
 		return
@@ -220,6 +227,12 @@ func ClientRegister(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	req.Phone = strings.TrimSpace(req.Phone)
+	if !utils.ValidPhone(req.Phone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid phone")
 		return
 	}
 
@@ -296,6 +309,12 @@ func StudentRegister(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	req.Phone = strings.TrimSpace(req.Phone)
+	if !utils.ValidPhone(req.Phone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid phone")
 		return
 	}
 
@@ -556,6 +575,85 @@ func GetMe(c *gin.Context) {
 	}
 
 	utils.Success(c, http.StatusOK, "User fetched", user)
+}
+
+// UpdateAvatar persists the caller's profile photo server-side. It used to
+// only be kept in the app's local SharedPreferences cache, so nobody else —
+// a client viewing a lawyer's profile, a lawyer viewing a client's — ever
+// saw it, and it vanished on reinstall.
+//
+// Stored as a data URI directly in the users row, matching how documents are
+// already stored inline as base64 elsewhere in this app. Capped well below
+// that 8MB document limit since this is a small, client-resized photo.
+const maxAvatarDataURILen = 2 * 1024 * 1024 // ~2MB of base64
+
+func UpdateAvatar(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+
+	var req struct {
+		AvatarURL string `json:"avatar_url" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	if len(req.AvatarURL) > maxAvatarDataURILen {
+		utils.Error(c, http.StatusRequestEntityTooLarge,
+			"Photo is too large", "resize before uploading")
+		return
+	}
+
+	if _, err := config.DB.Exec(
+		`UPDATE users SET avatar_url=$1, updated_at=NOW() WHERE id=$2::uuid`,
+		req.AvatarURL, userID,
+	); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to update photo", err.Error())
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "Photo updated", gin.H{"avatar_url": req.AvatarURL})
+}
+
+// UpdateProfile lets a signed-in user edit their own name/phone/designation.
+// There was previously no self-service way to do this at all — an admin
+// could rename a staff member (UpdateStaff), but a lawyer had no path to set
+// their own designation, which is why it always showed "Not set".
+func UpdateProfile(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+
+	var req struct {
+		Name        string `json:"name"`
+		Phone       string `json:"phone"`
+		Designation string `json:"designation"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	if req.Name != "" && len(strings.Fields(req.Name)) < 2 {
+		utils.Error(c, http.StatusBadRequest,
+			"Enter your full name (first and last name)", "")
+		return
+	}
+	req.Phone = strings.TrimSpace(req.Phone)
+	if req.Phone != "" && !utils.ValidPhone(req.Phone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid phone")
+		return
+	}
+
+	if _, err := config.DB.Exec(`
+		UPDATE users SET
+		  name        = CASE WHEN $1 != '' THEN $1 ELSE name END,
+		  phone       = CASE WHEN $2 != '' THEN $2 ELSE phone END,
+		  designation = CASE WHEN $3 != '' THEN $3 ELSE designation END,
+		  updated_at  = NOW()
+		WHERE id=$4::uuid
+	`, req.Name, req.Phone, req.Designation, userID); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to update profile", err.Error())
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "Profile updated", nil)
 }
 
 // ─── LOGOUT ──────────────────────────────────

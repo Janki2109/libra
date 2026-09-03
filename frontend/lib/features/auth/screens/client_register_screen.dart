@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
 
 class ClientRegisterScreen extends StatefulWidget {
@@ -143,11 +144,7 @@ class _ClientRegisterScreenState extends State<ClientRegisterScreen> {
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(10)
               ],
-              validator: (v) {
-                if (v!.isEmpty) return 'Phone is required';
-                if (v.length != 10) return 'Enter valid 10-digit number';
-                return null;
-              },
+              validator: (v) => Validators.phone(v),
               decoration: _deco(
                   'Phone Number *', Icons.phone_outlined, AppColors.info)),
           const SizedBox(height: 14),

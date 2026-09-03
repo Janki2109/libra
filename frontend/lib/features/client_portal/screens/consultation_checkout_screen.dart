@@ -75,6 +75,20 @@ class _ConsultationCheckoutScreenState
           if (mounted) setState(() => _loading = false);
         },
         onWebResourceError: (err) {
+          // Razorpay's checkout.js pulls in its own fonts, analytics and
+          // other sub-resources — any one of those failing (a blocked
+          // tracker, a flaky CDN asset) used to be treated the same as the
+          // checkout page itself failing to load, closing the whole flow
+          // over something that never actually mattered. Only a confirmed
+          // main-frame failure is fatal here.
+          // Many Android WebView versions report `null` (not `false`) for a
+          // sub-resource failure, which the earlier `== false` check let
+          // through as if it were fatal. Only a *confirmed* main-frame
+          // failure should end the flow — treat unknown/null the same as
+          // false, since silently swallowing a genuine rare main-frame
+          // error costs far less than killing payment over a harmless
+          // tracker/font 404.
+          if (err.isForMainFrame != true) return;
           if (!mounted) return;
           setState(() {
             _loading = false;

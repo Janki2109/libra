@@ -31,6 +31,7 @@ class CallScreen extends StatefulWidget {
 
 class _CallScreenState extends State<CallScreen> {
   late final WebRTCCallSession _session;
+  Timer? _durationTicker;
 
   @override
   void initState() {
@@ -39,6 +40,11 @@ class _CallScreenState extends State<CallScreen> {
         consultationId: widget.consultationId, video: widget.video);
     _session.addListener(_onSessionChange);
     _session.start(isCaller: widget.isCaller);
+    // Ticks the UI once a second so the live call-duration label advances —
+    // the session tracks elapsed time itself; this just repaints it.
+    _durationTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _session.state == CallState.connected) setState(() {});
+    });
   }
 
   void _onSessionChange() {
@@ -54,8 +60,15 @@ class _CallScreenState extends State<CallScreen> {
     setState(() {});
   }
 
+  String _formatDuration(int totalSeconds) {
+    final m = totalSeconds ~/ 60;
+    final s = totalSeconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   void dispose() {
+    _durationTicker?.cancel();
     // If the peer never joined (still ringing on IncomingCallScreen, with no
     // WebRTC socket open yet), the WS hangup below has nowhere to go — this
     // is the only channel back to them, same push pipeline every other call
@@ -81,7 +94,7 @@ class _CallScreenState extends State<CallScreen> {
       case CallState.ringing:
         return widget.isCaller ? 'Calling ${widget.peerName}…' : 'Connecting…';
       case CallState.connected:
-        return 'Connected';
+        return _formatDuration(_session.elapsedSeconds);
       case CallState.ended:
         return 'Call ended';
       case CallState.failed:
@@ -214,6 +227,19 @@ class _CallScreenState extends State<CallScreen> {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       _session.toggleMute();
+                    },
+                  ),
+                  const SizedBox(width: 20),
+                  _CallBtn(
+                    icon: _session.isSpeakerOn
+                        ? Icons.volume_up_rounded
+                        : Icons.hearing_rounded,
+                    color: _session.isSpeakerOn
+                        ? Colors.white.withValues(alpha: 0.35)
+                        : Colors.white.withValues(alpha: 0.18),
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _session.toggleSpeaker();
                     },
                   ),
                   const SizedBox(width: 20),

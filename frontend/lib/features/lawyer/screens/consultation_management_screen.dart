@@ -43,6 +43,14 @@ bool _isStartingSoon(String isoDate, String timeLabel) {
   }
 }
 
+/// 125 -> "2m 5s". Call duration was recorded (migration
+/// 018_consultation_call_duration.sql) but never surfaced anywhere in the UI.
+String _formatCallDuration(int seconds) {
+  final m = seconds ~/ 60;
+  final s = seconds % 60;
+  return m > 0 ? '${m}m ${s}s' : '${s}s';
+}
+
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
 const _brown = Color(0xFF150E3D);
@@ -581,9 +589,24 @@ class _ConsultationManagementScreenState
                                     const Icon(Icons.check_circle_rounded,
                                         color: _green, size: 13),
                                     const SizedBox(width: 4),
-                                    const Text('₹5 Paid',
-                                        style: TextStyle(
+                                    Text(
+                                        '₹${(((c['amount_paise'] ?? 0) as num) / 100).toStringAsFixed(0)} Paid',
+                                        style: const TextStyle(
                                             color: _green,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700)),
+                                  ]),
+                                if (((c['call_duration_seconds'] ?? 0) as num) > 0)
+                                  Row(mainAxisSize: MainAxisSize.min, children: [
+                                    const Icon(Icons.timer_outlined,
+                                        color: _blue, size: 13),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                        _formatCallDuration(
+                                            (c['call_duration_seconds'] as num)
+                                                .toInt()),
+                                        style: const TextStyle(
+                                            color: _blue,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700)),
                                   ]),

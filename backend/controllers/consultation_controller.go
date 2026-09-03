@@ -432,6 +432,7 @@ func GetMyConsultations(c *gin.Context) {
 			COALESCE(u.name,'') as lawyer_name,
 			COALESCE(u.phone,'') as lawyer_phone,
 			con.payment_status, COALESCE(con.amount_paise,0),
+			COALESCE(con.call_duration_seconds,0),
 			con.created_at
 		FROM consultations con
 		LEFT JOIN users u ON con.lawyer_id = u.id
@@ -446,20 +447,21 @@ func GetMyConsultations(c *gin.Context) {
 	defer rows.Close()
 
 	type Consultation struct {
-		ID               string    `json:"id"`
-		ConsultationType string    `json:"consultation_type"`
-		ConsultationDate string    `json:"consultation_date"`
-		ConsultationTime string    `json:"consultation_time"`
-		Status           string    `json:"status"`
-		Notes            string    `json:"notes"`
-		LawyerNotes      string    `json:"lawyer_notes"`
-		MeetingLink      string    `json:"meeting_link"`
-		LawyerID         string    `json:"lawyer_id"`
-		LawyerName       string    `json:"lawyer_name"`
-		LawyerPhone      string    `json:"lawyer_phone"`
-		PaymentStatus    string    `json:"payment_status"`
-		AmountPaise      int64     `json:"amount_paise"`
-		CreatedAt        time.Time `json:"created_at"`
+		ID                  string    `json:"id"`
+		ConsultationType    string    `json:"consultation_type"`
+		ConsultationDate    string    `json:"consultation_date"`
+		ConsultationTime    string    `json:"consultation_time"`
+		Status              string    `json:"status"`
+		Notes               string    `json:"notes"`
+		LawyerNotes         string    `json:"lawyer_notes"`
+		MeetingLink         string    `json:"meeting_link"`
+		LawyerID            string    `json:"lawyer_id"`
+		LawyerName          string    `json:"lawyer_name"`
+		LawyerPhone         string    `json:"lawyer_phone"`
+		PaymentStatus       string    `json:"payment_status"`
+		AmountPaise         int64     `json:"amount_paise"`
+		CallDurationSeconds int       `json:"call_duration_seconds"`
+		CreatedAt           time.Time `json:"created_at"`
 	}
 
 	consultations := []Consultation{}
@@ -470,7 +472,7 @@ func GetMyConsultations(c *gin.Context) {
 			&con.ConsultationTime, &con.Status, &con.Notes,
 			&con.LawyerNotes, &con.MeetingLink, &con.LawyerID,
 			&con.LawyerName, &con.LawyerPhone,
-			&con.PaymentStatus, &con.AmountPaise, &con.CreatedAt,
+			&con.PaymentStatus, &con.AmountPaise, &con.CallDurationSeconds, &con.CreatedAt,
 		)
 		consultations = append(consultations, con)
 	}
@@ -496,6 +498,7 @@ func GetLawyerConsultations(c *gin.Context) {
 			COALESCE(u.email,'') as client_email,
 			COALESCE(u.phone,'') as client_phone,
 			con.payment_status, COALESCE(con.amount_paise,0),
+			COALESCE(con.call_duration_seconds,0),
 			con.created_at
 		FROM consultations con
 		LEFT JOIN users u ON con.client_id = u.id
@@ -516,20 +519,21 @@ func GetLawyerConsultations(c *gin.Context) {
 	defer rows.Close()
 
 	type Consultation struct {
-		ID               string    `json:"id"`
-		ConsultationType string    `json:"consultation_type"`
-		ConsultationDate string    `json:"consultation_date"`
-		ConsultationTime string    `json:"consultation_time"`
-		Status           string    `json:"status"`
-		Notes            string    `json:"notes"`
-		LawyerNotes      string    `json:"lawyer_notes"`
-		MeetingLink      string    `json:"meeting_link"`
-		ClientName       string    `json:"client_name"`
-		ClientEmail      string    `json:"client_email"`
-		ClientPhone      string    `json:"client_phone"`
-		PaymentStatus    string    `json:"payment_status"`
-		AmountPaise      int64     `json:"amount_paise"`
-		CreatedAt        time.Time `json:"created_at"`
+		ID                  string    `json:"id"`
+		ConsultationType    string    `json:"consultation_type"`
+		ConsultationDate    string    `json:"consultation_date"`
+		ConsultationTime    string    `json:"consultation_time"`
+		Status              string    `json:"status"`
+		Notes               string    `json:"notes"`
+		LawyerNotes         string    `json:"lawyer_notes"`
+		MeetingLink         string    `json:"meeting_link"`
+		ClientName          string    `json:"client_name"`
+		ClientEmail         string    `json:"client_email"`
+		ClientPhone         string    `json:"client_phone"`
+		PaymentStatus       string    `json:"payment_status"`
+		AmountPaise         int64     `json:"amount_paise"`
+		CallDurationSeconds int       `json:"call_duration_seconds"`
+		CreatedAt           time.Time `json:"created_at"`
 	}
 
 	consultations := []Consultation{}
@@ -540,7 +544,7 @@ func GetLawyerConsultations(c *gin.Context) {
 			&con.ConsultationTime, &con.Status, &con.Notes,
 			&con.LawyerNotes, &con.MeetingLink,
 			&con.ClientName, &con.ClientEmail, &con.ClientPhone,
-			&con.PaymentStatus, &con.AmountPaise, &con.CreatedAt,
+			&con.PaymentStatus, &con.AmountPaise, &con.CallDurationSeconds, &con.CreatedAt,
 		)
 		consultations = append(consultations, con)
 	}
@@ -972,6 +976,44 @@ func CancelConsultationCall(c *gin.Context) {
 		"call_cancelled", id, "consultation")
 
 	utils.Success(c, http.StatusOK, "Call cancelled", nil)
+}
+
+// SaveCallDuration records how long a call actually lasted, added to any
+// duration already saved (a consultation can involve more than one call
+// attempt — a dropped call redialed). This was never recorded anywhere
+// before, so consultation history had nothing to show for a completed call.
+func SaveCallDuration(c *gin.Context) {
+	id := c.Param("id")
+	if !isUUID(id) {
+		utils.Error(c, http.StatusBadRequest, "Invalid id", "not a uuid")
+		return
+	}
+	userID := utils.UserID(c)
+
+	var req struct {
+		DurationSeconds int `json:"duration_seconds" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// A call that never connected has nothing worth recording — not an
+		// error, just nothing to do.
+		utils.Success(c, http.StatusOK, "Nothing to record", nil)
+		return
+	}
+
+	res, err := config.DB.Exec(`
+		UPDATE consultations SET call_duration_seconds = call_duration_seconds + $1, updated_at=NOW()
+		WHERE id=$2::uuid AND (lawyer_id=$3::uuid OR client_id=$3::uuid)
+	`, req.DurationSeconds, id, userID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to save call duration", err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		utils.Error(c, http.StatusForbidden, "Not a participant on this consultation", "")
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "Call duration saved", nil)
 }
 
 // CancelConsultation - Client cancels their booking

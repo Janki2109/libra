@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/hearing_provider.dart';
+import '../utils/hearing_status.dart';
 
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
@@ -25,7 +26,7 @@ class _HearingListScreenState extends State<HearingListScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HearingProvider>().loadHearings();
     });
@@ -50,12 +51,20 @@ class _HearingListScreenState extends State<HearingListScreen>
         .toList();
     final upcomingHearings = provider.hearings
         .where((h) =>
+            !isPastHearing(h) &&
             (h['hearing_date'] ?? '')
                 .toString()
                 .substring(0, 10)
                 .compareTo(todayStr) >
-            0)
+                0)
         .toList();
+    // History: everything completed/adjourned/cancelled, or dated before
+    // today — sorted most-recent-first so "what happened previously" reads
+    // top to bottom like a timeline.
+    final historyHearings = provider.hearings.where(isPastHearing).toList()
+      ..sort((a, b) => (b['hearing_date'] ?? '')
+          .toString()
+          .compareTo((a['hearing_date'] ?? '').toString()));
 
     return Scaffold(
       backgroundColor: _bg,
@@ -104,9 +113,12 @@ class _HearingListScreenState extends State<HearingListScreen>
                     indicatorWeight: 3,
                     labelColor: const Color(0xFFFFD700),
                     unselectedLabelColor: Colors.white60,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
                     tabs: [
                       Tab(text: 'Today (${todayHearings.length})'),
                       Tab(text: 'Upcoming (${upcomingHearings.length})'),
+                      Tab(text: 'History (${historyHearings.length})'),
                     ],
                   ),
                 ])),
@@ -126,6 +138,11 @@ class _HearingListScreenState extends State<HearingListScreen>
                           hearings: upcomingHearings,
                           emptyMessage: 'No upcoming hearings',
                           emptyIcon: Icons.calendar_today_rounded),
+                      _HearingTabView(
+                          hearings: historyHearings,
+                          emptyMessage: 'No past hearings yet',
+                          emptyIcon: Icons.history_rounded,
+                          hideScheduleAction: true),
                     ],
                   ),
           ),
@@ -149,10 +166,12 @@ class _HearingTabView extends StatelessWidget {
   final List<dynamic> hearings;
   final String emptyMessage;
   final IconData emptyIcon;
+  final bool hideScheduleAction;
   const _HearingTabView(
       {required this.hearings,
       required this.emptyMessage,
-      required this.emptyIcon});
+      required this.emptyIcon,
+      this.hideScheduleAction = false});
 
   @override
   Widget build(BuildContext context) {
@@ -169,20 +188,22 @@ class _HearingTabView extends StatelessWidget {
         Text(emptyMessage,
             style: const TextStyle(
                 color: _textPri, fontSize: 16, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        const Text('Schedule a new hearing',
-            style: TextStyle(color: _textMuted, fontSize: 13)),
-        const SizedBox(height: 24),
-        ElevatedButton.icon(
-          onPressed: () => context.push('/hearings/add'),
-          icon: const Icon(Icons.add_rounded, color: Colors.white),
-          label: const Text('Schedule Hearing',
-              style: TextStyle(color: Colors.white)),
-          style: ElevatedButton.styleFrom(
-              backgroundColor: _brown,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12))),
-        ),
+        if (!hideScheduleAction) ...[
+          const SizedBox(height: 8),
+          const Text('Schedule a new hearing',
+              style: TextStyle(color: _textMuted, fontSize: 13)),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => context.push('/hearings/add'),
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: const Text('Schedule Hearing',
+                style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _brown,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12))),
+          ),
+        ],
       ]));
     }
 
@@ -210,19 +231,6 @@ class _HearingCard extends StatelessWidget {
   final VoidCallback onTap;
   const _HearingCard({required this.hearing, required this.onTap});
 
-  Color _statusColor(String s) {
-    switch (s) {
-      case 'completed':
-        return const Color(0xFF2E8B57);
-      case 'adjourned':
-        return const Color(0xFFD4A017);
-      case 'cancelled':
-        return const Color(0xFFD9534F);
-      default:
-        return const Color(0xFF4A90D9);
-    }
-  }
-
   String _monthName(int m) => [
         'Jan',
         'Feb',
@@ -240,8 +248,8 @@ class _HearingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = hearing['status'] ?? 'scheduled';
-    final statusColor = _statusColor(status);
+    final statusInfo = hearingStatusInfo(hearing);
+    final statusColor = statusInfo.color;
     final date = (hearing['hearing_date'] ?? '').toString();
     final shortDate = date.length >= 10 ? date.substring(0, 10) : date;
     final day = shortDate.length >= 10 ? shortDate.substring(8, 10) : '--';
@@ -314,6 +322,12 @@ class _HearingCard extends StatelessWidget {
                               fontSize: 15),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
+                      if ((hearing['client_name'] ?? '').toString().isNotEmpty)
+                        Text(hearing['client_name'],
+                            style: const TextStyle(
+                                color: _textMuted, fontSize: 11.5),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                       Text(hearing['purpose'] ?? '',
                           style:
                               const TextStyle(color: _textMuted, fontSize: 12),
@@ -328,7 +342,7 @@ class _HearingCard extends StatelessWidget {
                       color: statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: statusColor.withValues(alpha: 0.3))),
-                  child: Text(status.toUpperCase(),
+                  child: Text(statusInfo.label.toUpperCase(),
                       style: TextStyle(
                           color: statusColor,
                           fontSize: 9,
@@ -350,6 +364,27 @@ class _HearingCard extends StatelessWidget {
                 const Icon(Icons.arrow_forward_ios_rounded,
                     color: _textMuted, size: 13),
               ]),
+              if ((hearing['next_date'] ?? '').toString().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFF6B4EFF).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Row(children: [
+                    const Icon(Icons.event_repeat_rounded,
+                        color: Color(0xFF6B4EFF), size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                        'Next hearing: ${(hearing['next_date'] ?? '').toString().substring(0, 10)}',
+                        style: const TextStyle(
+                            color: Color(0xFF6B4EFF),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ],
             ]),
           ),
         ]),

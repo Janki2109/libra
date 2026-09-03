@@ -83,6 +83,13 @@ class _SubscriptionCheckoutScreenState
           if (mounted) setState(() => _loading = false);
         },
         onWebResourceError: (err) {
+          // A sub-resource failure (font, analytics, ad-script Razorpay's
+          // own checkout.js pulls in) is not the checkout page failing —
+          // only a confirmed main-frame failure should end the flow.
+          // Many Android WebView versions report `null` (not `false`) for a
+          // sub-resource failure. Only a confirmed main-frame failure should
+          // end the flow.
+          if (err.isForMainFrame != true) return;
           if (!mounted) return;
           setState(() {
             _loading = false;

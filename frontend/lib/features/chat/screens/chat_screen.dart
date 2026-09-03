@@ -1,10 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/utils/file_opener.dart';
 import '../../auth/providers/auth_provider.dart';
+
+// Matches the backend's maxInlineChatFileBytes (chat_controller.go) — check
+// client-side too so a user finds out a file is too large immediately
+// instead of waiting on a round trip that the server will reject anyway.
+const _maxAttachmentBytes = 8 * 1024 * 1024;
+const _allowedDocExtensions = [
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'
+];
 
 // Lawyer theme (navy)
 const _bgLawyer = Color(0xFFF6F5FB);
@@ -34,6 +47,16 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
+/// Local-only state for an attachment upload in flight — never persisted,
+/// just enough to render a spinner or a Retry action on that one bubble.
+class _PendingAttachment {
+  final Uint8List bytes;
+  final bool uploading;
+  final bool failed;
+  const _PendingAttachment(
+      {required this.bytes, required this.uploading, required this.failed});
+}
+
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
@@ -44,6 +67,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   late AnimationController _sendCtrl;
   late Animation<double> _sendScale;
 
+  // Real presence — replaces the previous hardcoded "Online" text. Polled
+  // alongside messages so it stays fresh without a second network timer.
+  bool? _peerOnline;
+  DateTime? _peerLastSeen;
+
+  // In-flight/failed attachment uploads, keyed by the temp message id, so a
+  // failed upload can show a Retry action on that specific bubble instead of
+  // silently vanishing or blocking the whole thread.
+  final Map<String, _PendingAttachment> _pendingAttachments = {};
+
   @override
   void initState() {
     super.initState();
@@ -51,8 +84,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         duration: const Duration(milliseconds: 150), vsync: this);
     _sendScale = Tween<double>(begin: 1.0, end: 0.9).animate(_sendCtrl);
     _loadMessages();
-    _pollingTimer = Timer.periodic(
-        const Duration(seconds: 3), (_) => _loadMessages(silent: true));
+    _loadPresence();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _loadMessages(silent: true);
+      _loadPresence();
+    });
   }
 
   @override
@@ -62,6 +98,36 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _scrollCtrl.dispose();
     _sendCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPresence() async {
+    try {
+      final res =
+          await DioClient.instance.get('/chat/rooms/${widget.roomId}/presence');
+      final data = res.data['data'];
+      if (!mounted || data == null) return;
+      setState(() {
+        _peerOnline = data['online'] == true;
+        final lastSeen = data['last_seen'];
+        _peerLastSeen =
+            lastSeen != null ? DateTime.tryParse(lastSeen.toString()) : null;
+      });
+    } catch (_) {
+      // Presence is a nice-to-have overlay on the chat, not a hard
+      // dependency — a failed poll just leaves the last-known state showing
+      // rather than erroring or blocking the message list.
+    }
+  }
+
+  String _presenceLabel() {
+    if (_peerOnline == null) return '';
+    if (_peerOnline == true) return 'Online';
+    if (_peerLastSeen == null) return 'Offline';
+    final diff = DateTime.now().difference(_peerLastSeen!.toLocal());
+    if (diff.inMinutes < 1) return 'Last seen just now';
+    if (diff.inMinutes < 60) return 'Last seen ${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return 'Last seen ${diff.inHours}h ago';
+    return 'Last seen ${diff.inDays}d ago';
   }
 
   Future<void> _loadMessages({bool silent = false}) async {
@@ -135,6 +201,273 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
     }
     _scrollToBottom();
+  }
+
+  void _showAttachmentOptions() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bgCard,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                    color: _border, borderRadius: BorderRadius.circular(2))),
+            ListTile(
+              leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                      color: const Color(0xFF4A90D9).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.image_rounded,
+                      color: Color(0xFF4A90D9))),
+              title: const Text('Photo',
+                  style: TextStyle(color: _textPri, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndSendPhoto();
+              },
+            ),
+            ListTile(
+              leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                      color: _brown.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.description_rounded, color: _brown)),
+              title: const Text('Document',
+                  style: TextStyle(color: _textPri, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndSendDocument();
+              },
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndSendPhoto() async {
+    final XFile? picked =
+        await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (bytes.length > _maxAttachmentBytes) {
+      _showError('Photo is too large. Max size is 8 MB.');
+      return;
+    }
+    if (!mounted) return;
+    // Preview before sending, per spec — a lightweight confirm dialog rather
+    // than a full editor screen, matching this app's existing dialog style.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Send this photo?',
+            style: TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(bytes, fit: BoxFit.contain, height: 220),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: _textMuted))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _brown),
+            child: const Text('Send', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ext = picked.name.contains('.') ? picked.name.split('.').last : 'jpg';
+    _sendAttachment(
+      bytes: bytes,
+      fileName: picked.name.isNotEmpty ? picked.name : 'photo.$ext',
+      mimeType: 'image/$ext',
+      messageType: 'image',
+    );
+  }
+
+  Future<void> _pickAndSendDocument() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: _allowedDocExtensions,
+      withData: true,
+    );
+    final file = result?.files.single;
+    if (file == null || file.bytes == null) return;
+    if (file.size > _maxAttachmentBytes) {
+      _showError('File is too large. Max size is 8 MB.');
+      return;
+    }
+    _sendAttachment(
+      bytes: file.bytes!,
+      fileName: file.name,
+      mimeType: _mimeTypeForExtension(file.extension ?? ''),
+      messageType: 'file',
+    );
+  }
+
+  String _mimeTypeForExtension(String ext) {
+    switch (ext.toLowerCase()) {
+      case 'pdf': return 'application/pdf';
+      case 'doc': return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls': return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'ppt': return 'application/vnd.ms-powerpoint';
+      case 'pptx':
+        return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      case 'txt': return 'text/plain';
+      case 'csv': return 'text/csv';
+      default: return 'application/octet-stream';
+    }
+  }
+
+  Future<void> _sendAttachment({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+    required String messageType,
+  }) async {
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final tempMsg = {
+      'id': tempId,
+      'message': '',
+      'is_mine': true,
+      'sender_name': 'Me',
+      'sender_role': 'user',
+      'message_type': messageType,
+      'file_name': fileName,
+      'mime_type': mimeType,
+      'has_file': true,
+      'is_read': false,
+      'is_deleted_by_sender': false,
+      'created_at': DateTime.now().toIso8601String(),
+    };
+    setState(() {
+      _messages.add(tempMsg);
+      _pendingAttachments[tempId] =
+          _PendingAttachment(bytes: bytes, uploading: true, failed: false);
+    });
+    _scrollToBottom();
+    await _uploadAttachment(tempId, tempMsg, bytes, fileName, mimeType, messageType);
+  }
+
+  Future<void> _uploadAttachment(String tempId, Map tempMsg, Uint8List bytes,
+      String fileName, String mimeType, String messageType) async {
+    setState(() => _pendingAttachments[tempId] =
+        _PendingAttachment(bytes: bytes, uploading: true, failed: false));
+    try {
+      final res = await DioClient.instance.post(
+          '/chat/rooms/${widget.roomId}/messages',
+          data: {
+            'message': '',
+            'message_type': messageType,
+            'file_name': fileName,
+            'mime_type': mimeType,
+            'file_content': base64Encode(bytes),
+          });
+      if (!mounted) return;
+      if (res.data['success'] == true) {
+        final newMsg = res.data['data'];
+        setState(() {
+          final idx = _messages.indexWhere((m) => m['id'] == tempId);
+          if (idx != -1) _messages[idx] = {...newMsg, 'is_mine': true};
+          _pendingAttachments.remove(tempId);
+          // The just-sent bytes are cached locally so the sender's own
+          // bubble can render an image immediately without a round trip
+          // back to the server it just uploaded to.
+          if (newMsg['id'] != null) {
+            _fileCache[newMsg['id'].toString()] = bytes;
+          }
+        });
+      } else {
+        setState(() => _pendingAttachments[tempId] =
+            _PendingAttachment(bytes: bytes, uploading: false, failed: true));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _pendingAttachments[tempId] =
+          _PendingAttachment(bytes: bytes, uploading: false, failed: true));
+    }
+  }
+
+  void _retryAttachment(String tempId) {
+    final msg = _messages.firstWhere((m) => m['id'] == tempId, orElse: () => null);
+    final pending = _pendingAttachments[tempId];
+    if (msg == null || pending == null) return;
+    _uploadAttachment(tempId, msg, pending.bytes,
+        (msg['file_name'] ?? 'file').toString(),
+        (msg['mime_type'] ?? '').toString(),
+        (msg['message_type'] ?? 'file').toString());
+  }
+
+  void _removeFailedAttachment(String tempId) {
+    setState(() {
+      _messages.removeWhere((m) => m['id'] == tempId);
+      _pendingAttachments.remove(tempId);
+    });
+  }
+
+  // Fetched attachment bytes, keyed by real message id — avoids re-fetching
+  // an image every time the 3s poll rebuilds the message list.
+  final Map<String, Uint8List> _fileCache = {};
+
+  Future<Uint8List?> _fetchAttachment(String messageId) async {
+    if (_fileCache.containsKey(messageId)) return _fileCache[messageId];
+    try {
+      final res =
+          await DioClient.instance.get('/chat/messages/$messageId/file');
+      final b64 = res.data['data']?['file_content'] as String?;
+      if (b64 == null) return null;
+      final bytes = base64Decode(b64);
+      _fileCache[messageId] = bytes;
+      return bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _openAttachment(Map message) async {
+    final id = message['id'].toString();
+    final fileName = (message['file_name'] ?? 'document').toString();
+    final mimeType = (message['mime_type'] ?? '').toString().isNotEmpty
+        ? message['mime_type'].toString()
+        : 'application/octet-stream';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Opening $fileName...'),
+        duration: const Duration(seconds: 1),
+        backgroundColor: _brown,
+        behavior: SnackBarBehavior.floating));
+    final bytes = await _fetchAttachment(id);
+    if (!mounted) return;
+    if (bytes == null) {
+      _showError('Could not load this attachment.');
+      return;
+    }
+    final result = await openDocumentBytes(
+        bytes: bytes, fileName: fileName, mimeType: mimeType);
+    if (!mounted) return;
+    if (!result.success) {
+      _showError(result.message ?? 'Could not open this file.');
+    }
   }
 
   void _showError(String msg) {
@@ -270,18 +603,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 15)),
-                            Row(children: [
-                              Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                      color: Color(0xFF4CAF7D),
-                                      shape: BoxShape.circle)),
-                              const SizedBox(width: 4),
-                              const Text('Online',
-                                  style: TextStyle(
-                                      color: Color(0xFF4CAF7D), fontSize: 10)),
-                            ]),
+                            if (_presenceLabel().isNotEmpty)
+                              Row(children: [
+                                Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                        color: _peerOnline == true
+                                            ? const Color(0xFF4CAF7D)
+                                            : Colors.white38,
+                                        shape: BoxShape.circle)),
+                                const SizedBox(width: 4),
+                                Text(_presenceLabel(),
+                                    style: TextStyle(
+                                        color: _peerOnline == true
+                                            ? const Color(0xFF4CAF7D)
+                                            : Colors.white60,
+                                        fontSize: 10)),
+                              ]),
                           ])),
                       IconButton(
                         icon: const Icon(Icons.refresh_rounded,
@@ -360,9 +699,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                 message: msg,
                                 isMine: isMine,
                                 isPending: isTemp,
+                                pending: isTemp ? _pendingAttachments[msg['id']] : null,
                                 onLongPress: isMine && !isTemp
                                     ? () => _showDeleteDialog(msg['id'])
                                     : null,
+                                onRetryAttachment: isTemp
+                                    ? () => _retryAttachment(msg['id'])
+                                    : null,
+                                onRemoveFailedAttachment: isTemp
+                                    ? () => _removeFailedAttachment(msg['id'])
+                                    : null,
+                                onOpenAttachment: () => _openAttachment(msg),
+                                fetchImageBytes: () => _fetchAttachment(msg['id'].toString()),
                               ),
                             ]);
                           },
@@ -388,6 +736,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
               child: SafeArea(
                   child: Row(children: [
+                // Attachment button
+                GestureDetector(
+                  onTap: _showAttachmentOptions,
+                  child: Container(
+                    width: 42,
+                    height: 42,
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      color: isClient ? const Color(0xFFF0FAF6) : _bg,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: isClient ? const Color(0xFFB2DFD0) : _border,
+                          width: 0.8),
+                    ),
+                    child: Icon(Icons.add_rounded,
+                        color: isClient ? const Color(0xFF0D6E4F) : _brown),
+                  ),
+                ),
                 // Text input
                 Expanded(
                   child: Container(
@@ -410,6 +776,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         hintText: 'Type a message...',
                         hintStyle: TextStyle(color: _textMuted, fontSize: 14),
                         border: InputBorder.none,
+                        filled: false,
                         isDense: true,
                       ),
                       onSubmitted: (_) => _sendMessage(),
@@ -519,12 +886,22 @@ class _MessageBubble extends StatelessWidget {
   final dynamic message;
   final bool isMine;
   final bool isPending;
+  final _PendingAttachment? pending;
   final VoidCallback? onLongPress;
+  final VoidCallback? onRetryAttachment;
+  final VoidCallback? onRemoveFailedAttachment;
+  final VoidCallback onOpenAttachment;
+  final Future<Uint8List?> Function() fetchImageBytes;
   const _MessageBubble(
       {required this.message,
       required this.isMine,
       this.isPending = false,
-      this.onLongPress});
+      this.pending,
+      this.onLongPress,
+      this.onRetryAttachment,
+      this.onRemoveFailedAttachment,
+      required this.onOpenAttachment,
+      required this.fetchImageBytes});
 
   String _formatTime(String t) {
     try {
@@ -533,6 +910,151 @@ class _MessageBubble extends StatelessWidget {
     } catch (_) {
       return '';
     }
+  }
+
+  bool get _hasAttachment {
+    final type = (message['message_type'] ?? 'text').toString();
+    return (type == 'image' || type == 'file') &&
+        (message['has_file'] == true || pending != null);
+  }
+
+  Widget _buildAttachment(BuildContext context, bool isMine) {
+    if (!_hasAttachment) return const SizedBox.shrink();
+    final isImage = (message['message_type'] ?? '') == 'image';
+    final fileName = (message['file_name'] ?? 'Attachment').toString();
+
+    // A failed upload shows the local bytes with a Retry action — the
+    // message never silently vanishes, and never looks like it sent when it
+    // didn't.
+    if (pending != null && pending!.failed) {
+      return Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+            color: const Color(0xFFD9534F).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.error_outline_rounded,
+                color: Color(0xFFD9534F), size: 16),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text('Upload failed: $fileName',
+                    style: const TextStyle(
+                        color: Color(0xFFD9534F), fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis)),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            TextButton(
+              onPressed: onRetryAttachment,
+              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              child: const Text('Retry',
+                  style: TextStyle(
+                      color: Color(0xFFD9534F), fontWeight: FontWeight.w700)),
+            ),
+            TextButton(
+              onPressed: onRemoveFailedAttachment,
+              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              child: Text('Remove',
+                  style: TextStyle(color: isMine ? Colors.white70 : _textMuted)),
+            ),
+          ]),
+        ]),
+      );
+    }
+
+    if (pending != null && pending!.uploading) {
+      return Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: isMine ? Colors.white : _brown)),
+          const SizedBox(width: 8),
+          Flexible(
+              child: Text('Uploading $fileName...',
+                  style: TextStyle(
+                      color: isMine ? Colors.white : _textPri, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis)),
+        ]),
+      );
+    }
+
+    if (isImage) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: GestureDetector(
+          onTap: onOpenAttachment,
+          child: pending != null
+              ? Image.memory(pending!.bytes,
+                  width: 200, height: 200, fit: BoxFit.cover)
+              : FutureBuilder<Uint8List?>(
+                  future: fetchImageBytes(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return Container(
+                          width: 200,
+                          height: 200,
+                          color: Colors.black.withValues(alpha: 0.05),
+                          child: const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2)));
+                    }
+                    if (snapshot.data == null) {
+                      return Container(
+                        width: 200,
+                        height: 120,
+                        color: Colors.black.withValues(alpha: 0.05),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.broken_image_rounded,
+                            color: _textMuted),
+                      );
+                    }
+                    return Image.memory(snapshot.data!,
+                        width: 200, height: 200, fit: BoxFit.cover);
+                  },
+                ),
+        ),
+      );
+    }
+
+    // Document attachment — icon + name, tap to open via the shared
+    // file-opener (same one Documents uses).
+    return GestureDetector(
+      onTap: onOpenAttachment,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isMine
+              ? Colors.white.withValues(alpha: 0.12)
+              : _brown.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.insert_drive_file_rounded,
+              color: isMine ? Colors.white : _brown, size: 20),
+          const SizedBox(width: 8),
+          Flexible(
+              child: Text(fileName,
+                  style: TextStyle(
+                      color: isMine ? Colors.white : _textPri,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 6),
+          Icon(Icons.download_rounded,
+              color: isMine ? Colors.white70 : _textMuted, size: 16),
+        ]),
+      ),
+    );
   }
 
   @override
@@ -616,20 +1138,32 @@ class _MessageBubble extends StatelessWidget {
                                 color: _brownLight,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700))),
-                  Text(
-                    isDeleted ? '🗑 Deleted' : text,
-                    style: TextStyle(
-                      color: isMine
-                          ? Colors.white
-                          : isDeleted
-                              ? _textMuted
-                              : _textPri,
-                      fontSize: 14,
-                      height: 1.4,
-                      fontStyle:
-                          isDeleted ? FontStyle.italic : FontStyle.normal,
+                  if (!isDeleted) _buildAttachment(context, isMine),
+                  if (!isDeleted && text.toString().trim().isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                          top: _hasAttachment ? 6 : 0),
+                      child: Text(
+                        text,
+                        style: TextStyle(
+                          color: isMine ? Colors.white : _textPri,
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
+                      ),
                     ),
-                  ),
+                  if (isDeleted)
+                    Text(
+                      '🗑 Deleted',
+                      style: TextStyle(
+                        color: isMine
+                            ? Colors.white.withValues(alpha: 0.85)
+                            : _textMuted,
+                        fontSize: 14,
+                        height: 1.4,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                   const SizedBox(height: 3),
                   Row(mainAxisSize: MainAxisSize.min, children: [
                     Text(time,

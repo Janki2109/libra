@@ -56,7 +56,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       const Spacer(),
                       GestureDetector(
-                        onTap: () {},
+                        onTap: () => context.push('/profile/edit'),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 7),
@@ -87,11 +87,17 @@ class ProfileScreen extends StatelessWidget {
                   const SizedBox(height: 14),
 
                   // Name
-                  Text(user?.name ?? '',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(user?.name ?? '',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800)),
+                  ),
                   const SizedBox(height: 8),
 
                   // LAWYER badge
@@ -194,7 +200,7 @@ class ProfileScreen extends StatelessWidget {
                   label: 'Notifications',
                   subtitle: 'Manage alerts & reminders',
                   color: _gold,
-                  onTap: () {},
+                  onTap: () => context.push('/notifications'),
                 ),
                 const SizedBox(height: 22),
 
@@ -451,14 +457,51 @@ class _ProfilePhotoWidget extends StatelessWidget {
   const _ProfilePhotoWidget({required this.user});
 
   Future<void> _pickPhoto(BuildContext context) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 12),
+          Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take Photo'),
+            onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from Gallery'),
+            onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (source == null) return;
+
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 70, maxWidth: 600);
+    final picked =
+        await picker.pickImage(source: source, imageQuality: 70, maxWidth: 600);
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     final base64Photo = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    if (context.mounted)
-      await context.read<AuthProvider>().updateProfilePhoto(base64Photo);
+    if (!context.mounted) return;
+    final synced =
+        await context.read<AuthProvider>().updateProfilePhoto(base64Photo);
+    if (!synced && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Photo updated on this device, but could not sync — others may not see it yet.'),
+          backgroundColor: Color(0xFFD4A017)));
+    }
   }
 
   @override
@@ -469,12 +512,13 @@ class _ProfilePhotoWidget extends StatelessWidget {
     return GestureDetector(
       onTap: () => _pickPhoto(context),
       child: Stack(alignment: Alignment.center, children: [
-        // Photo container
+        // Photo container — a true circle, so the photo is cropped to fit it
+        // exactly rather than sitting in a rounded-rectangle badge.
         Container(
-          width: 120,
-          height: 150,
+          width: 132,
+          height: 132,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            shape: BoxShape.circle,
             border:
                 Border.all(color: Colors.white.withValues(alpha: 0.7), width: 2.5),
             color: Colors.white.withValues(alpha: 0.15),
@@ -485,15 +529,14 @@ class _ProfilePhotoWidget extends StatelessWidget {
                   spreadRadius: 2)
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(21.5),
+          child: ClipOval(
             child: hasPhoto
                 ? Image.memory(
                     base64Decode((user!.profilePhoto as String)
                         .replaceFirst('data:image/jpeg;base64,', '')),
                     fit: BoxFit.cover,
-                    width: 120,
-                    height: 150,
+                    width: 132,
+                    height: 132,
                     errorBuilder: (_, __, ___) => _initials(initials),
                   )
                 : _initials(initials),
@@ -501,8 +544,8 @@ class _ProfilePhotoWidget extends StatelessWidget {
         ),
         // Camera button
         Positioned(
-            bottom: 8,
-            right: 8,
+            bottom: 4,
+            right: 4,
             child: Container(
               width: 32,
               height: 32,
@@ -513,8 +556,8 @@ class _ProfilePhotoWidget extends StatelessWidget {
             )),
         // Online dot
         Positioned(
-            top: 8,
-            right: 8,
+            top: 4,
+            right: 4,
             child: Container(
               width: 16,
               height: 16,

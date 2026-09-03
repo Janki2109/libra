@@ -629,7 +629,13 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                             final fileType = d['file_type'] ?? '';
                             final color = _fileColor(fileType);
                             final icon = _fileIcon(fileType);
-                            return Container(
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                context.push('/documents/${d['id']}');
+                              },
+                              child: Container(
                               margin: const EdgeInsets.only(bottom: 10),
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
@@ -692,6 +698,7 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                                   },
                                 ),
                               ]),
+                              ),
                             );
                           },
                         ),

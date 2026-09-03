@@ -71,6 +71,21 @@ func requireFirmResource(c *gin.Context, table, id string) (string, bool) {
 	return firmID, true
 }
 
+// firmStaffRole mirrors middleware.firmStaffRoles (unexported, and this
+// package cannot import middleware without a cycle) — the roles that work
+// inside a firm's workspace rather than being its client. Used by handlers
+// like CreatePayment that sit outside the RequireFirmStaff() group (because
+// a client must also reach them for their own records) but still need to
+// tell "firm staff acting on a client's behalf" apart from "the client
+// themselves".
+func firmStaffRole(role string) bool {
+	switch role {
+	case "super_admin", "admin", "lawyer", "staff", "clerk":
+		return true
+	}
+	return false
+}
+
 // isUUID does a shape check so a malformed path parameter fails fast with a
 // 400 instead of surfacing a Postgres cast error as a 500.
 func isUUID(s string) bool {
@@ -140,9 +155,12 @@ func requireChatRoomAccess(c *gin.Context, roomID string) bool {
 		return false
 	}
 
-	// The caller is a participant if they are the room's lawyer, or if they are
-	// the client the room was opened for (clients are matched to their portal
-	// login by email address).
+	// The caller is a participant if they are the room's lawyer, the law
+	// student it was opened for (student_id is a direct users.id, unlike
+	// client_id), or the client it was opened for (clients are matched to
+	// their portal login by email address). student_id was missing here
+	// entirely, which meant a law student could never open their own chat's
+	// messages — every request 404'd as "not a participant".
 	var one int
 	err := config.DB.QueryRow(`
 		SELECT 1 FROM chat_rooms cr
@@ -150,6 +168,7 @@ func requireChatRoomAccess(c *gin.Context, roomID string) bool {
 		WHERE cr.id = $1::uuid
 		  AND (
 		    cr.lawyer_id = $2::uuid
+		    OR cr.student_id = $2::uuid
 		    OR lower(cl.email) = (SELECT lower(email) FROM users WHERE id = $2::uuid)
 		  )
 	`, roomID, userID).Scan(&one)

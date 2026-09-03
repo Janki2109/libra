@@ -228,6 +228,7 @@ class _EcourtsScreenState extends State<EcourtsScreen> {
                             ),
                           ),
                           border: InputBorder.none,
+                          filled: false,
                           contentPadding:
                               const EdgeInsets.symmetric(vertical: 14),
                         ),

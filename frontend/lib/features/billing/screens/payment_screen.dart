@@ -32,6 +32,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _accountNumber = '',
       _ifsc = '',
       _bankName = '';
+  double _subtotal = 0, _gstRate = 18, _gstAmount = 0, _platformFee = 100;
   final _transactionIdCtrl = TextEditingController();
   final _slipUrlCtrl = TextEditingController();
 
@@ -50,7 +51,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _loadInvoiceDetails() async {
     try {
-      final res = await DioClient.instance.get('/invoices/${widget.invoiceId}');
+      // /portal/my-invoices/:id, not the firm-staff-only /invoices/:id — a
+      // client account never passes RequireFirmStaff, so the old call here
+      // silently 403'd on every load and this screen never actually showed
+      // bank details (or, now, the GST/platform-fee breakdown) to a client.
+      final res =
+          await DioClient.instance.get('/portal/my-invoices/${widget.invoiceId}');
       final data = res.data['data'] ?? {};
       setState(() {
         _upiId = data['upi_id'] ?? '';
@@ -58,6 +64,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
         _accountNumber = data['bank_account_number'] ?? '';
         _ifsc = data['bank_ifsc'] ?? '';
         _bankName = data['bank_name'] ?? '';
+        _subtotal = (data['subtotal'] ?? 0).toDouble();
+        _gstRate = (data['gst_rate'] ?? 18).toDouble();
+        _gstAmount = (data['gst_amount'] ?? 0).toDouble();
+        _platformFee = (data['platform_fee'] ?? 100).toDouble();
         _loadingDetails = false;
       });
     } catch (e) {
@@ -405,6 +415,33 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                       const SizedBox(height: 16),
 
+                      // Amount breakdown — the client must always see the
+                      // full base + GST + platform-fee breakdown, never just
+                      // a single total.
+                      if (_subtotal > 0)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                              color: _bgCard,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: _border, width: 0.8)),
+                          child: Column(children: [
+                            _BreakdownRow(
+                                'Service Amount', _subtotal, _textPri),
+                            _BreakdownRow(
+                                'GST (${_gstRate.toStringAsFixed(0)}%)',
+                                _gstAmount,
+                                _textMuted),
+                            _BreakdownRow(
+                                'Platform Fee', _platformFee, _textMuted),
+                            Divider(color: _border, height: 20),
+                            _BreakdownRow(
+                                'Total Payable', widget.amount, _green,
+                                bold: true),
+                          ]),
+                        ),
+
                       // How it works
                       Container(
                         padding: const EdgeInsets.all(14),
@@ -655,6 +692,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
       );
 }
+
+Widget _BreakdownRow(String label, double amount, Color color, {bool bold = false}) =>
+    Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label,
+            style: TextStyle(
+                color: bold ? color : _textMuted,
+                fontSize: bold ? 14 : 12,
+                fontWeight: bold ? FontWeight.w800 : FontWeight.w500)),
+        Text('₹${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+                color: color,
+                fontSize: bold ? 16 : 13,
+                fontWeight: bold ? FontWeight.w800 : FontWeight.w600)),
+      ]),
+    );
 
 Widget _StatusRow(IconData icon, String text, Color color) => Row(children: [
       Icon(icon, color: color, size: 16),

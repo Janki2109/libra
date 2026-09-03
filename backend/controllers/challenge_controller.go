@@ -446,6 +446,127 @@ func GetStudentProgress(c *gin.Context) {
 	})
 }
 
+// SubmitQuizResult records a completed quiz's score. Grading happens
+// client-side (the questions and answers are already on the device once
+// generated), so this just logs the outcome — it's the only record of a
+// quiz ever having been taken, which certificate eligibility reads back.
+func SubmitQuizResult(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+
+	var req struct {
+		Subject      string `json:"subject" binding:"required"`
+		ScorePercent int    `json:"score_percent" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	if req.ScorePercent < 0 || req.ScorePercent > 100 {
+		utils.Error(c, http.StatusBadRequest, "Invalid score", "must be 0-100")
+		return
+	}
+
+	_, err := config.DB.Exec(`
+		INSERT INTO student_activity_log (id, user_id, activity_type, category, score)
+		VALUES (uuid_generate_v4(), $1::uuid, 'quiz', $2, $3)
+	`, userID, req.Subject, req.ScorePercent)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to record quiz result", err.Error())
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "Quiz result recorded", nil)
+}
+
+// certificateDef mirrors the frontend's certificate list — kept in the same
+// order so results line up positionally. The frontend still owns the
+// display copy (title, icon, description); this only answers "has this
+// account actually earned it".
+type certificateDef struct {
+	Key string
+	Met func(userID string) (bool, int, int) // earned, progress, target
+}
+
+var certificateDefs = []certificateDef{
+	{"constitutional_law", quizCertCheck("Constitutional Law")},
+	{"criminal_law", quizCertCheck("BNS / IPC")},
+	{"case_solver", caseSolverCertCheck},
+	{"contract_law", quizCertCheck("Law of Contracts")},
+	{"mock_court_champion", mockCourtCertCheck},
+	{"ai_study_partner", aiAdvisorCertCheck},
+}
+
+func quizCertCheck(subject string) func(string) (bool, int, int) {
+	return func(userID string) (bool, int, int) {
+		var best int
+		config.DB.QueryRow(`
+			SELECT COALESCE(MAX(score), 0) FROM student_activity_log
+			WHERE user_id=$1::uuid AND activity_type='quiz' AND category=$2
+		`, userID, subject).Scan(&best)
+		return best >= 80, best, 80
+	}
+}
+
+func caseSolverCertCheck(userID string) (bool, int, int) {
+	var count int
+	config.DB.QueryRow(`
+		SELECT COUNT(*) FROM case_challenges WHERE user_id=$1::uuid AND is_submitted=true
+	`, userID).Scan(&count)
+	target := 5
+	if count > target {
+		count = target
+	}
+	return count >= target, count, target
+}
+
+func mockCourtCertCheck(userID string) (bool, int, int) {
+	var count int
+	config.DB.QueryRow(`
+		SELECT COUNT(*) FROM student_activity_log
+		WHERE user_id=$1::uuid AND activity_type='mock_court' AND result='won'
+	`, userID).Scan(&count)
+	target := 5
+	if count > target {
+		count = target
+	}
+	return count >= target, count, target
+}
+
+func aiAdvisorCertCheck(userID string) (bool, int, int) {
+	var count int
+	config.DB.QueryRow(`
+		SELECT COUNT(*) FROM student_activity_log
+		WHERE user_id=$1::uuid AND activity_type='ai_advisor'
+	`, userID).Scan(&count)
+	target := 10
+	if count > target {
+		count = target
+	}
+	return count >= target, count, target
+}
+
+// GetCertificates reports, for every certificate the app shows, whether the
+// signed-in student has actually earned it and how far along they are —
+// every entry used to be hardcoded to locked regardless of what the student
+// had done, because nothing was ever recorded to check against.
+func GetCertificates(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(string)
+
+	results := make([]gin.H, 0, len(certificateDefs))
+	for _, def := range certificateDefs {
+		earned, progress, target := def.Met(uid)
+		results = append(results, gin.H{
+			"key":      def.Key,
+			"earned":   earned,
+			"progress": progress,
+			"target":   target,
+		})
+	}
+
+	utils.Success(c, http.StatusOK, "Certificates fetched", results)
+}
+
 // ─── LEADERBOARD ──────────────────────────────
 func GetLeaderboard(c *gin.Context) {
 	rows, err := config.DB.Query(`

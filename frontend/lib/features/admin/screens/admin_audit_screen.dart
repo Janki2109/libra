@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/dio_client.dart';
+import '../widgets/admin_shell.dart';
+import '../widgets/admin_widgets.dart';
 
 class AdminAuditScreen extends StatefulWidget {
   const AdminAuditScreen({super.key});
@@ -62,32 +63,18 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: AppColors.primaryDark,
-        title: const Text('Audit Logs',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
-        leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-            onPressed: () => context.pop()),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.gold),
-            onPressed: () => _load(reset: true),
-          ),
-        ],
-      ),
-      body: _loading && _logs.isEmpty
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.gold))
+    return AdminShell(
+      activeRoute: '/admin/audit',
+      title: 'Settings — Audit Logs',
+      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: () => _load(reset: true))],
+      child: AdminSectionCard(
+        child: _loading && _logs.isEmpty
+          ? const Padding(padding: EdgeInsets.symmetric(vertical: 60), child: Center(child: CircularProgressIndicator()))
           : _logs.isEmpty
-              ? const Center(
-                  child: Text('No audit logs',
-                      style: TextStyle(color: AppColors.textMuted)))
+              ? const AdminEmptyState(message: 'No audit logs')
               : ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
                   itemCount: _logs.length + (_hasMore ? 1 : 0),
                   itemBuilder: (_, i) {
                     if (i == _logs.length) {
@@ -163,6 +150,7 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
                     );
                   },
                 ),
+      ),
     );
   }
 

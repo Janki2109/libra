@@ -89,6 +89,8 @@ func SetupRoutes() *gin.Engine {
 	protected.Use(middleware.AuthMiddleware())
 	{
 		protected.GET("/auth/me", controllers.GetMe)
+		protected.PUT("/auth/avatar", controllers.UpdateAvatar)
+		protected.PUT("/auth/profile", controllers.UpdateProfile)
 		protected.GET("/dashboard", controllers.GetDashboard)
 
 		// ── FCM device tokens (all roles) ──────
@@ -99,6 +101,7 @@ func SetupRoutes() *gin.Engine {
 		// has answered (see CancelConsultationCall) — not role-gated, since
 		// the handler itself checks the caller is actually a participant.
 		protected.POST("/consultations/:id/call/cancel", controllers.CancelConsultationCall)
+		protected.POST("/consultations/:id/call/duration", controllers.SaveCallDuration)
 
 		// ── Subscription & billing ─────────────
 		// Entitlement is decided here, not in the app's local storage. These
@@ -117,6 +120,15 @@ func SetupRoutes() *gin.Engine {
 		protected.POST("/users/change-password", controllers.ChangePassword)
 		protected.POST("/auth/change-password", controllers.ChangePassword)
 
+		// Submitting a payment (the manual UPI/bank-transfer proof flow
+		// payment_screen.dart uses) used to sit behind RequireFirmStaff(),
+		// which explicitly excludes the 'client' role — so no client could
+		// ever actually submit a payment for their own invoice; every
+		// attempt 403'd. It stays reachable for firm staff too (recording a
+		// payment they received by another channel); CreatePayment itself
+		// now checks that a non-staff caller may only pay their own invoice.
+		protected.POST("/payments", controllers.CreatePayment)
+
 		// ── Client Portal ──────────────────────
 		portal := protected.Group("/portal")
 		{
@@ -126,6 +138,7 @@ func SetupRoutes() *gin.Engine {
 			portal.GET("/documents/:id", controllers.GetMyDocument)
 			portal.POST("/documents/upload", controllers.UploadDocument)
 			portal.GET("/my-invoices", controllers.GetMyInvoices)
+			portal.GET("/my-invoices/:id", controllers.GetMyInvoice)
 
 			portal.POST("/book-consultation", controllers.BookConsultation)
 			// Payment-gated booking (Razorpay). The plain /book-consultation
@@ -219,7 +232,13 @@ func SetupRoutes() *gin.Engine {
 			// ── AI Legal Drafting / Smart Draft AI Tools ──
 			billed.POST("/ai/draft", controllers.GenerateDraft)
 			billed.POST("/ai/tool", controllers.GenerateAITool)
+			billed.POST("/ai/extract-text", controllers.ExtractDocumentText)
+			billed.POST("/ai/export-docx", controllers.ExportDocx)
+			billed.POST("/ai/export-pdf", controllers.ExportPdf)
 			billed.POST("/ai/research", controllers.LegalResearch)
+			billed.GET("/ai/research/history", controllers.GetResearchHistory)
+			billed.GET("/ai/research/history/:id", controllers.GetResearchHistoryItem)
+			billed.DELETE("/ai/research/history/:id", controllers.DeleteResearchHistory)
 
 			// ── Documents ──────────────────────
 			billed.GET("/documents", controllers.GetDocuments)
@@ -236,10 +255,10 @@ func SetupRoutes() *gin.Engine {
 			billed.GET("/invoices/:id", controllers.GetInvoice)
 			billed.PUT("/invoices/:id", controllers.UpdateInvoice)
 			billed.GET("/payments", controllers.GetPayments)
-			billed.POST("/payments", controllers.CreatePayment)
 			billed.POST("/payments/razorpay/order", controllers.CreateRazorpayOrder)
 			billed.POST("/payments/razorpay/verify", controllers.VerifyRazorpayPayment)
 			billed.PUT("/payments/:id/verify", controllers.VerifyPayment)
+			billed.POST("/payments/:id/refund", controllers.RefundPayment)
 		}
 
 		// ── Firm-staff only, not paywalled ─────
@@ -277,6 +296,8 @@ func SetupRoutes() *gin.Engine {
 		protected.POST("/chat/rooms", controllers.CreateChatRoom)
 		protected.GET("/chat/rooms/:room_id/messages", controllers.GetMessages)
 		protected.POST("/chat/rooms/:room_id/messages", controllers.SendMessage)
+		protected.GET("/chat/rooms/:room_id/presence", controllers.GetRoomPresence)
+		protected.GET("/chat/messages/:message_id/file", controllers.GetMessageFile)
 		protected.DELETE("/chat/messages/:message_id", controllers.DeleteMessage)
 		protected.GET("/chat/unread", controllers.GetUnreadCount)
 
@@ -284,6 +305,8 @@ func SetupRoutes() *gin.Engine {
 		protected.GET("/student/lawyers", controllers.GetAllLawyers)
 		protected.GET("/student/lawyer/:id", controllers.GetLawyerProfile)
 		protected.GET("/student/progress", controllers.GetStudentProgress)
+		protected.POST("/student/quiz/submit", controllers.SubmitQuizResult)
+		protected.GET("/student/certificates", controllers.GetCertificates)
 		protected.GET("/student/leaderboard", controllers.GetLeaderboard)
 
 		// ── AI Legal Advisor (student panel) ───
@@ -315,7 +338,11 @@ func SetupRoutes() *gin.Engine {
 			admin.GET("/audit-logs", controllers.GetAuditLogs)
 
 			// ✅ User Management (Suspend / Activate / Delete)
+			// /users/:id must be registered after every other literal
+			// /users/... segment, or "detail"/etc would be captured as :id —
+			// same ordering rule already used for /hearings and /invoices.
 			admin.GET("/users", controllers.AdminGetUsers)
+			admin.GET("/users/:id", controllers.AdminGetUserDetail)
 			admin.PUT("/users/:id", controllers.AdminUpdateUser)
 			admin.DELETE("/users/:id", controllers.AdminDeleteUser)
 
@@ -327,9 +354,33 @@ func SetupRoutes() *gin.Engine {
 			admin.GET("/lawyers/:id/document", controllers.AdminGetLawyerDocument)
 			admin.PUT("/lawyers/:id/verify", controllers.AdminVerifyLawyer)
 
-			// ✅ Subscriptions & Revenue
+			// ✅ Students & Clients
+			admin.GET("/students", controllers.AdminGetStudents)
+			admin.GET("/clients", controllers.AdminGetClients)
+
+			// ✅ Consultations (platform-wide)
+			admin.GET("/consultations", controllers.AdminGetConsultations)
+			admin.GET("/consultations/:id", controllers.AdminGetConsultationDetail)
+
+			// ✅ Payments / Razorpay ledger
+			admin.GET("/payments", controllers.AdminGetPayments)
+
+			// ✅ Subscriptions & Revenue / Billing
 			admin.GET("/subscriptions", controllers.AdminGetSubscriptions)
 			admin.GET("/revenue", controllers.AdminGetRevenue)
+			admin.GET("/invoices", controllers.AdminGetInvoices)
+
+			// ✅ Documents, Cases, Hearings (platform-wide)
+			admin.GET("/documents", controllers.AdminGetDocuments)
+			admin.GET("/cases", controllers.AdminGetCases)
+			admin.GET("/hearings", controllers.AdminGetHearings)
+
+			// ✅ Notifications
+			admin.GET("/notifications", controllers.AdminGetNotifications)
+			admin.POST("/notifications/send", controllers.AdminSendNotification)
+
+			// ✅ Global search
+			admin.GET("/search", controllers.AdminSearch)
 		}
 	}
 

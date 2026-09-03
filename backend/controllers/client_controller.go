@@ -11,6 +11,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -97,6 +98,16 @@ func CreateClient(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	req.Phone = strings.TrimSpace(req.Phone)
+	if !utils.ValidPhone(req.Phone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid phone")
+		return
+	}
+	req.AlternatePhone = strings.TrimSpace(req.AlternatePhone)
+	if req.AlternatePhone != "" && !utils.ValidPhone(req.AlternatePhone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid alternate phone")
 		return
 	}
 
@@ -350,6 +361,11 @@ func UpdateClient(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	req.Phone = strings.TrimSpace(req.Phone)
+	if req.Phone != "" && !utils.ValidPhone(req.Phone) {
+		utils.Error(c, http.StatusBadRequest, "Please enter a valid 10-digit mobile number.", "invalid phone")
 		return
 	}
 

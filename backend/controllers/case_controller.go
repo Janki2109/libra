@@ -29,6 +29,7 @@ func GetCases(c *gin.Context) {
 	// the device and filtering there.
 	status := c.Query("status")
 	search := c.Query("q")
+	clientID := c.Query("client_id")
 
 	rows, err := config.DB.Query(`
 		SELECT c.id, COALESCE(c.case_number,''), c.case_title,
@@ -42,9 +43,10 @@ func GetCases(c *gin.Context) {
 		  AND ($2 = '' OR c.status = $2)
 		  AND ($3 = '' OR c.case_title ILIKE '%' || $3 || '%'
 		               OR c.case_number ILIKE '%' || $3 || '%')
+		  AND ($6 = '' OR c.client_id = $6::uuid)
 		ORDER BY c.created_at DESC
 		LIMIT $4 OFFSET $5
-	`, firmID, status, search, page.Limit, page.Offset)
+	`, firmID, status, search, page.Limit, page.Offset, clientID)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to fetch cases", err.Error())
 		return
@@ -424,9 +426,14 @@ func GetCaseHearings(c *gin.Context) {
 	if _, ok := requireFirmResource(c, tblCases, caseID); !ok {
 		return
 	}
+	// next_date/order_summary/remarks/hearing_time are included so the case's
+	// Hearings tab can render the same previous-hearing/next-hearing timeline
+	// as the hearing details screen, instead of a thinner shape that forced
+	// it to guess "next" from raw dates alone.
 	rows, err := config.DB.Query(`
-		SELECT id, hearing_date::text, COALESCE(court_name,''),
-		COALESCE(purpose,''), status
+		SELECT id, hearing_date::text, COALESCE(hearing_time::text,''),
+		COALESCE(court_name,''), COALESCE(purpose,''), status,
+		COALESCE(next_date::text,''), COALESCE(order_summary,''), COALESCE(remarks,'')
 		FROM hearings WHERE case_id=$1::uuid ORDER BY hearing_date DESC
 	`, caseID)
 	if err != nil {
@@ -436,16 +443,24 @@ func GetCaseHearings(c *gin.Context) {
 	defer rows.Close()
 
 	type H struct {
-		ID          string `json:"id"`
-		HearingDate string `json:"hearing_date"`
-		CourtName   string `json:"court_name"`
-		Purpose     string `json:"purpose"`
-		Status      string `json:"status"`
+		ID           string `json:"id"`
+		HearingDate  string `json:"hearing_date"`
+		HearingTime  string `json:"hearing_time"`
+		CourtName    string `json:"court_name"`
+		Purpose      string `json:"purpose"`
+		Status       string `json:"status"`
+		NextDate     string `json:"next_date"`
+		OrderSummary string `json:"order_summary"`
+		Remarks      string `json:"remarks"`
 	}
 	hearings := []H{}
 	for rows.Next() {
 		var h H
-		rows.Scan(&h.ID, &h.HearingDate, &h.CourtName, &h.Purpose, &h.Status)
+		if err := rows.Scan(&h.ID, &h.HearingDate, &h.HearingTime, &h.CourtName,
+			&h.Purpose, &h.Status, &h.NextDate, &h.OrderSummary, &h.Remarks); err != nil {
+			utils.Error(c, http.StatusInternalServerError, "Failed to read hearings", err.Error())
+			return
+		}
 		hearings = append(hearings, h)
 	}
 	utils.Success(c, http.StatusOK, "Hearings fetched", hearings)

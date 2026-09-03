@@ -578,11 +578,6 @@ class _CasesTab extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: _bg,
         body: Stack(children: [
-          Positioned.fill(
-              child: Opacity(
-                  opacity: 0.50,
-                  child: Image.asset('assets/imagies1/cilent case.jpg',
-                      fit: BoxFit.cover))),
           SafeArea(
             child: Column(children: [
               Padding(
@@ -1044,12 +1039,6 @@ class _DocumentsTabState extends State<_DocumentsTab> {
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: _bg,
         body: Stack(children: [
-          Positioned.fill(
-              child: Opacity(
-                  opacity: 0.50,
-                  child: Image.asset(
-                      'assets/imagies1/document for cilent page.jpg',
-                      fit: BoxFit.cover))),
           SafeArea(
             child: Column(children: [
               Padding(
@@ -1392,11 +1381,6 @@ class _BillingTab extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: _bg,
         body: Stack(children: [
-          Positioned.fill(
-              child: Opacity(
-                  opacity: 0.50,
-                  child: Image.asset('assets/imagies1/bills for cilent.webp',
-                      fit: BoxFit.cover))),
           SafeArea(
               child: ListView(padding: const EdgeInsets.all(16), children: [
             const Text('Billing & Payments',
@@ -1434,11 +1418,6 @@ class _ChatTab extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: _bg,
         body: Stack(children: [
-          Positioned.fill(
-              child: Opacity(
-                  opacity: 0.50,
-                  child: Image.asset('assets/imagies1/chat for cilent.jpg',
-                      fit: BoxFit.cover))),
           SafeArea(
             child: Column(children: [
               const Padding(
@@ -1684,7 +1663,7 @@ class _ProfileTab extends StatelessWidget {
                     title: 'Notifications',
                     subtitle: 'Case updates & reminders',
                     color: const Color(0xFFD4A017),
-                    onTap: () {}),
+                    onTap: () => context.push('/notifications')),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,

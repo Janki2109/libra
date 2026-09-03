@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/validators.dart';
 import '../providers/staff_provider.dart';
 
 class AddStaffScreen extends StatefulWidget {
@@ -88,7 +90,12 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                 validator: (v) => (v ?? '').isEmpty ? 'Required' : null),
             const SizedBox(height: 14),
             _Field(ctrl: _phoneCtrl, label: 'Phone',
-                keyboardType: TextInputType.phone),
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                validator: (v) => Validators.phone(v, required: false)),
             const SizedBox(height: 14),
             _Field(ctrl: _passwordCtrl, label: 'Password',
                 obscure: true,
@@ -169,12 +176,14 @@ class _Field extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool obscure;
   final String? Function(String?)? validator;
+  final List<TextInputFormatter>? inputFormatters;
   const _Field(
       {required this.ctrl,
       required this.label,
       this.keyboardType,
       this.obscure = false,
-      this.validator});
+      this.validator,
+      this.inputFormatters});
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,6 +198,7 @@ class _Field extends StatelessWidget {
             controller: ctrl,
             keyboardType: keyboardType,
             obscureText: obscure,
+            inputFormatters: inputFormatters,
             validator: validator,
             style: const TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(

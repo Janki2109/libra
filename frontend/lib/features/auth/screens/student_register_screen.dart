@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
 
 class StudentRegisterScreen extends StatefulWidget {
@@ -129,11 +130,9 @@ class _StudentRegisterScreenState extends State<StudentRegisterScreen> {
 
           // ✅ Phone - 10 digits only
           _buildField(_phoneCtrl, 'Phone Number *', Icons.phone_outlined,
-              keyboardType: TextInputType.phone, isPhone: true, validator: (v) {
-            if (v!.isEmpty) return 'Required';
-            if (v.length != 10) return 'Enter valid 10-digit number';
-            return null;
-          }),
+              keyboardType: TextInputType.phone,
+              isPhone: true,
+              validator: (v) => Validators.phone(v)),
           const SizedBox(height: 14),
 
           _buildField(_collegeCtrl, 'College / University Name *',

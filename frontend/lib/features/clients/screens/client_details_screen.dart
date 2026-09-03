@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
+import '../../documents/widgets/document_upload_sheet.dart';
 
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
 const _brown = Color(0xFF150E3D);
 const _brownLight = Color(0xFF3D2C8D);
-const _gold = Color(0xFFB8860B);
 const _border = Color(0xFFE6E3F4);
 const _textPri = Color(0xFF2C1A0E);
 const _textMuted = Color(0xFF3D2C8D);
@@ -25,6 +25,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
   Map<String, dynamic>? _client;
   List<dynamic> _cases = [];
   List<dynamic> _documents = [];
+  List<dynamic> _hearings = [];
   bool _loading = true;
   String? _error;
 
@@ -59,16 +60,35 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
           _loading = false;
         });
       }
+      // Filtered server-side by client_id now — the old client-side
+      // name-matching silently showed nothing for two clients sharing a name
+      // and broke the moment a client was renamed after a case was filed.
       try {
-        final casesRes = await DioClient.instance.get('/cases');
-        final allCases = casesRes.data['data'] as List;
+        final casesRes = await DioClient.instance
+            .get('/cases', queryParameters: {'client_id': widget.clientId});
         setState(() {
-          _cases = allCases
-              .where((c) => c['client_name'] == _client?['name'])
-              .toList();
+          _cases = casesRes.data['data'] as List;
         });
       } catch (e) {
         debugPrint('Cases error: $e');
+      }
+      try {
+        final docsRes = await DioClient.instance.get('/documents',
+            queryParameters: {'client_id': widget.clientId});
+        setState(() {
+          _documents = docsRes.data['data'] as List;
+        });
+      } catch (e) {
+        debugPrint('Documents error: $e');
+      }
+      try {
+        final hearingsRes = await DioClient.instance.get('/hearings',
+            queryParameters: {'client_id': widget.clientId});
+        setState(() {
+          _hearings = hearingsRes.data['data'] as List;
+        });
+      } catch (e) {
+        debugPrint('Hearings error: $e');
       }
     } catch (e) {
       setState(() {
@@ -145,7 +165,9 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
             actions: [
               IconButton(
                 icon: const Icon(Icons.edit_rounded, color: Color(0xFFFFD700)),
-                onPressed: () {},
+                onPressed: () => context
+                    .push('/clients/${widget.clientId}/edit')
+                    .then((_) => _loadClient()),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -241,9 +263,17 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _DetailsTab(client: _client!),
-                _CasesTab(cases: _cases),
-                _DocumentsTab(documents: _documents),
+                _DetailsTab(client: _client!, hearings: _hearings),
+                _CasesTab(
+                    cases: _cases,
+                    clientId: widget.clientId,
+                    clientName: _client!['name'] ?? '',
+                    onRefresh: _loadClient),
+                _DocumentsTab(
+                    documents: _documents,
+                    clientId: widget.clientId,
+                    clientName: _client!['name'] ?? '',
+                    onRefresh: _loadClient),
               ],
             ),
           ),
@@ -256,59 +286,276 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
 // ── Details Tab ────────────────────────────────────
 class _DetailsTab extends StatelessWidget {
   final Map<String, dynamic> client;
-  const _DetailsTab({required this.client});
+  final List<dynamic> hearings;
+  const _DetailsTab({required this.client, required this.hearings});
+
+  Map<String, dynamic>? get _nextHearing {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final upcoming = hearings.where((h) {
+      if (h['status'] != 'scheduled') return false;
+      final d = DateTime.tryParse(h['hearing_date'] ?? '');
+      return d != null && !d.isBefore(todayDate);
+    }).toList()
+      ..sort((a, b) => DateTime.parse(a['hearing_date'])
+          .compareTo(DateTime.parse(b['hearing_date'])));
+    return upcoming.isEmpty ? null : upcoming.first as Map<String, dynamic>;
+  }
 
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _InfoCard(
-              title: 'Contact Information',
-              icon: Icons.contact_phone_outlined,
-              items: [
-                _InfoItem(
-                    icon: Icons.email_outlined,
-                    label: 'Email',
-                    value: client['email'] ?? '-'),
-                _InfoItem(
-                    icon: Icons.phone_outlined,
-                    label: 'Phone',
-                    value: client['phone'] ?? '-'),
-                _InfoItem(
-                    icon: Icons.phone_outlined,
-                    label: 'Alt Phone',
-                    value: client['alternate_phone'] ?? '-'),
-              ]),
-          const SizedBox(height: 14),
-          _InfoCard(title: 'Address', icon: Icons.location_on_outlined, items: [
-            _InfoItem(
-                icon: Icons.home_outlined,
-                label: 'Address',
-                value: client['address'] ?? '-'),
-            _InfoItem(
-                icon: Icons.location_city_outlined,
-                label: 'City',
-                value: client['city'] ?? '-'),
-            _InfoItem(
-                icon: Icons.map_outlined,
-                label: 'State',
-                value: client['state'] ?? '-'),
-            _InfoItem(
-                icon: Icons.pin_outlined,
-                label: 'Pincode',
-                value: client['pincode'] ?? '-'),
-          ]),
-          if ((client['notes'] ?? '').isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _InfoCard(title: 'Notes', icon: Icons.note_outlined, items: [
+  Widget build(BuildContext context) {
+    final next = _nextHearing;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _InfoCard(
+            title: 'Contact Information',
+            icon: Icons.contact_phone_outlined,
+            items: [
               _InfoItem(
-                  icon: Icons.note_outlined,
-                  label: 'Notes',
-                  value: client['notes']),
+                  icon: Icons.email_outlined,
+                  label: 'Email',
+                  value: client['email'] ?? '-'),
+              _InfoItem(
+                  icon: Icons.phone_outlined,
+                  label: 'Phone',
+                  value: client['phone'] ?? '-'),
+              _InfoItem(
+                  icon: Icons.phone_outlined,
+                  label: 'Alt Phone',
+                  value: client['alternate_phone'] ?? '-'),
             ]),
-          ],
-          const SizedBox(height: 80),
+        const SizedBox(height: 14),
+        _InfoCard(title: 'Address', icon: Icons.location_on_outlined, items: [
+          _InfoItem(
+              icon: Icons.home_outlined,
+              label: 'Address',
+              value: client['address'] ?? '-'),
+          _InfoItem(
+              icon: Icons.location_city_outlined,
+              label: 'City',
+              value: client['city'] ?? '-'),
+          _InfoItem(
+              icon: Icons.map_outlined,
+              label: 'State',
+              value: client['state'] ?? '-'),
+          _InfoItem(
+              icon: Icons.pin_outlined,
+              label: 'Pincode',
+              value: client['pincode'] ?? '-'),
+        ]),
+        const SizedBox(height: 14),
+        _HearingCard(nextHearing: next, hearings: hearings),
+        if ((client['notes'] ?? '').isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _NotesCard(notes: client['notes']),
         ],
+        const SizedBox(height: 80),
+      ],
+    );
+  }
+}
+
+// ── Next Hearing + Hearing History card ─────────────
+class _HearingCard extends StatelessWidget {
+  final Map<String, dynamic>? nextHearing;
+  final List<dynamic> hearings;
+  const _HearingCard({required this.nextHearing, required this.hearings});
+
+  String _fmtDate(String? iso) {
+    final d = DateTime.tryParse(iso ?? '');
+    if (d == null) return '-';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'completed':
+        return const Color(0xFF2E8B57);
+      case 'cancelled':
+        return const Color(0xFFD9534F);
+      case 'adjourned':
+        return const Color(0xFFB8860B);
+      default:
+        return const Color(0xFF4A90D9);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _bgCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _border, width: 0.8),
+          boxShadow: [
+            BoxShadow(
+                color: _brown.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                    color: _brown, borderRadius: BorderRadius.circular(7)),
+                child: const Icon(Icons.event_rounded,
+                    color: Colors.white, size: 13)),
+            const SizedBox(width: 8),
+            const Text('Hearing Schedule',
+                style: TextStyle(
+                    color: _brown, fontSize: 13, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 2),
+          Divider(color: _border, height: 20, thickness: 0.6),
+          if (nextHearing == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text('No upcoming hearing scheduled',
+                  style: TextStyle(color: _textMuted, fontSize: 13)),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: const Color(0xFF4A90D9).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.calendar_today_rounded,
+                          color: Color(0xFF4A90D9), size: 14),
+                      const SizedBox(width: 6),
+                      Flexible(
+                          child: Text(
+                              'Next Hearing: ${_fmtDate(nextHearing!['hearing_date'])}',
+                              style: const TextStyle(
+                                  color: _textPri,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700))),
+                    ]),
+                    if ((nextHearing!['court_name'] ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(nextHearing!['court_name'],
+                          style:
+                              const TextStyle(color: _textMuted, fontSize: 12)),
+                    ],
+                    if ((nextHearing!['purpose'] ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(nextHearing!['purpose'],
+                          style:
+                              const TextStyle(color: _textMuted, fontSize: 12)),
+                    ],
+                  ]),
+            ),
+          if (hearings.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('History',
+                style: TextStyle(
+                    color: _textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            ...hearings.map((h) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                            width: 90,
+                            child: Text(_fmtDate(h['hearing_date']),
+                                style: const TextStyle(
+                                    color: _textPri,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500))),
+                        Expanded(
+                            child: Text(
+                                (h['purpose'] ?? '').isNotEmpty
+                                    ? h['purpose']
+                                    : (h['court_name'] ?? '-'),
+                                style: const TextStyle(
+                                    color: _textMuted, fontSize: 12))),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: _statusColor(h['status'] ?? '')
+                                  .withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8)),
+                          child: Text(h['status'] ?? '-',
+                              style: TextStyle(
+                                  color: _statusColor(h['status'] ?? ''),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                )),
+          ] else
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('No hearing history yet',
+                  style: TextStyle(color: _textMuted, fontSize: 12)),
+            ),
+        ]),
+      );
+}
+
+// ── Notes card ───────────────────────────────────────
+// Notes are free-form paragraphs, not a short label/value pair — jamming them
+// through the same fixed-80px-label _InfoItem row (built for short fields
+// like Email/Phone) squeezed long notes into a narrow column and let
+// unbroken text (URLs, long case references) spill past the card edge. A
+// full-width block with explicit soft-wrapping fixes both.
+class _NotesCard extends StatelessWidget {
+  final String notes;
+  const _NotesCard({required this.notes});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _bgCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _border, width: 0.8),
+          boxShadow: [
+            BoxShadow(
+                color: _brown.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                    color: _brown, borderRadius: BorderRadius.circular(7)),
+                child: const Icon(Icons.note_outlined,
+                    color: Colors.white, size: 13)),
+            const SizedBox(width: 8),
+            const Text('Notes',
+                style: TextStyle(
+                    color: _brown, fontSize: 13, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 2),
+          Divider(color: _border, height: 20, thickness: 0.6),
+          Text(notes,
+              softWrap: true,
+              style: const TextStyle(
+                  color: _textPri, fontSize: 13, height: 1.5)),
+        ]),
       );
 }
 
@@ -382,7 +629,20 @@ class _InfoItem extends StatelessWidget {
 // ── Cases Tab ──────────────────────────────────────
 class _CasesTab extends StatelessWidget {
   final List<dynamic> cases;
-  const _CasesTab({required this.cases});
+  final String clientId;
+  final String clientName;
+  final VoidCallback onRefresh;
+  const _CasesTab(
+      {required this.cases,
+      required this.clientId,
+      required this.clientName,
+      required this.onRefresh});
+
+  void _addCase(BuildContext context) {
+    context
+        .push('/cases/add', extra: {'clientId': clientId, 'clientName': clientName})
+        .then((_) => onRefresh());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -396,7 +656,7 @@ class _CasesTab extends StatelessWidget {
             style: TextStyle(color: _textMuted, fontSize: 15)),
         const SizedBox(height: 16),
         ElevatedButton.icon(
-          onPressed: () => context.push('/cases/add'),
+          onPressed: () => _addCase(context),
           icon: const Icon(Icons.add_rounded, color: Colors.white),
           label: const Text('Add Case', style: TextStyle(color: Colors.white)),
           style: ElevatedButton.styleFrom(
@@ -406,7 +666,26 @@ class _CasesTab extends StatelessWidget {
         ),
       ]));
     }
-    return ListView.builder(
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _addCase(context),
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: const Text('Add Case',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _brown,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12))),
+          ),
+        ),
+      ),
+      Expanded(
+        child: ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: cases.length,
       itemBuilder: (_, i) {
@@ -465,14 +744,32 @@ class _CasesTab extends StatelessWidget {
           ),
         );
       },
-    );
+        ),
+      ),
+    ]);
   }
 }
 
 // ── Documents Tab ──────────────────────────────────
 class _DocumentsTab extends StatelessWidget {
   final List<dynamic> documents;
-  const _DocumentsTab({required this.documents});
+  final String clientId;
+  final String clientName;
+  final VoidCallback onRefresh;
+  const _DocumentsTab(
+      {required this.documents,
+      required this.clientId,
+      required this.clientName,
+      required this.onRefresh});
+
+  void _addDocument(BuildContext context) {
+    showDocumentUploadSheet(
+      context,
+      clientId: clientId,
+      description: 'Document for client: $clientName',
+      onUploaded: onRefresh,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -486,9 +783,9 @@ class _DocumentsTab extends StatelessWidget {
             style: TextStyle(color: _textMuted, fontSize: 15)),
         const SizedBox(height: 16),
         ElevatedButton.icon(
-          onPressed: () => context.push('/documents'),
+          onPressed: () => _addDocument(context),
           icon: const Icon(Icons.upload_rounded, color: Colors.white),
-          label: const Text('Upload Document',
+          label: const Text('Add Document',
               style: TextStyle(color: Colors.white)),
           style: ElevatedButton.styleFrom(
               backgroundColor: _brown,
@@ -497,12 +794,37 @@ class _DocumentsTab extends StatelessWidget {
         ),
       ]));
     }
-    return ListView.builder(
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _addDocument(context),
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: const Text('Add Document',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _brown,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12))),
+          ),
+        ),
+      ),
+      Expanded(
+        child: ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: documents.length,
       itemBuilder: (_, i) {
         final d = documents[i];
-        return Container(
+        return InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            context.push('/documents/${d['id']}');
+          },
+          child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -532,13 +854,13 @@ class _DocumentsTab extends StatelessWidget {
                         color: _textPri,
                         fontWeight: FontWeight.w600,
                         fontSize: 14))),
-            IconButton(
-              icon: const Icon(Icons.download_rounded, color: _gold, size: 20),
-              onPressed: () => HapticFeedback.lightImpact(),
-            ),
+            const Icon(Icons.chevron_right_rounded, color: _textMuted, size: 20),
           ]),
+          ),
         );
       },
-    );
+        ),
+      ),
+    ]);
   }
 }

@@ -29,7 +29,7 @@ class ClientProvider extends ChangeNotifier {
       await loadClients();
       return true;
     } catch (e) {
-      _error = e.toString();
+      _error = DioClient.describeError(e);
       notifyListeners();
       return false;
     }
@@ -44,9 +44,11 @@ class ClientProvider extends ChangeNotifier {
       if (res.data['success'] == true) {
         return res.data['data'];
       }
+      _error = res.data['message'] as String? ?? 'Failed to add client';
+      notifyListeners();
       return null;
     } catch (e) {
-      _error = e.toString();
+      _error = DioClient.describeError(e);
       notifyListeners();
       return null;
     }

@@ -48,6 +48,8 @@ import '../../features/billing/screens/invoice_details_screen.dart';
 import '../../features/billing/screens/payment_history_screen.dart';
 import '../../features/hearings/screens/hearing_details_screen.dart';
 import '../../features/clients/screens/edit_client_screen.dart';
+import '../../features/cases/screens/edit_case_screen.dart';
+import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/cases/screens/case_timeline_screen.dart';
 import '../../features/cases/screens/case_documents_screen.dart';
 import '../../features/documents/screens/upload_document_screen.dart';
@@ -60,10 +62,21 @@ import '../../features/admin/screens/admin_audit_screen.dart';
 import '../../features/admin/screens/admin_verify_lawyers_screen.dart';
 import '../../features/admin/screens/admin_subscriptions_screen.dart';
 import '../../features/admin/screens/admin_revenue_screen.dart';
+import '../../features/admin/screens/admin_lawyers_screen.dart';
+import '../../features/admin/screens/admin_students_screen.dart';
+import '../../features/admin/screens/admin_clients_screen.dart';
+import '../../features/admin/screens/admin_consultations_screen.dart';
+import '../../features/admin/screens/admin_payments_screen.dart';
+import '../../features/admin/screens/admin_lawyer_earnings_screen.dart';
+import '../../features/admin/screens/admin_documents_screen.dart';
+import '../../features/admin/screens/admin_cases_screen.dart';
+import '../../features/admin/screens/admin_hearings_screen.dart';
+import '../../features/admin/screens/admin_notifications_screen.dart';
 import '../../features/chat/screens/chat_list_screen.dart';
 import '../../features/chat/screens/chat_screen.dart';
 import '../../features/student/screens/lawyer_profile_screen.dart';
 import '../../features/lawyer/screens/ai_legal_research_screen.dart';
+import '../../features/lawyer/screens/research_history_screen.dart';
 import '../../features/lawyer/screens/ai_drafting_screen.dart';
 import '../../features/lawyer/screens/ecourts_screen.dart';
 import '../../features/lawyer/screens/consultation_management_screen.dart';
@@ -117,9 +130,24 @@ class AppRouter {
         // Not logged in → send to login
         if (!isAuth && !publicRoutes.contains(loc)) return '/login';
 
+        final role = isAuth ? (auth.user?.roleName ?? '') : '';
+
+        // Admin routes are super_admin only. The backend's
+        // RoleMiddleware("super_admin") is the real enforcement — every
+        // /admin/* API 403s for anyone else regardless of what the frontend
+        // does — but without this check, a Lawyer/Student/Client could still
+        // navigate straight to an /admin/... URL and see the admin shell
+        // itself (just with every request in it failing). This sends any
+        // non-admin role away before that shell ever renders.
+        if (loc.startsWith('/admin') && role != 'super_admin') {
+          if (!isAuth) return '/login';
+          if (role == 'client') return '/portal/dashboard';
+          if (role == 'law_student') return '/student/dashboard';
+          return '/dashboard';
+        }
+
         // Logged in → redirect away from public routes to dashboard
         if (isAuth && publicRoutes.contains(loc)) {
-          final role = auth.user?.roleName ?? '';
           if (role == 'super_admin') return '/admin';
           if (role == 'client') return '/portal/dashboard';
           if (role == 'law_student') return '/student/dashboard';
@@ -190,6 +218,14 @@ class AppRouter {
         GoRoute(
             path: '/portal/find-lawyer',
             builder: (_, __) => const FindLawyerScreen()),
+        GoRoute(
+          path: '/portal/lawyer/:id',
+          builder: (_, state) => LawyerProfileScreen(
+            lawyerId: state.pathParameters['id']!,
+            lawyerName: state.uri.queryParameters['name'] ?? '',
+            fromClientPortal: true,
+          ),
+        ),
         GoRoute(
           path: '/portal/book-consultation/:lawyerId',
           builder: (_, state) => BookConsultationScreen(
@@ -271,11 +307,25 @@ class AppRouter {
 
         // ─── CASES ───────────────────────────
         GoRoute(path: '/cases', builder: (_, __) => const CaseListScreen()),
-        GoRoute(path: '/cases/add', builder: (_, __) => const AddCaseScreen()),
+        GoRoute(
+          path: '/cases/add',
+          builder: (_, state) {
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            return AddCaseScreen(
+              initialClientId: extra['clientId'] as String?,
+              initialClientName: extra['clientName'] as String?,
+            );
+          },
+        ),
         GoRoute(
           path: '/cases/:id',
           builder: (_, state) =>
               CaseDetailsScreen(caseId: state.pathParameters['id']!),
+        ),
+        GoRoute(
+          path: '/cases/:id/edit',
+          builder: (_, state) =>
+              EditCaseScreen(caseId: state.pathParameters['id']!),
         ),
         GoRoute(
           path: '/cases/:id/timeline',
@@ -292,8 +342,12 @@ class AppRouter {
         GoRoute(
             path: '/hearings', builder: (_, __) => const HearingListScreen()),
         GoRoute(
-            path: '/hearings/add',
-            builder: (_, __) => const AddHearingScreen()),
+          path: '/hearings/add',
+          builder: (_, state) {
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            return AddHearingScreen(initialCaseId: extra['caseId'] as String?);
+          },
+        ),
         GoRoute(
           path: '/hearings/:id',
           builder: (_, state) =>
@@ -353,6 +407,9 @@ class AppRouter {
 
         // ─── PROFILE ─────────────────────────
         GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+        GoRoute(
+            path: '/profile/edit',
+            builder: (_, __) => const EditProfileScreen()),
         GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
         GoRoute(
             path: '/profile/change-password',
@@ -374,6 +431,13 @@ class AppRouter {
         GoRoute(
             path: '/lawyer/ai-research',
             builder: (_, __) => const AILegalResearchScreen()),
+        GoRoute(
+            path: '/lawyer/ai-research/history',
+            builder: (_, __) => const ResearchHistoryScreen()),
+        GoRoute(
+            path: '/lawyer/ai-research/history/:id',
+            builder: (_, state) => ResearchHistoryDetailScreen(
+                id: state.pathParameters['id']!)),
         GoRoute(
             path: '/lawyer/ai-drafting',
             builder: (_, __) => const AIDraftingScreen()),
@@ -404,6 +468,35 @@ class AppRouter {
         GoRoute(
             path: '/admin/revenue',
             builder: (_, __) => const AdminRevenueScreen()),
+        GoRoute(
+            path: '/admin/lawyers',
+            builder: (_, __) => const AdminLawyersScreen()),
+        GoRoute(
+            path: '/admin/students',
+            builder: (_, __) => const AdminStudentsScreen()),
+        GoRoute(
+            path: '/admin/clients',
+            builder: (_, __) => const AdminClientsScreen()),
+        GoRoute(
+            path: '/admin/consultations',
+            builder: (_, __) => const AdminConsultationsScreen()),
+        GoRoute(
+            path: '/admin/payments',
+            builder: (_, __) => const AdminPaymentsScreen()),
+        GoRoute(
+            path: '/admin/lawyer-earnings',
+            builder: (_, __) => const AdminLawyerEarningsScreen()),
+        GoRoute(
+            path: '/admin/documents',
+            builder: (_, __) => const AdminDocumentsScreen()),
+        GoRoute(
+            path: '/admin/cases', builder: (_, __) => const AdminCasesScreen()),
+        GoRoute(
+            path: '/admin/hearings',
+            builder: (_, __) => const AdminHearingsScreen()),
+        GoRoute(
+            path: '/admin/notifications',
+            builder: (_, __) => const AdminNotificationsScreen()),
       ],
     );
     current = router;

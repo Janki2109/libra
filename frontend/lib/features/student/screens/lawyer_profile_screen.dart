@@ -1,30 +1,56 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
 
-const _bg = Color(0xFFFFF0F5);
+// Pink is this screen's default (student panel) palette. Reached from the
+// client portal's green-themed Find a Lawyer page, it switched to this pink
+// scheme mid-flow with nothing else on the page to explain why — so the
+// accent, background and border all key off which caller opened the screen.
 const _bgCard = Color(0xFFFFFFFF);
-const _pink = Color(0xFFE91E8C);
-const _border = Color(0xFFFFD6EB);
 const _textPri = Color(0xFF1A1A2E);
 const _textMuted = Color(0xFF6B6B8A);
 
+const _pink = Color(0xFFE91E8C);
+const _bgPink = Color(0xFFFFF0F5);
+const _borderPink = Color(0xFFFFD6EB);
+
+const _green = Color(0xFF0D6E4F);
+const _bgGreen = Color(0xFFF0FAF6);
+const _borderGreen = Color(0xFFB2DFD0);
+
 class LawyerProfileScreen extends StatefulWidget {
   final String lawyerId, lawyerName;
+  // True when opened from the client portal's Find a Lawyer page, so the
+  // accent color matches the page the client just came from instead of the
+  // student panel's pink.
+  final bool fromClientPortal;
   const LawyerProfileScreen(
-      {super.key, required this.lawyerId, required this.lawyerName});
+      {super.key,
+      required this.lawyerId,
+      required this.lawyerName,
+      this.fromClientPortal = false});
   @override
   State<LawyerProfileScreen> createState() => _LawyerProfileScreenState();
 }
 
 class _LawyerProfileScreenState extends State<LawyerProfileScreen>
     with TickerProviderStateMixin {
+  Color get _accent => widget.fromClientPortal ? _green : _pink;
+  Color get _bg => widget.fromClientPortal ? _bgGreen : _bgPink;
+  Color get _border => widget.fromClientPortal ? _borderGreen : _borderPink;
+
   Map<String, dynamic> _profile = {};
   List<dynamic> _wonCases = [];
   bool _loading = true;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
+  // Chat is a paid-consultation-gated feature for clients (matches Find a
+  // Lawyer's own gating) — students reaching this screen keep free access,
+  // since their AI Legal Advisor chat is a separate, always-available
+  // feature with no consultation/payment concept at all.
+  bool _chatUnlocked = false;
 
   @override
   void initState() {
@@ -34,6 +60,19 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
       ..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadProfile();
+    if (widget.fromClientPortal) _loadChatUnlocked();
+  }
+
+  Future<void> _loadChatUnlocked() async {
+    try {
+      final res = await DioClient.instance.get('/portal/my-consultations');
+      final list = res.data['data'] as List<dynamic>? ?? [];
+      final unlocked = list.any((c) =>
+          c['lawyer_id'] == widget.lawyerId && c['payment_status'] == 'paid');
+      if (mounted) setState(() => _chatUnlocked = unlocked);
+    } catch (_) {
+      // Leave locked — a failed check should never grant access.
+    }
   }
 
   @override
@@ -60,6 +99,19 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
   }
 
   Future<void> _startChat() async {
+    if (widget.fromClientPortal && !_chatUnlocked) {
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text(
+              'Chat unlocks once you book a paid consultation with this lawyer.'),
+          backgroundColor: const Color(0xFFD4A017),
+          action: SnackBarAction(
+              label: 'Book',
+              textColor: Colors.white,
+              onPressed: () => context.push(
+                  '/portal/book-consultation/${widget.lawyerId}?name=${Uri.encodeComponent(widget.lawyerName)}'))));
+      return;
+    }
     HapticFeedback.heavyImpact();
     try {
       final res = await DioClient.instance
@@ -87,22 +139,32 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
     final experience = _profile['experience_years'] ?? 0;
     final initials = name.isNotEmpty ? name[0].toUpperCase() : 'L';
     final location = [city, state].where((s) => s.isNotEmpty).join(', ');
+    final avatarUrl = (_profile['avatar_url'] ?? '') as String;
 
     return Scaffold(
       backgroundColor: _bg,
       body: _loading
-          ? Center(child: CircularProgressIndicator(color: _pink))
+          ? Center(child: CircularProgressIndicator(color: _accent))
           : FadeTransition(
               opacity: _fadeAnim,
               child: CustomScrollView(slivers: [
                 SliverToBoxAdapter(
                     child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(colors: [
-                      Color(0xFFB5166E),
-                      Color(0xFFE91E8C),
-                      Color(0xFFFF6BB3)
-                    ], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                        colors: widget.fromClientPortal
+                            ? const [
+                                Color(0xFF0A4A32),
+                                Color(0xFF0D6E4F),
+                                Color(0xFF3FA980)
+                              ]
+                            : const [
+                                Color(0xFFB5166E),
+                                Color(0xFFE91E8C),
+                                Color(0xFFFF6BB3)
+                              ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight),
                   ),
                   child: SafeArea(
                       child: Column(children: [
@@ -128,12 +190,28 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                                   color: Colors.black.withValues(alpha: 0.15),
                                   blurRadius: 16)
                             ]),
-                        child: Center(
-                            child: Text(initials,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 36)))),
+                        child: avatarUrl.isNotEmpty
+                            ? ClipOval(
+                                child: Image.memory(
+                                  base64Decode(avatarUrl.replaceFirst(
+                                      RegExp(r'^data:image/\w+;base64,'), '')),
+                                  width: 90,
+                                  height: 90,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Center(
+                                      child: Text(initials,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 36))),
+                                ),
+                              )
+                            : Center(
+                                child: Text(initials,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 36)))),
                     const SizedBox(height: 12),
                     Text(name,
                         style: const TextStyle(
@@ -204,11 +282,18 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                           height: 50,
                           child: ElevatedButton.icon(
                             onPressed: _startChat,
-                            icon: const Icon(Icons.chat_rounded,
-                                color: _pink, size: 18),
-                            label: const Text('Start Conversation',
+                            icon: Icon(
+                                widget.fromClientPortal && !_chatUnlocked
+                                    ? Icons.lock_outline_rounded
+                                    : Icons.chat_rounded,
+                                color: _accent,
+                                size: 18),
+                            label: Text(
+                                widget.fromClientPortal && !_chatUnlocked
+                                    ? 'Chat (Book to Unlock)'
+                                    : 'Start Conversation',
                                 style: TextStyle(
-                                    color: _pink,
+                                    color: _accent,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 15)),
                             style: ElevatedButton.styleFrom(
@@ -239,10 +324,10 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                                   color: _bgCard,
                                   borderRadius: BorderRadius.circular(14),
                                   border:
-                                      Border.all(color: _pink.withValues(alpha: 0.2)),
+                                      Border.all(color: _accent.withValues(alpha: 0.2)),
                                   boxShadow: [
                                     BoxShadow(
-                                        color: _pink.withValues(alpha: 0.05),
+                                        color: _accent.withValues(alpha: 0.05),
                                         blurRadius: 8,
                                         offset: const Offset(0, 2))
                                   ]),
@@ -251,12 +336,12 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                                     width: 40,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                        color: _pink.withValues(alpha: 0.1),
+                                        color: _accent.withValues(alpha: 0.1),
                                         borderRadius:
                                             BorderRadius.circular(10)),
-                                    child: const Icon(
+                                    child: Icon(
                                         Icons.workspace_premium_rounded,
-                                        color: _pink,
+                                        color: _accent,
                                         size: 22)),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -289,14 +374,14 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 6),
                                       decoration: BoxDecoration(
-                                          color: _pink.withValues(alpha: 0.08),
+                                          color: _accent.withValues(alpha: 0.08),
                                           borderRadius:
                                               BorderRadius.circular(20),
                                           border: Border.all(
-                                              color: _pink.withValues(alpha: 0.25))),
+                                              color: _accent.withValues(alpha: 0.25))),
                                       child: Text(area,
-                                          style: const TextStyle(
-                                              color: _pink,
+                                          style: TextStyle(
+                                              color: _accent,
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600)),
                                     ))
@@ -339,7 +424,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                                       Border.all(color: _border, width: 0.8),
                                   boxShadow: [
                                     BoxShadow(
-                                        color: _pink.withValues(alpha: 0.04),
+                                        color: _accent.withValues(alpha: 0.04),
                                         blurRadius: 6,
                                         offset: const Offset(0, 2))
                                   ]),
@@ -375,7 +460,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
             border: Border(top: BorderSide(color: _border, width: 0.8)),
             boxShadow: [
               BoxShadow(
-                  color: _pink.withValues(alpha: 0.08),
+                  color: _accent.withValues(alpha: 0.08),
                   blurRadius: 10,
                   offset: const Offset(0, -2))
             ]),
@@ -392,7 +477,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                     fontWeight: FontWeight.w700,
                     fontSize: 15)),
             style: ElevatedButton.styleFrom(
-                backgroundColor: _pink,
+                backgroundColor: _accent,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14))),
           ),

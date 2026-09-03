@@ -1,10 +1,16 @@
 package controllers
 
 import (
+	"database/sql"
+	"encoding/base64"
+	"encoding/json"
+	"libra/config"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"libra/services"
 	"libra/utils"
@@ -201,6 +207,18 @@ func AdvisorChat(c *gin.Context) {
 		utils.Error(c, http.StatusServiceUnavailable, "AI request failed", err.Error())
 		return
 	}
+
+	// Feeds the "AI Study Partner" certificate — repurposed from a
+	// "Legal Researcher" certificate that required 10 AI Legal Research
+	// sessions, a lawyer-only, subscription-gated feature no student account
+	// can ever reach. This is the actual AI feature students have.
+	if userID, ok := c.Get("user_id"); ok {
+		config.DB.Exec(`
+			INSERT INTO student_activity_log (id, user_id, activity_type)
+			VALUES (uuid_generate_v4(), $1::uuid, 'ai_advisor')
+		`, userID)
+	}
+
 	utils.Success(c, http.StatusOK, "Generated", gin.H{"content": content})
 }
 
@@ -208,7 +226,19 @@ func AdvisorChat(c *gin.Context) {
 // hardcoded-key-bypassing-the-rotation-pool bug as AdvisorChat, fixed the
 // same way: the screen now sends only conversation history + question, and
 // the fixed system prompt plus key rotation both live here.
+//
+// Every successful query is persisted to ai_research_history (best-effort:
+// a save failure logs but never fails the response the lawyer is waiting
+// on) so the Research History screen has something to show, and so a
+// query/result survives an app restart or logout instead of living only in
+// the screen's in-memory chat list.
 func LegalResearch(c *gin.Context) {
+	firmID, ok := utils.RequireFirm(c)
+	if !ok {
+		return
+	}
+	userID := utils.UserID(c)
+
 	var req struct {
 		Messages []struct {
 			Role    string `json:"role"`
@@ -233,12 +263,16 @@ Format your response clearly with headings.
 Always cite: Act name, Section number, Case name (Year).
 Be comprehensive but organized.`},
 	}
+	var lastQuery string
 	for _, m := range req.Messages {
 		role := m.Role
 		if role != "user" && role != "assistant" {
 			continue
 		}
 		messages = append(messages, map[string]string{"role": role, "content": m.Content})
+		if role == "user" {
+			lastQuery = m.Content
+		}
 	}
 
 	content, err := services.GenerateChat(messages, 1500, 0.3)
@@ -246,7 +280,122 @@ Be comprehensive but organized.`},
 		utils.Error(c, http.StatusServiceUnavailable, "AI request failed", err.Error())
 		return
 	}
+
+	if lastQuery != "" {
+		if _, err := config.DB.Exec(`
+			INSERT INTO ai_research_history (id, user_id, firm_id, query, response)
+			VALUES (uuid_generate_v4(), $1::uuid, $2::uuid, $3, $4)
+		`, userID, firmID, lastQuery, content); err != nil {
+			log.Printf("[research-history] failed to save query for user %s: %v", userID, err)
+		}
+	}
+
 	utils.Success(c, http.StatusOK, "Generated", gin.H{"content": content})
+}
+
+// GetResearchHistory lists the caller's own past research queries — never
+// another lawyer's, even within the same firm, since a lawyer's research
+// trail can reveal what matter they're working and for whom. Supports a
+// text search over the query and newest/oldest sort, matching the History
+// screen's search + sort controls.
+func GetResearchHistory(c *gin.Context) {
+	userID := utils.UserID(c)
+	page := ParsePagination(c)
+	search := c.Query("q")
+	order := "DESC"
+	if c.Query("sort") == "oldest" {
+		order = "ASC"
+	}
+
+	rows, err := config.DB.Query(`
+		SELECT id, query, response, created_at
+		FROM ai_research_history
+		WHERE user_id = $1::uuid
+		  AND ($2 = '' OR query ILIKE '%' || $2 || '%')
+		ORDER BY created_at `+order+`
+		LIMIT $3 OFFSET $4
+	`, userID, search, page.Limit, page.Offset)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to fetch research history", err.Error())
+		return
+	}
+	defer rows.Close()
+
+	type Item struct {
+		ID        string    `json:"id"`
+		Query     string    `json:"query"`
+		Preview   string    `json:"preview"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	items := []Item{}
+	for rows.Next() {
+		var id, query, response string
+		var createdAt time.Time
+		if err := rows.Scan(&id, &query, &response, &createdAt); err != nil {
+			utils.Error(c, http.StatusInternalServerError, "Failed to read research history", err.Error())
+			return
+		}
+		items = append(items, Item{ID: id, Query: query, Preview: previewText(response, 160), CreatedAt: createdAt})
+	}
+	utils.SuccessWithMeta(c, http.StatusOK, "Research history fetched", items, page.Meta(len(items)))
+}
+
+// GetResearchHistoryItem returns one past query's full result — scoped to
+// the caller so one lawyer can't open another's research by guessing an id.
+func GetResearchHistoryItem(c *gin.Context) {
+	userID := utils.UserID(c)
+	id := c.Param("id")
+
+	var item struct {
+		ID        string    `json:"id"`
+		Query     string    `json:"query"`
+		Response  string    `json:"response"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	err := config.DB.QueryRow(`
+		SELECT id, query, response, created_at
+		FROM ai_research_history WHERE id=$1::uuid AND user_id=$2::uuid
+	`, id, userID).Scan(&item.ID, &item.Query, &item.Response, &item.CreatedAt)
+	if err == sql.ErrNoRows {
+		utils.Error(c, http.StatusNotFound, "Research entry not found", "")
+		return
+	}
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Database error", err.Error())
+		return
+	}
+	utils.Success(c, http.StatusOK, "Research entry fetched", item)
+}
+
+// DeleteResearchHistory removes one past query — scoped to the caller.
+func DeleteResearchHistory(c *gin.Context) {
+	userID := utils.UserID(c)
+	id := c.Param("id")
+
+	res, err := config.DB.Exec(
+		"DELETE FROM ai_research_history WHERE id=$1::uuid AND user_id=$2::uuid",
+		id, userID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to delete research entry", err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		utils.Error(c, http.StatusNotFound, "Research entry not found", "")
+		return
+	}
+	utils.Success(c, http.StatusOK, "Research entry deleted", nil)
+}
+
+// previewText trims a stored result down to a short single-line snippet for
+// the history list, so the list query doesn't have to drag full multi-KB
+// research answers across the wire just to render a preview.
+func previewText(s string, max int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
 }
 
 // GenerateQuiz serves the Legal Quiz screen. Same pattern as GenerateDraft —
@@ -381,5 +530,65 @@ Return ONLY valid JSON:
 		utils.Error(c, http.StatusServiceUnavailable, "AI request failed", err.Error())
 		return
 	}
+
+	// Record the outcome — this used to go nowhere, so "Win 5 Mock Court
+	// sessions" (the Mock Court Champion certificate) had no data to ever
+	// check against.
+	if userID, ok := c.Get("user_id"); ok {
+		start := strings.Index(content, "{")
+		end := strings.LastIndex(content, "}")
+		if start >= 0 && end > start {
+			var parsed struct {
+				Result string `json:"result"`
+			}
+			if json.Unmarshal([]byte(content[start:end+1]), &parsed) == nil && parsed.Result != "" {
+				config.DB.Exec(`
+					INSERT INTO student_activity_log (id, user_id, activity_type, result)
+					VALUES (uuid_generate_v4(), $1::uuid, 'mock_court', $2)
+				`, userID, parsed.Result)
+			}
+		}
+	}
+
 	utils.Success(c, http.StatusOK, "Generated", gin.H{"content": content})
+}
+
+// maxUploadedDocBytes caps the file this endpoint will decode — well above
+// what a typical PDF/DOCX legal document needs, without letting an arbitrary
+// upload exhaust server memory decoding base64.
+const maxUploadedDocBytes = 15 * 1024 * 1024
+
+// ExtractDocumentText pulls plain text out of an uploaded PDF/DOCX/TXT file
+// so a Smart Draft tool can be run against an actual document instead of
+// requiring the lawyer to copy-paste its contents by hand first. Purely
+// local text extraction — no AI call, so it works even when no AI provider
+// key is configured, and it can't help with a scanned/image-only PDF (no
+// text layer to pull from), which is what the OCR tool is for instead.
+func ExtractDocumentText(c *gin.Context) {
+	var req struct {
+		FileContent string `json:"file_content" binding:"required"`
+		FileType    string `json:"file_type" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	fileBytes, err := base64.StdEncoding.DecodeString(req.FileContent)
+	if err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid file content", "not valid base64")
+		return
+	}
+	if len(fileBytes) > maxUploadedDocBytes {
+		utils.Error(c, http.StatusRequestEntityTooLarge, "File is too large", "")
+		return
+	}
+
+	text, err := services.ExtractDocumentText(fileBytes, req.FileType)
+	if err != nil {
+		utils.Error(c, http.StatusUnprocessableEntity, "Could not extract text", err.Error())
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "Text extracted", gin.H{"text": text})
 }

@@ -369,7 +369,9 @@ func GetMyInvoices(c *gin.Context) {
 	}
 
 	rows, err := config.DB.Query(`
-		SELECT i.id, i.invoice_number, i.total_amount,
+		SELECT i.id, i.invoice_number,
+		       COALESCE(i.subtotal,0), COALESCE(i.tax_percent,0), COALESCE(i.tax_amount,0),
+		       COALESCE(i.platform_fee,0), i.total_amount,
 		       COALESCE(i.paid_amount,0), i.status, i.issue_date::text,
 		       COALESCE(i.due_date::text,''), COALESCE(i.notes,'')
 		FROM invoices i
@@ -386,6 +388,10 @@ func GetMyInvoices(c *gin.Context) {
 	type Invoice struct {
 		ID            string  `json:"id"`
 		InvoiceNumber string  `json:"invoice_number"`
+		Subtotal      float64 `json:"subtotal"`
+		GSTRate       float64 `json:"gst_rate"`
+		GSTAmount     float64 `json:"gst_amount"`
+		PlatformFee   float64 `json:"platform_fee"`
 		TotalAmount   float64 `json:"total_amount"`
 		PaidAmount    float64 `json:"paid_amount"`
 		Status        string  `json:"status"`
@@ -398,11 +404,84 @@ func GetMyInvoices(c *gin.Context) {
 	for rows.Next() {
 		var inv Invoice
 		rows.Scan(
-			&inv.ID, &inv.InvoiceNumber, &inv.TotalAmount,
+			&inv.ID, &inv.InvoiceNumber, &inv.Subtotal, &inv.GSTRate, &inv.GSTAmount,
+			&inv.PlatformFee, &inv.TotalAmount,
 			&inv.PaidAmount, &inv.Status, &inv.IssueDate,
 			&inv.DueDate, &inv.Notes,
 		)
 		invoices = append(invoices, inv)
 	}
 	utils.Success(c, http.StatusOK, "Invoices fetched", invoices)
+}
+
+// GetMyInvoice - a single invoice, scoped to the calling client the same way
+// GetMyInvoices is.
+//
+// Added because payment_screen.dart (the client's own pay-this-invoice
+// screen) was calling GET /invoices/:id — the firm-staff-only route
+// (billed.GET("/invoices/:id", GetInvoice), gated by RequireFirmStaff(),
+// which explicitly excludes the 'client' role) — and so was silently
+// getting a 403 on every load. The screen swallowed the error and rendered
+// with empty bank details; the client never saw them, and would never have
+// seen the GST/platform-fee breakdown added alongside this either. This is
+// the portal-scoped equivalent of GetInvoice.
+func GetMyInvoice(c *gin.Context) {
+	id := c.Param("id")
+	if !isUUID(id) {
+		utils.Error(c, http.StatusBadRequest, "Invalid id", "not a uuid")
+		return
+	}
+	userEmail, ok := portalClientEmail(c)
+	if !ok {
+		utils.Error(c, http.StatusNotFound, "Invoice not found", "")
+		return
+	}
+
+	var inv struct {
+		ID                string  `json:"id"`
+		InvoiceNumber     string  `json:"invoice_number"`
+		Subtotal          float64 `json:"subtotal"`
+		GSTRate           float64 `json:"gst_rate"`
+		GSTAmount         float64 `json:"gst_amount"`
+		PlatformFee       float64 `json:"platform_fee"`
+		TotalAmount       float64 `json:"total_amount"`
+		PaidAmount        float64 `json:"paid_amount"`
+		Status            string  `json:"status"`
+		IssueDate         string  `json:"issue_date"`
+		DueDate           string  `json:"due_date"`
+		Notes             string  `json:"notes"`
+		ClientName        string  `json:"client_name"`
+		UPIID             string  `json:"upi_id"`
+		BankAccountName   string  `json:"bank_account_name"`
+		BankAccountNumber string  `json:"bank_account_number"`
+		BankIFSC          string  `json:"bank_ifsc"`
+		BankName          string  `json:"bank_name"`
+	}
+	err := config.DB.QueryRow(`
+		SELECT i.id, i.invoice_number,
+		       COALESCE(i.subtotal,0), COALESCE(i.tax_percent,0), COALESCE(i.tax_amount,0),
+		       COALESCE(i.platform_fee,0), i.total_amount, COALESCE(i.paid_amount,0),
+		       i.status, i.issue_date::text, COALESCE(i.due_date::text,''),
+		       COALESCE(i.notes,''), COALESCE(cl.name,''),
+		       COALESCE(i.upi_id, f.upi_id, ''),
+		       COALESCE(i.bank_account_name, f.bank_account_name, ''),
+		       COALESCE(i.bank_account_number, f.bank_account_number, ''),
+		       COALESCE(i.bank_ifsc, f.bank_ifsc, ''),
+		       COALESCE(i.bank_name, f.bank_name, '')
+		FROM invoices i
+		LEFT JOIN clients cl ON i.client_id = cl.id
+		LEFT JOIN firms f ON i.firm_id = f.id
+		WHERE i.id = $1::uuid
+		  AND i.client_id IN (SELECT id FROM clients WHERE lower(email) = $2)
+	`, id, userEmail).Scan(
+		&inv.ID, &inv.InvoiceNumber, &inv.Subtotal, &inv.GSTRate, &inv.GSTAmount,
+		&inv.PlatformFee, &inv.TotalAmount, &inv.PaidAmount,
+		&inv.Status, &inv.IssueDate, &inv.DueDate, &inv.Notes, &inv.ClientName,
+		&inv.UPIID, &inv.BankAccountName, &inv.BankAccountNumber,
+		&inv.BankIFSC, &inv.BankName)
+	if err != nil {
+		utils.Error(c, http.StatusNotFound, "Invoice not found", err.Error())
+		return
+	}
+	utils.Success(c, http.StatusOK, "Invoice fetched", inv)
 }

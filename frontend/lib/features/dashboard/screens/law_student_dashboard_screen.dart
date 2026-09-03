@@ -113,7 +113,7 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       {'icon': Icons.home_rounded, 'label': 'Home'},
-      {'icon': Icons.gavel_rounded, 'label': 'Cases'},
+      {'icon': Icons.menu_book_rounded, 'label': 'Library'},
       {'icon': Icons.newspaper_rounded, 'label': 'News'},
       {'icon': Icons.people_rounded, 'label': 'Lawyers'},
       {'icon': Icons.person_rounded, 'label': 'Profile'},
@@ -415,14 +415,20 @@ class _HomeTab extends StatelessWidget {
                 children: [
                   _ExploreCard('📰', 'Live News', 'Court updates', _skyBlue,
                       () => onTabChange(2)),
-                  _ExploreCard('📚', 'Case Library', 'Landmark cases', _blue,
-                      () => onTabChange(1)),
+                  _ExploreCard('📚', 'Study Library', 'Free legal resources',
+                      _blue, () => onTabChange(1)),
                   _ExploreCard(
                       '💬',
                       'AI Lawyer',
                       'Ask AI anything',
                       const Color(0xFF00897B),
                       () => context.push('/student/ai-lawyer')),
+                  _ExploreCard(
+                      '📅',
+                      'Consultation Mode',
+                      'Book a lawyer consultation',
+                      const Color(0xFF7C3AED),
+                      () => onTabChange(3)),
                   _ExploreCard('🏆', 'Leaderboard', 'Top students', _gold,
                       () => context.push('/student/leaderboard')),
                   _ExploreCard('📖', 'Legal Notes', 'Study subjects', _blue,
@@ -1196,72 +1202,6 @@ class _CasesTabState extends State<_CasesTab> {
                 url: r['url'], title: r['title'], source: r['source'])));
   }
 
-  static const List<Map<String, dynamic>> _cases = [
-    {
-      'title': 'Kesavananda Bharati vs State of Kerala',
-      'year': '1973',
-      'court': 'Supreme Court',
-      'category': 'Constitutional',
-      'desc':
-          'Established the Basic Structure Doctrine – Parliament cannot amend the basic structure of the Constitution.',
-      'color': Color(0xFF1565C0)
-    },
-    {
-      'title': 'Maneka Gandhi vs Union of India',
-      'year': '1978',
-      'court': 'Supreme Court',
-      'category': 'Constitutional',
-      'desc':
-          'Expanded Article 21 – Right to life includes right to live with human dignity.',
-      'color': Color(0xFF0288D1)
-    },
-    {
-      'title': 'Shah Bano Case',
-      'year': '1985',
-      'court': 'Supreme Court',
-      'category': 'Family',
-      'desc':
-          'Muslim woman entitled to maintenance under Section 125 CrPC even after divorce.',
-      'color': Color(0xFF1A237E)
-    },
-    {
-      'title': 'Vishaka vs State of Rajasthan',
-      'year': '1997',
-      'court': 'Supreme Court',
-      'category': 'Constitutional',
-      'desc':
-          'Laid down guidelines for prevention of sexual harassment at workplace.',
-      'color': Color(0xFF00897B)
-    },
-    {
-      'title': 'Navtej Singh Johar vs Union of India',
-      'year': '2018',
-      'court': 'Supreme Court',
-      'category': 'Constitutional',
-      'desc':
-          'Struck down Section 377 IPC to the extent it criminalised consensual same-sex relations.',
-      'color': Color(0xFF1565C0)
-    },
-    {
-      'title': 'K.S. Puttaswamy vs Union of India',
-      'year': '2017',
-      'court': 'Supreme Court',
-      'category': 'Constitutional',
-      'desc':
-          'Right to Privacy is a fundamental right protected under Article 21.',
-      'color': Color(0xFF0288D1)
-    },
-  ];
-
-  static const List<String> _filters = [
-    'All',
-    'Constitutional',
-    'Criminal',
-    'Civil',
-    'Family',
-    'Property'
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1271,126 +1211,30 @@ class _CasesTabState extends State<_CasesTab> {
         Container(
           color: _bgCard,
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Text('Case Library',
-                  style: TextStyle(
-                      color: _textPri,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800)),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                    color: _blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12)),
-                child: Text('${_cases.length} landmark cases',
-                    style: const TextStyle(
-                        color: _blue,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-              ),
-            ]),
-            const SizedBox(height: 10),
-            SizedBox(
-                height: 36,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _filters.length,
-                  itemBuilder: (_, i) =>
-                      _FilterChip(label: _filters[i], index: i),
-                )),
+          child: Row(children: [
+            const Text('Study Library',
+                style: TextStyle(
+                    color: _textPri,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                  color: _blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Text('${_library.length} resources',
+                  style: const TextStyle(
+                      color: _blue,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600)),
+            ),
           ]),
         ),
         Expanded(
             child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            ..._cases.map((c) {
-              final color = c['color'] as Color;
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                      color: _bgCard,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: color.withValues(alpha: 0.2)),
-                      boxShadow: [
-                        BoxShadow(
-                            color: _blue.withValues(alpha: 0.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2))
-                      ]),
-                  child: Row(children: [
-                    Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12)),
-                        child: const Center(
-                            child:
-                                Text('⚖️', style: TextStyle(fontSize: 22)))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Text(c['title'],
-                              style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13),
-                              maxLines: 2),
-                          const SizedBox(height: 4),
-                          Text('${c['year']} • ${c['court']}',
-                              style: const TextStyle(
-                                  color: _textMuted, fontSize: 11)),
-                          const SizedBox(height: 6),
-                          Text(c['desc'],
-                              style: const TextStyle(
-                                  color: _textPri, fontSize: 12, height: 1.4),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
-                        ])),
-                    const SizedBox(width: 8),
-                    Icon(Icons.arrow_forward_ios_rounded,
-                        color: color.withValues(alpha: 0.4), size: 14),
-                  ]),
-                ),
-              );
-            }),
-
-            // ── Study Library (new — alongside the landmark cases above) ──
-            const SizedBox(height: 8),
-            const Divider(height: 32),
-            Row(children: [
-              const Text('Study Library',
-                  style: TextStyle(
-                      color: _textPri,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800)),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                    color: _blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12)),
-                child: Text('${_library.length} resources',
-                    style: const TextStyle(
-                        color: _blue,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-              ),
-            ]),
-            const SizedBox(height: 4),
             const Text(
                 'Free bare acts, judgments, courses and research for LLB, judiciary and legal-practice prep.',
                 style: TextStyle(color: _textMuted, fontSize: 11)),
@@ -1556,46 +1400,6 @@ class _CasesTabState extends State<_CasesTab> {
           ],
         )),
       ])),
-    );
-  }
-}
-
-class _FilterChip extends StatefulWidget {
-  final String label;
-  final int index;
-  const _FilterChip({required this.label, required this.index});
-  @override
-  State<_FilterChip> createState() => _FilterChipState();
-}
-
-class _FilterChipState extends State<_FilterChip> {
-  static int _selected = 0;
-  @override
-  Widget build(BuildContext context) {
-    final sel = _selected == widget.index;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        setState(() => _selected = widget.index);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: sel ? _blue : _bgCard,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: sel ? _blue : _border),
-          boxShadow: sel
-              ? [BoxShadow(color: _blue.withValues(alpha: 0.3), blurRadius: 8)]
-              : [],
-        ),
-        child: Text(widget.label,
-            style: TextStyle(
-                color: sel ? Colors.white : _textMuted,
-                fontSize: 12,
-                fontWeight: sel ? FontWeight.w700 : FontWeight.w400)),
-      ),
     );
   }
 }

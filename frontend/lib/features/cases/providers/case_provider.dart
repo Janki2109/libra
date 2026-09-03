@@ -17,7 +17,7 @@ class CaseProvider extends ChangeNotifier {
       final res = await DioClient.instance.get('/cases');
       _cases = res.data['data'] ?? [];
     } catch (e) {
-      _error = e.toString();
+      _error = DioClient.describeError(e);
     }
     _loading = false;
     notifyListeners();
@@ -29,7 +29,7 @@ class CaseProvider extends ChangeNotifier {
       await loadCases();
       return true;
     } catch (e) {
-      _error = e.toString();
+      _error = DioClient.describeError(e);
       notifyListeners();
       return false;
     }

@@ -37,6 +37,11 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
   // duplicate one.
   String? _consultationId;
   bool _paymentFailed = false;
+  // Payment succeeded but the booking's own confirmation hasn't shown up
+  // yet on a re-check — distinct from _paymentFailed (Razorpay itself
+  // reported cancellation/failure). Never treated as a failure: money was
+  // already taken, so the UI must not invite a second charge.
+  bool _stillConfirming = false;
 
   final List<Map<String, dynamic>> _consultTypes = [
     {
@@ -102,6 +107,7 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
     setState(() {
       _loading = true;
       _paymentFailed = false;
+      _stillConfirming = false;
     });
 
     try {
@@ -131,24 +137,38 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
 
       if (outcome == CheckoutOutcome.paid) {
         // The checkout screen's WebView path only ever reports `paid` after
-        // the backend has verified the signature. Its browser fallback (a
-        // separate tab with no way to hand a signature back to this app)
-        // cannot make that same guarantee from a button tap alone — so
-        // either way, re-read the booking's real server-side state before
-        // the UI claims success. A closed tab or a stray tap is never
-        // itself treated as proof of payment.
-        final confirmed = await _consultRepo.fetchConsultation(_consultationId!);
+        // the backend has already verified the signature and committed
+        // payment_status='paid' in the same request — so the very next read
+        // here should see it immediately (Postgres has no replication lag on
+        // a single primary). The browser-checkout fallback (a separate tab
+        // with no way to hand a signature back to this app) cannot make that
+        // same guarantee from a button tap alone, so it still needs this
+        // re-check. Either way, poll briefly rather than judging success or
+        // failure off a single read — a slow response or a transient network
+        // hiccup on this one GET must never be shown as "payment failed"
+        // when the payment itself already succeeded.
+        Map<String, dynamic>? confirmed;
+        for (var attempt = 0; attempt < 4; attempt++) {
+          confirmed = await _consultRepo.fetchConsultation(_consultationId!);
+          if (confirmed != null && confirmed['payment_status'] == 'paid') break;
+          if (attempt < 3) await Future.delayed(const Duration(seconds: 2));
+        }
         if (!mounted) return;
         setState(() => _loading = false);
         if (confirmed != null && confirmed['payment_status'] == 'paid') {
           HapticFeedback.heavyImpact();
           _showSuccessDialog();
         } else {
-          setState(() => _paymentFailed = true);
+          // Genuinely still unconfirmed after several checks — this is a
+          // "wait and recheck" state, not a failure: the booking stays
+          // exactly as it was (not marked failed), and payment was already
+          // taken, so the button must not invite a second charge. Retrying
+          // here just re-checks status rather than opening a new order.
+          setState(() => _stillConfirming = true);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text(
-                  'Payment received. Confirming your booking — this can take a moment. '
-                  'If it does not confirm shortly, retry payment.'),
+                  'Payment received. Confirming your booking is taking longer than '
+                  'usual — tap "Check Status" to try again.'),
               backgroundColor: Color(0xFFD4A017)));
         }
         return;
@@ -178,6 +198,25 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
             content: Text(e.message),
             backgroundColor: const Color(0xFFD9534F)));
       }
+    }
+  }
+
+  /// Re-checks a payment that was taken but not yet confirmed as paid —
+  /// just a status read, never a new payment attempt, so it can't result in
+  /// a second charge.
+  Future<void> _checkStatus() async {
+    if (_consultationId == null) return;
+    setState(() => _loading = true);
+    final confirmed = await _consultRepo.fetchConsultation(_consultationId!);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (confirmed != null && confirmed['payment_status'] == 'paid') {
+      HapticFeedback.heavyImpact();
+      _showSuccessDialog();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Still confirming — please check again shortly.'),
+          backgroundColor: Color(0xFFD4A017)));
     }
   }
 
@@ -255,9 +294,26 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
             ));
   }
 
+  /// Steps back through the wizard one screen at a time; only leaves the
+  /// flow entirely (back to Find a Lawyer) once already on step 0. Used by
+  /// both the header arrow and the system/gesture back button, so neither
+  /// can skip the wizard and drop straight to Home.
+  void _handleBack() {
+    if (_step > 0) {
+      setState(() => _step--);
+    } else {
+      context.pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _step--);
+      },
+      child: Scaffold(
       backgroundColor: _bg,
       body: Column(children: [
         // Header
@@ -277,7 +333,7 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
                     IconButton(
                         icon: const Icon(Icons.arrow_back_rounded,
                             color: Colors.white),
-                        onPressed: () => context.pop()),
+                        onPressed: _handleBack),
                     Expanded(
                         child: Column(children: [
                       const Text('Book Consultation',
@@ -286,6 +342,8 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
                               fontSize: 16,
                               fontWeight: FontWeight.w700)),
                       Text('with ${widget.lawyerName}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: Colors.white70, fontSize: 12)),
                     ])),
@@ -359,10 +417,13 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
                     child: ElevatedButton(
                       onPressed: _canProceed()
                           ? () {
-                              if (_step < 2)
+                              if (_step < 2) {
                                 setState(() => _step++);
-                              else
+                              } else if (_stillConfirming) {
+                                _checkStatus();
+                              } else {
                                 _payAndConfirm();
+                              }
                             }
                           : null,
                       style: ElevatedButton.styleFrom(
@@ -379,9 +440,11 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
                           : Text(
                               _step != 2
                                   ? 'Next →'
-                                  : _paymentFailed
-                                      ? 'Retry Payment'
-                                      : 'Pay ₹5 & Confirm',
+                                  : _stillConfirming
+                                      ? 'Check Status'
+                                      : _paymentFailed
+                                          ? 'Retry Payment'
+                                          : 'Pay ₹5 & Confirm',
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
@@ -390,6 +453,7 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
               ])),
         ),
       ]),
+      ),
     );
   }
 
@@ -493,11 +557,11 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
             scrollDirection: Axis.horizontal,
             itemCount: 14,
             itemBuilder: (_, i) {
-              final date = now.add(Duration(days: i + 1));
+              final date = now.add(Duration(days: i));
               final sel = _selectedDate?.day == date.day &&
                   _selectedDate?.month == date.month;
               final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-              final day = days[date.weekday - 1];
+              final day = i == 0 ? 'Today' : days[date.weekday - 1];
               return GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
@@ -663,15 +727,26 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
             child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.lock_outline_rounded, color: _green, size: 16),
+                  Icon(
+                      _stillConfirming
+                          ? Icons.hourglass_top_rounded
+                          : Icons.lock_outline_rounded,
+                      color: _stillConfirming ? const Color(0xFFD4A017) : _green,
+                      size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                       child: Text(
-                          _paymentFailed
-                              ? 'Your previous payment did not complete. Retry to confirm this booking — nothing is booked until payment succeeds.'
-                              : 'Pay ₹5 securely with Razorpay. Your booking is confirmed instantly after payment, and your lawyer is notified.',
-                          style: const TextStyle(
-                              color: _green, fontSize: 12, height: 1.4))),
+                          _stillConfirming
+                              ? 'Your payment was received and is being confirmed. This can take a moment — tap "Check Status" to refresh.'
+                              : _paymentFailed
+                                  ? 'Your previous payment did not complete. Retry to confirm this booking — nothing is booked until payment succeeds.'
+                                  : 'Pay ₹5 securely with Razorpay. Your booking is confirmed instantly after payment, and your lawyer is notified.',
+                          style: TextStyle(
+                              color: _stillConfirming
+                                  ? const Color(0xFFD4A017)
+                                  : _green,
+                              fontSize: 12,
+                              height: 1.4))),
                 ])),
         if (_paymentFailed) ...[
           const SizedBox(height: 10),

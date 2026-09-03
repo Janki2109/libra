@@ -53,7 +53,14 @@ class UserModel {
       roleName: json['role_name']?.toString() ?? json['role']?.toString() ?? '',
       firmId: json['firm_id']?.toString() ?? '',
       avatarUrl: json['avatar_url']?.toString() ?? '',
-      profilePhoto: json['profile_photo']?.toString() ?? '',
+      // The server only ever populates avatar_url — profile_photo exists
+      // solely in the locally-cached copy of this model, written by
+      // AuthProvider.updateProfilePhoto. Prefer it when present (it may be
+      // fresher than what the server has just after an update), otherwise
+      // fall back to what the server actually sent.
+      profilePhoto: (json['profile_photo']?.toString().isNotEmpty ?? false)
+          ? json['profile_photo'].toString()
+          : (json['avatar_url']?.toString() ?? ''),
       designation: json['designation']?.toString() ?? '',
       isActive: json['is_active'] ?? true,
       createdAt: json['created_at']?.toString() ?? '',

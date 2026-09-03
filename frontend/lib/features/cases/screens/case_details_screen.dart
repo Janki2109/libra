@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
+import '../../documents/widgets/document_upload_sheet.dart';
+import '../../hearings/utils/hearing_status.dart';
 
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
@@ -33,6 +35,10 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    // Notes tab has its own bottom action bar (note input + Send); the
+    // floating Change Status button would sit on top of it and overflow, so
+    // it's hidden there and offered inline in the Notes bar instead.
+    _tabController.addListener(() => setState(() {}));
     _loadCase();
   }
 
@@ -340,160 +346,11 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
   }
 
   void _showUploadDialog() {
-    final nameCtrl = TextEditingController();
-    final urlCtrl = TextEditingController();
-    String category = 'General';
-    bool loading = false;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: _bgCard,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setS) => Padding(
-                padding: EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 20,
-                    bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-                child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                          child: Container(
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                  color: _border,
-                                  borderRadius: BorderRadius.circular(2)))),
-                      const SizedBox(height: 16),
-                      const Text('Upload Document',
-                          style: TextStyle(
-                              color: _textPri,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 4),
-                      const Text('PDF, Excel, Photo, Video or any file',
-                          style: TextStyle(color: _textMuted, fontSize: 12)),
-                      const SizedBox(height: 16),
-                      Row(children: [
-                        _FileTypeChip(
-                            label: 'PDF', color: const Color(0xFFD9534F)),
-                        const SizedBox(width: 8),
-                        _FileTypeChip(
-                            label: 'Excel', color: const Color(0xFF2E8B57)),
-                        const SizedBox(width: 8),
-                        _FileTypeChip(
-                            label: 'Photo', color: const Color(0xFF4A90D9)),
-                        const SizedBox(width: 8),
-                        _FileTypeChip(label: 'Video', color: _brownLight),
-                      ]),
-                      const SizedBox(height: 14),
-                      TextField(
-                          controller: nameCtrl,
-                          style: const TextStyle(color: _textPri),
-                          decoration: _inputDeco(
-                              'Document Name *', Icons.description_outlined)),
-                      const SizedBox(height: 12),
-                      TextField(
-                          controller: urlCtrl,
-                          style: const TextStyle(color: _textPri),
-                          decoration: _inputDeco(
-                              'File URL / Link *', Icons.link_rounded)),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 2),
-                        decoration: BoxDecoration(
-                            color: _bg,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _border, width: 0.8)),
-                        child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                          value: category,
-                          dropdownColor: _bgCard,
-                          style: const TextStyle(color: _textPri, fontSize: 14),
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                              color: _brown),
-                          isExpanded: true,
-                          items: [
-                            'General',
-                            'Petition',
-                            'Court Order',
-                            'Agreement',
-                            'Evidence',
-                            'Affidavit',
-                            'Photo',
-                            'Video',
-                            'Other'
-                          ]
-                              .map((c) =>
-                                  DropdownMenuItem(value: c, child: Text(c)))
-                              .toList(),
-                          onChanged: (v) => setS(() => category = v!),
-                        )),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: ElevatedButton(
-                          onPressed: loading
-                              ? null
-                              : () async {
-                                  if (nameCtrl.text.isEmpty ||
-                                      urlCtrl.text.isEmpty) return;
-                                  setS(() => loading = true);
-                                  try {
-                                    await DioClient.instance
-                                        .post('/documents/upload', data: {
-                                      'file_name': nameCtrl.text.trim(),
-                                      'file_url': urlCtrl.text.trim(),
-                                      'file_type': category.toLowerCase(),
-                                      'category': category,
-                                      'case_id': widget.caseId,
-                                      'description':
-                                          'Document for case: ${_case?['case_title']}',
-                                    });
-                                    if (ctx.mounted) Navigator.pop(ctx);
-                                    _loadCase();
-                                    HapticFeedback.heavyImpact();
-                                    if (mounted)
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(SnackBar(
-                                        content:
-                                            const Text('Document uploaded!'),
-                                        backgroundColor:
-                                            const Color(0xFF2E8B57),
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12)),
-                                      ));
-                                  } catch (e) {
-                                    setS(() => loading = false);
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: _brown,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12))),
-                          child: loading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2))
-                              : const Text('Upload Document',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white)),
-                        ),
-                      ),
-                    ]),
-              )),
+    showDocumentUploadSheet(
+      context,
+      caseId: widget.caseId,
+      description: 'Document for case: ${_case?['case_title']}',
+      onUploaded: _loadCase,
     );
   }
 
@@ -600,6 +457,11 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
           ]),
           actions: [
             IconButton(
+                icon: const Icon(Icons.edit_rounded, color: Color(0xFFFFD700)),
+                onPressed: () => context
+                    .push('/cases/${widget.caseId}/edit')
+                    .then((_) => _loadCase())),
+            IconButton(
                 icon: const Icon(Icons.upload_file_rounded,
                     color: Color(0xFFFFD700)),
                 onPressed: _showUploadDialog),
@@ -662,13 +524,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
           ),
         ),
         body: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/imagies1/cilent case.jpg'),
-              fit: BoxFit.cover,
-              opacity: 0.50,
-            ),
-          ),
+          color: _bg,
           child: TabBarView(
             controller: _tabController,
             children: [
@@ -679,12 +535,20 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                   onRefresh: _loadCase),
               _DocumentsTab(documents: _documents, onUpload: _showUploadDialog),
               _NotesTab(
-                  notes: _notes, caseId: widget.caseId, onRefresh: _loadCase),
+                  notes: _notes,
+                  caseId: widget.caseId,
+                  onRefresh: _loadCase,
+                  showChangeStatus: status != 'won' &&
+                      status != 'lost' &&
+                      status != 'closed',
+                  onChangeStatus: _showStatusDialog),
             ],
           ),
         ), // Container
-        floatingActionButton:
-            status != 'won' && status != 'lost' && status != 'closed'
+        floatingActionButton: status != 'won' &&
+                status != 'lost' &&
+                status != 'closed' &&
+                _tabController.index != 3
                 ? FloatingActionButton.extended(
                     onPressed: _showStatusDialog,
                     backgroundColor: _brown,
@@ -869,9 +733,32 @@ class _HearingsTab extends StatelessWidget {
   const _HearingsTab(
       {required this.hearings, required this.caseId, required this.onRefresh});
 
+  void _addNextHearing(BuildContext context) {
+    context
+        .push('/hearings/add', extra: {'caseId': caseId})
+        .then((_) => onRefresh());
+  }
+
+  // The hearing date can be postponed and re-added multiple times, so the
+  // soonest still-scheduled hearing is flagged "NEXT" to distinguish it from
+  // the rest of the history rather than replacing/removing older entries.
+  Map<String, dynamic>? get _nextHearing {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final upcoming = hearings.where((h) {
+      if (h['status'] != 'scheduled') return false;
+      final d = DateTime.tryParse(h['hearing_date'] ?? '');
+      return d != null && !d.isBefore(todayDate);
+    }).toList()
+      ..sort((a, b) => DateTime.parse(a['hearing_date'])
+          .compareTo(DateTime.parse(b['hearing_date'])));
+    return upcoming.isEmpty ? null : upcoming.first as Map<String, dynamic>;
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (hearings.isEmpty)
+    final next = _nextHearing;
+    if (hearings.isEmpty) {
       return Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.event_rounded,
@@ -880,7 +767,7 @@ class _HearingsTab extends StatelessWidget {
         const Text('No hearings yet', style: TextStyle(color: _textMuted)),
         const SizedBox(height: 16),
         ElevatedButton.icon(
-          onPressed: () => context.push('/hearings/add'),
+          onPressed: () => _addNextHearing(context),
           icon: const Icon(Icons.add_rounded, color: Colors.white),
           label: const Text('Schedule Hearing',
               style: TextStyle(color: Colors.white)),
@@ -890,68 +777,117 @@ class _HearingsTab extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12))),
         ),
       ]));
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: hearings.length,
-      itemBuilder: (_, i) {
-        final h = hearings[i];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-              color: _bgCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _border, width: 0.8),
-              boxShadow: [
-                BoxShadow(
-                    color: _brown.withValues(alpha: 0.05),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2))
-              ]),
-          child: Row(children: [
-            Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                    color: const Color(0xFF4A90D9).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.event_rounded,
-                    color: Color(0xFF4A90D9), size: 20)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(h['hearing_date'] ?? '',
-                      style: const TextStyle(
-                          color: _brown,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14)),
-                  if ((h['court_name'] ?? '').isNotEmpty)
-                    Text(h['court_name'],
-                        style:
-                            const TextStyle(color: _textMuted, fontSize: 12)),
-                  if ((h['purpose'] ?? '').isNotEmpty)
-                    Text(h['purpose'],
-                        style:
-                            const TextStyle(color: _textMuted, fontSize: 12)),
-                ])),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                  color: const Color(0xFF4A90D9).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Text(h['status'] ?? 'scheduled',
-                  style: const TextStyle(
-                      color: Color(0xFF4A90D9),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600)),
-            ),
-          ]),
-        );
-      },
-    );
+    }
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _addNextHearing(context),
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: const Text('Add Next Hearing',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _brown,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12))),
+          ),
+        ),
+      ),
+      Expanded(
+        child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: hearings.length,
+              itemBuilder: (_, i) {
+                final h = hearings[i];
+                final isNext = next != null && h['id'] == next['id'];
+                final statusInfo = hearingStatusInfo(h);
+                return InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => context
+                      .push('/hearings/${h['id']}')
+                      .then((_) => onRefresh()),
+                  child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                      color: _bgCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                          color: isNext ? _brown : _border,
+                          width: isNext ? 1.4 : 0.8),
+                      boxShadow: [
+                        BoxShadow(
+                            color: _brown.withValues(alpha: 0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2))
+                      ]),
+                  child: Row(children: [
+                    Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                            color: const Color(0xFF4A90D9).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.event_rounded,
+                            color: Color(0xFF4A90D9), size: 20)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Row(children: [
+                            Text(h['hearing_date'] ?? '',
+                                style: const TextStyle(
+                                    color: _brown,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14)),
+                            if (isNext) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                    color: const Color(0xFF2E8B57),
+                                    borderRadius: BorderRadius.circular(6)),
+                                child: const Text('NEXT',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800)),
+                              ),
+                            ],
+                          ]),
+                          if ((h['court_name'] ?? '').isNotEmpty)
+                            Text(h['court_name'],
+                                style: const TextStyle(
+                                    color: _textMuted, fontSize: 12)),
+                          if ((h['purpose'] ?? '').isNotEmpty)
+                            Text(h['purpose'],
+                                style: const TextStyle(
+                                    color: _textMuted, fontSize: 12)),
+                        ])),
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                          color: statusInfo.color.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Text(statusInfo.label,
+                          style: TextStyle(
+                              color: statusInfo.color,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
+                  ),
+                );
+              },
+        ),
+      ),
+    ]);
   }
 }
 
@@ -997,7 +933,10 @@ class _DocumentsTab extends StatelessWidget {
                 itemCount: documents.length,
                 itemBuilder: (_, i) {
                   final d = documents[i];
-                  return Container(
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => context.push('/documents/${d['id']}'),
+                    child: Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -1036,6 +975,7 @@ class _DocumentsTab extends StatelessWidget {
                                     color: _textMuted, fontSize: 12)),
                           ])),
                     ]),
+                    ),
                   );
                 },
               ),
@@ -1047,8 +987,14 @@ class _NotesTab extends StatefulWidget {
   final List<dynamic> notes;
   final String caseId;
   final VoidCallback onRefresh;
+  final bool showChangeStatus;
+  final VoidCallback onChangeStatus;
   const _NotesTab(
-      {required this.notes, required this.caseId, required this.onRefresh});
+      {required this.notes,
+      required this.caseId,
+      required this.onRefresh,
+      required this.showChangeStatus,
+      required this.onChangeStatus});
   @override
   State<_NotesTab> createState() => _NotesTabState();
 }
@@ -1120,7 +1066,9 @@ class _NotesTabState extends State<_NotesTab> {
                     );
                   }),
         ),
-        Container(
+        SafeArea(
+          top: false,
+          child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
               color: _bgCard,
@@ -1131,7 +1079,24 @@ class _NotesTabState extends State<_NotesTab> {
                     blurRadius: 8,
                     offset: const Offset(0, -2))
               ]),
-          child: Row(children: [
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            if (widget.showChangeStatus) ...[
+              GestureDetector(
+                onTap: widget.onChangeStatus,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _brown.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _brown.withValues(alpha: 0.3)),
+                  ),
+                  child: const Icon(Icons.sync_alt_rounded,
+                      color: _brown, size: 20),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             Expanded(
                 child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1146,6 +1111,7 @@ class _NotesTabState extends State<_NotesTab> {
                   hintText: 'Add a note...',
                   hintStyle: TextStyle(color: _textMuted),
                   border: InputBorder.none,
+                  filled: false,
                   isDense: true,
                 ),
               ),
@@ -1173,6 +1139,7 @@ class _NotesTabState extends State<_NotesTab> {
               ),
             ),
           ]),
+          ),
         ),
       ]);
 }
@@ -1209,24 +1176,4 @@ class _StatusOption extends StatelessWidget {
           onTap();
         },
       );
-}
-
-class _FileTypeChip extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _FileTypeChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-          child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withValues(alpha: 0.3))),
-        child: Text(label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: color, fontSize: 10, fontWeight: FontWeight.w600)),
-      ));
 }

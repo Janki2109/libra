@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -23,8 +23,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
   final _barCouncilCtrl = TextEditingController();
-  String _selectedCity = '';
-  String _selectedState = '';
+  final _designationCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  final _stateCtrl = TextEditingController();
   bool _obscurePass = true;
   bool _obscureConfirm = true;
   bool _agreeToTerms = false;
@@ -44,6 +45,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordCtrl.dispose();
     _confirmPassCtrl.dispose();
     _barCouncilCtrl.dispose();
+    _designationCtrl.dispose();
+    _cityCtrl.dispose();
+    _stateCtrl.dispose();
     super.dispose();
   }
 
@@ -106,8 +110,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     HapticFeedback.lightImpact();
     final auth = context.read<AuthProvider>();
-    final pendingPlan = await StorageService.takePendingPlan();
-    if (!mounted) return;
+    // Plan is chosen after the account exists, on the SubscriptionScreen this
+    // navigates to below — not before, when there is nothing yet to attach
+    // a purchase to.
     final success = await auth.register(
       firmName: _firmNameCtrl.text.trim(),
       name: _nameCtrl.text.trim(),
@@ -115,9 +120,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       phone: _phoneCtrl.text.trim(),
       password: _passwordCtrl.text,
       barCouncilNumber: _barCouncilCtrl.text.trim(),
-      city: _selectedCity,
-      state: _selectedState,
-      plan: pendingPlan ?? '',
+      designation: _designationCtrl.text.trim(),
+      city: _cityCtrl.text.trim(),
+      state: _stateCtrl.text.trim(),
+      plan: '',
     );
 
     if (success && mounted) {
@@ -187,7 +193,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
               controller: _nameCtrl,
               label: 'Your Full Name *',
               icon: Icons.person_rounded,
-              validator: (v) => v!.isEmpty ? 'Name required' : null),
+              validator: (v) {
+                final trimmed = v?.trim() ?? '';
+                if (trimmed.isEmpty) return 'Name required';
+                final words =
+                    trimmed.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+                if (words.length < 2) {
+                  return 'Enter your full name (first and last name)';
+                }
+                return null;
+              }),
           const SizedBox(height: 14),
 
           _buildField(
@@ -205,33 +220,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
               isPhone: true,
-              validator: (v) {
-                if (v!.isEmpty) return 'Phone required';
-                if (v.length != 10) return 'Enter valid 10-digit number';
-                return null;
-              }),
+              validator: (v) => Validators.phone(v)),
           const SizedBox(height: 14),
 
           _buildField(
               controller: _barCouncilCtrl,
-              label: 'Bar Council Number',
-              icon: Icons.badge_outlined),
+              label: 'Bar Council Number *',
+              icon: Icons.badge_outlined,
+              validator: (v) => v!.trim().isEmpty
+                  ? 'Bar Council number required'
+                  : null),
+          const SizedBox(height: 14),
+
+          _buildField(
+              controller: _designationCtrl,
+              label: 'Designation *',
+              icon: Icons.work_outline_rounded,
+              validator: (v) => v!.trim().isEmpty
+                  ? 'Designation required (e.g. Advocate, Partner)'
+                  : null),
           const SizedBox(height: 14),
 
           Row(children: [
             Expanded(
                 child: _buildField(
-                    controller: TextEditingController(),
-                    label: 'City',
+                    controller: _cityCtrl,
+                    label: 'City *',
                     icon: Icons.location_city_outlined,
-                    onChanged: (v) => _selectedCity = v)),
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'City required' : null)),
             const SizedBox(width: 12),
             Expanded(
                 child: _buildField(
-                    controller: TextEditingController(),
-                    label: 'State',
+                    controller: _stateCtrl,
+                    label: 'State *',
                     icon: Icons.map_outlined,
-                    onChanged: (v) => _selectedState = v)),
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'State required' : null)),
           ]),
           const SizedBox(height: 14),
 

@@ -161,7 +161,24 @@ class _QuizScreenState extends State<QuizScreen> {
       });
     } else {
       setState(() => _finished = true);
+      _submitResult();
     }
+  }
+
+  /// Records the score so certificate eligibility (e.g. "Score 80%+ in
+  /// Constitutional Law Quiz") has something real to check against — quizzes
+  /// used to be graded entirely on-device and forgotten the moment the
+  /// screen closed. Fire-and-forget: a failed submission shouldn't block the
+  /// student from seeing their own result.
+  Future<void> _submitResult() async {
+    if (_questions.isEmpty || _selectedSubject == null) return;
+    final pct = (_score / _questions.length * 100).round();
+    try {
+      await DioClient.instance.post('/student/quiz/submit', data: {
+        'subject': _selectedSubject,
+        'score_percent': pct,
+      });
+    } catch (_) {}
   }
 
   @override

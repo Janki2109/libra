@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/utils/validators.dart';
 
 class EditClientScreen extends StatefulWidget {
   final String clientId;
@@ -39,7 +41,7 @@ class _EditClientScreenState extends State<EditClientScreen> {
       final res =
           await DioClient.instance.get('/clients/${widget.clientId}');
       final data = res.data['data'] ?? {};
-      _nameCtrl.text = data['full_name'] ?? '';
+      _nameCtrl.text = data['name'] ?? '';
       _emailCtrl.text = data['email'] ?? '';
       _phoneCtrl.text = data['phone'] ?? '';
       _addressCtrl.text = data['address'] ?? '';
@@ -52,7 +54,7 @@ class _EditClientScreenState extends State<EditClientScreen> {
     setState(() => _saving = true);
     try {
       await DioClient.instance.put('/clients/${widget.clientId}', data: {
-        'full_name': _nameCtrl.text.trim(),
+        'name': _nameCtrl.text.trim(),
         'email': _emailCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),
@@ -69,7 +71,7 @@ class _EditClientScreenState extends State<EditClientScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Update failed: $e'),
+              content: Text(DioClient.describeError(e)),
               backgroundColor: AppColors.error),
         );
       }
@@ -109,7 +111,12 @@ class _EditClientScreenState extends State<EditClientScreen> {
                           (v ?? '').isEmpty ? 'Required' : null),
                   const SizedBox(height: 14),
                   _Field(ctrl: _phoneCtrl, label: 'Phone',
-                      keyboardType: TextInputType.phone),
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      validator: (v) => Validators.phone(v, required: false)),
                   const SizedBox(height: 14),
                   _Field(ctrl: _addressCtrl, label: 'Address',
                       maxLines: 3),
@@ -151,12 +158,14 @@ class _Field extends StatelessWidget {
   final TextInputType? keyboardType;
   final int maxLines;
   final String? Function(String?)? validator;
+  final List<TextInputFormatter>? inputFormatters;
   const _Field(
       {required this.ctrl,
       required this.label,
       this.keyboardType,
       this.maxLines = 1,
-      this.validator});
+      this.validator,
+      this.inputFormatters});
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,6 +180,7 @@ class _Field extends StatelessWidget {
             controller: ctrl,
             keyboardType: keyboardType,
             maxLines: maxLines,
+            inputFormatters: inputFormatters,
             validator: validator,
             style: const TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(

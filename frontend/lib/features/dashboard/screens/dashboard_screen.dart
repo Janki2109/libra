@@ -137,16 +137,52 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 12),
+          Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take Photo'),
+            onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from Gallery'),
+            onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (source == null) return;
+
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 70, maxWidth: 400);
+    final picked =
+        await picker.pickImage(source: source, imageQuality: 70, maxWidth: 400);
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     final base64Photo = 'data:image/jpeg;base64,${base64Encode(bytes)}';
     if (mounted) {
       final auth = context.read<AuthProvider>();
-      await auth.updateProfilePhoto(base64Photo);
+      final synced = await auth.updateProfilePhoto(base64Photo);
       setState(() {});
+      if (!synced && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Photo updated on this device, but could not sync — others may not see it yet.'),
+            backgroundColor: Color(0xFFD4A017)));
+      }
     }
   }
 

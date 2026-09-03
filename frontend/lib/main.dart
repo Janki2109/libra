@@ -66,6 +66,35 @@ class LibraApp extends StatelessWidget {
             darkTheme: AppTheme.darkTheme,
             themeMode: ThemeMode.dark, // ✅ Always dark
             routerConfig: AppRouter.router(auth),
+            // Only reached once go_router's own Navigator has nothing left
+            // to pop — i.e. the system/gesture back press would otherwise
+            // exit the app outright with no warning. In-app back navigation
+            // elsewhere is untouched; this never intercepts a pop that a
+            // screen further down the stack can still handle itself.
+            builder: (context, child) => PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, _) async {
+                if (didPop) return;
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Exit app?'),
+                    content:
+                        const Text('Are you sure you want to exit the app?'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Exit')),
+                    ],
+                  ),
+                );
+                if (confirmed == true) SystemNavigator.pop();
+              },
+              child: child!,
+            ),
           );
         },
       ),

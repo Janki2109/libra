@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,9 @@ class _FindLawyerScreenState extends State<FindLawyerScreen> {
   List<dynamic> _lawyers = [];
   List<dynamic> _filtered = [];
   bool _loading = true;
+  // Chat is a premium feature: unlocked with a lawyer only once the client
+  // has a paid consultation with them. Populated alongside the lawyer list.
+  Set<String> _paidLawyerIds = {};
   String _selectedCategory = 'All';
   String _selectedCity = 'All';
 
@@ -53,13 +57,31 @@ class _FindLawyerScreenState extends State<FindLawyerScreen> {
     setState(() => _loading = true);
     try {
       final res = await DioClient.instance.get('/student/lawyers');
+      final paidIds = await _loadPaidLawyerIds();
       setState(() {
         _lawyers = res.data['data'] ?? [];
         _filtered = _lawyers;
+        _paidLawyerIds = paidIds;
         _loading = false;
       });
     } catch (e) {
       setState(() => _loading = false);
+    }
+  }
+
+  /// Lawyers this client has at least one paid consultation with — chat is
+  /// gated on that, not on a general subscription, since a client's only
+  /// paid relationship in this app is per-lawyer consultation.
+  Future<Set<String>> _loadPaidLawyerIds() async {
+    try {
+      final res = await DioClient.instance.get('/portal/my-consultations');
+      final list = res.data['data'] as List<dynamic>? ?? [];
+      return list
+          .where((c) => c['payment_status'] == 'paid')
+          .map((c) => c['lawyer_id'] as String)
+          .toSet();
+    } catch (e) {
+      return {};
     }
   }
 
@@ -172,6 +194,7 @@ class _FindLawyerScreenState extends State<FindLawyerScreen> {
                                 })
                             : null,
                         border: InputBorder.none,
+                        filled: false,
                         contentPadding:
                             const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -311,7 +334,12 @@ class _FindLawyerScreenState extends State<FindLawyerScreen> {
                                 child: Transform.translate(
                                     offset: Offset(0, 20 * (1 - v)),
                                     child: child)),
-                            child: _LawyerCard(lawyer: l, index: i),
+                            child: _LawyerCard(
+                              lawyer: l,
+                              index: i,
+                              chatUnlocked:
+                                  _paidLawyerIds.contains(l['id']),
+                            ),
                           );
                         },
                       ),
@@ -370,7 +398,9 @@ class _FindLawyerScreenState extends State<FindLawyerScreen> {
 class _LawyerCard extends StatelessWidget {
   final dynamic lawyer;
   final int index;
-  const _LawyerCard({required this.lawyer, required this.index});
+  final bool chatUnlocked;
+  const _LawyerCard(
+      {required this.lawyer, required this.index, required this.chatUnlocked});
 
   @override
   Widget build(BuildContext context) {
@@ -384,6 +414,7 @@ class _LawyerCard extends StatelessWidget {
     final totalCases = lawyer['total_cases'] ?? 0;
     final initials = name.isNotEmpty ? name[0].toUpperCase() : 'A';
     final location = [city, state].where((s) => s.isNotEmpty).join(', ');
+    final avatarUrl = (lawyer['avatar_url'] ?? '') as String;
 
     final colors = [
       const Color(0xFF0D6E4F),
@@ -428,12 +459,28 @@ class _LawyerCard extends StatelessWidget {
                   BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10)
                 ],
               ),
-              child: Center(
-                  child: Text(initials,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 22))),
+              child: avatarUrl.isNotEmpty
+                  ? ClipOval(
+                      child: Image.memory(
+                        base64Decode(
+                            avatarUrl.replaceFirst(RegExp(r'^data:image/\w+;base64,'), '')),
+                        width: 58,
+                        height: 58,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Center(
+                            child: Text(initials,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 22))),
+                      ),
+                    )
+                  : Center(
+                      child: Text(initials,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 22))),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -534,6 +581,19 @@ class _LawyerCard extends StatelessWidget {
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () async {
+                if (!chatUnlocked) {
+                  HapticFeedback.lightImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: const Text(
+                          'Chat unlocks once you book a paid consultation with this lawyer.'),
+                      backgroundColor: const Color(0xFFD4A017),
+                      action: SnackBarAction(
+                          label: 'Book',
+                          textColor: Colors.white,
+                          onPressed: () => context.push(
+                              '/portal/book-consultation/${lawyer['id']}?name=${Uri.encodeComponent(name)}'))));
+                  return;
+                }
                 HapticFeedback.heavyImpact();
                 try {
                   final res = await DioClient.instance
@@ -553,14 +613,23 @@ class _LawyerCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
-                    color: _bgCard,
+                    color: chatUnlocked ? _bgCard : _bgCard.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _green, width: 1.2)),
-                child: const Text('Chat',
-                    style: TextStyle(
-                        color: _green,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12)),
+                    border: Border.all(
+                        color: chatUnlocked ? _green : _textMuted,
+                        width: 1.2)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (!chatUnlocked) ...[
+                    const Icon(Icons.lock_outline_rounded,
+                        size: 12, color: _textMuted),
+                    const SizedBox(width: 4),
+                  ],
+                  Text('Chat',
+                      style: TextStyle(
+                          color: chatUnlocked ? _green : _textMuted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12)),
+                ]),
               ),
             ),
           ]),

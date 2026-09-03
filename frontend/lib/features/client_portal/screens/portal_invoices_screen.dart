@@ -219,6 +219,15 @@ class _PortalInvoicesScreenState extends State<PortalInvoicesScreen> {
                                                 ? const Color(0xFFD9534F)
                                                 : _textMuted),
                                       ]),
+                                  if ((inv['gst_amount'] ?? 0) > 0 ||
+                                      (inv['platform_fee'] ?? 0) > 0) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                        'Incl. GST (${(inv['gst_rate'] ?? 18).toStringAsFixed(0)}%): ₹${(inv['gst_amount'] ?? 0).toStringAsFixed(0)} '
+                                        '+ Platform Fee: ₹${(inv['platform_fee'] ?? 0).toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                            color: _textMuted, fontSize: 10.5)),
+                                  ],
                                   if (isPendingPayment) ...[
                                     const SizedBox(height: 14),
                                     SizedBox(

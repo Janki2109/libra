@@ -194,6 +194,24 @@ func CreateChatRoom(c *gin.Context) {
 			return
 		}
 
+		// Chat is a premium feature: a client may only message a lawyer they
+		// have at least one paid consultation with. This used to be enforced
+		// only in the app's UI (which hid the button) — nothing stopped a
+		// client from calling this endpoint directly and opening a room with
+		// zero paid consultations.
+		var hasPaidConsultation bool
+		config.DB.QueryRow(`
+			SELECT EXISTS(
+				SELECT 1 FROM consultations
+				WHERE client_id=$1::uuid AND lawyer_id=$2::uuid AND payment_status='paid'
+			)
+		`, userID, lawyerID).Scan(&hasPaidConsultation)
+		if !hasPaidConsultation {
+			utils.Error(c, http.StatusPaymentRequired,
+				"Chat unlocks once you book a paid consultation with this lawyer", "")
+			return
+		}
+
 		// chat_rooms.client_id is a hard foreign key into `clients`, not
 		// `users` — so the caller's own row there is found (or, the first
 		// time they message this particular firm, created) rather than ever
@@ -308,10 +326,16 @@ func GetMessages(c *gin.Context) {
 	userID := utils.UserID(c)
 	uID := userID
 
+	// file_content is deliberately not selected here — same reasoning as
+	// GetDocuments: dragging every attachment's full base64 body through a
+	// list that's polled every 3 seconds would be enormous. HasFile tells
+	// the bubble whether to show an attachment at all; the bytes are fetched
+	// on demand from GET /chat/messages/:id/file only when opened.
 	rows, err := config.DB.Query(`
 		SELECT id, COALESCE(sender_id::text,''), sender_name,
 		       sender_role, message, COALESCE(message_type,'text'),
 		       COALESCE(file_url,''), COALESCE(file_name,''),
+		       COALESCE(mime_type,''), (file_content IS NOT NULL AND file_content != ''),
 		       is_read, is_deleted_by_sender, created_at
 		FROM chat_messages
 		WHERE room_id=$1::uuid AND is_deleted_by_sender=false
@@ -333,6 +357,8 @@ func GetMessages(c *gin.Context) {
 		MessageType       string    `json:"message_type"`
 		FileURL           string    `json:"file_url"`
 		FileName          string    `json:"file_name"`
+		MimeType          string    `json:"mime_type"`
+		HasFile           bool      `json:"has_file"`
 		IsRead            bool      `json:"is_read"`
 		IsDeletedBySender bool      `json:"is_deleted_by_sender"`
 		IsMine            bool      `json:"is_mine"`
@@ -344,6 +370,7 @@ func GetMessages(c *gin.Context) {
 		var m Message
 		rows.Scan(&m.ID, &m.SenderID, &m.SenderName, &m.SenderRole,
 			&m.Message, &m.MessageType, &m.FileURL, &m.FileName,
+			&m.MimeType, &m.HasFile,
 			&m.IsRead, &m.IsDeletedBySender, &m.CreatedAt)
 		m.IsMine = m.SenderID == uID
 		messages = append(messages, m)
@@ -367,13 +394,26 @@ func SendMessage(c *gin.Context) {
 	role := utils.Role(c)
 
 	var req struct {
-		Message     string `json:"message" binding:"required"`
+		Message     string `json:"message"`
 		MessageType string `json:"message_type"`
 		FileURL     string `json:"file_url"`
 		FileName    string `json:"file_name"`
+		FileContent string `json:"file_content"` // base64, image/document attachments
+		MimeType    string `json:"mime_type"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	// A message needs text or an attachment — not neither. binding:"required"
+	// on Message alone would reject a photo/document sent with no caption,
+	// which is the normal way people send an attachment.
+	if req.Message == "" && req.FileContent == "" {
+		utils.Error(c, http.StatusBadRequest, "Message text or an attachment is required", "")
+		return
+	}
+	if len(req.FileContent) > maxInlineChatFileBytes {
+		utils.Error(c, http.StatusRequestEntityTooLarge, "File too large", "attachment exceeds limit")
 		return
 	}
 
@@ -390,20 +430,25 @@ func SendMessage(c *gin.Context) {
 
 	_, err := config.DB.Exec(`
 		INSERT INTO chat_messages (id, room_id, sender_id, sender_name, sender_role,
-		message, message_type, file_url, file_name)
-		VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9)
+		message, message_type, file_url, file_name, file_content, mime_type)
+		VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11)
 	`, id, roomID, userID, senderName, role,
-		req.Message, msgType, req.FileURL, req.FileName)
+		req.Message, msgType, req.FileURL, req.FileName,
+		nullIfEmpty(req.FileContent), nullIfEmpty(req.MimeType))
 
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to send message", err.Error())
 		return
 	}
 
+	lastMessagePreview := req.Message
+	if lastMessagePreview == "" {
+		lastMessagePreview = "📎 " + req.FileName
+	}
 	config.DB.Exec(`
 		UPDATE chat_rooms SET last_message=$1, last_message_at=NOW(), updated_at=NOW()
 		WHERE id=$2::uuid
-	`, req.Message, roomID)
+	`, lastMessagePreview, roomID)
 
 	utils.Success(c, http.StatusCreated, "Message sent", gin.H{
 		"id":           id,
@@ -411,9 +456,58 @@ func SendMessage(c *gin.Context) {
 		"sender_role":  role,
 		"message":      req.Message,
 		"message_type": msgType,
+		"file_url":     req.FileURL,
+		"file_name":    req.FileName,
+		"mime_type":    req.MimeType,
+		"has_file":     req.FileContent != "",
 		"is_mine":      true,
 		"is_read":      false,
 		"created_at":   now,
+	})
+}
+
+// maxInlineChatFileBytes caps a base64 attachment stored directly on the
+// message row — same 8MB ceiling as document uploads (maxInlineDocumentBytes
+// in remaining_controllers.go), for the same reason: without a limit a
+// single request can push an arbitrarily large string into Postgres.
+const maxInlineChatFileBytes = 8 << 20
+
+// GetMessageFile returns one message's attachment bytes — kept out of
+// GetMessages (see the comment there) and fetched only when the recipient
+// actually opens it.
+func GetMessageFile(c *gin.Context) {
+	messageID := c.Param("message_id")
+	if !isUUID(messageID) {
+		utils.Error(c, http.StatusBadRequest, "Invalid message id", "not a uuid")
+		return
+	}
+
+	var roomID string
+	var fileName, mimeType, fileContent sql.NullString
+	err := config.DB.QueryRow(`
+		SELECT room_id::text, file_name, mime_type, file_content
+		FROM chat_messages WHERE id=$1::uuid AND is_deleted_by_sender=false
+	`, messageID).Scan(&roomID, &fileName, &mimeType, &fileContent)
+	if err == sql.ErrNoRows {
+		utils.Error(c, http.StatusNotFound, "Message not found", "")
+		return
+	}
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Database error", err.Error())
+		return
+	}
+	if !requireChatRoomAccess(c, roomID) {
+		return
+	}
+	if !fileContent.Valid || fileContent.String == "" {
+		utils.Error(c, http.StatusNotFound, "This message has no attachment", "")
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "Attachment fetched", gin.H{
+		"file_name":    fileName.String,
+		"mime_type":    mimeType.String,
+		"file_content": fileContent.String,
 	})
 }
 
@@ -458,6 +552,73 @@ func DeleteMessage(c *gin.Context) {
 	`, messageID)
 
 	utils.Success(c, http.StatusOK, "Message deleted", nil)
+}
+
+// onlineWindow is how recently a user must have made an authenticated
+// request (see middleware.touchPresence) to be shown as "Online". Chat polls
+// every 3s while open, so anyone actively using the app is comfortably
+// within this window; it also covers the presence poll's own ~3s cadence
+// (see GetRoomPresence below) plus the auth middleware's throttle.
+const onlineWindow = 2 * time.Minute
+
+// GetRoomPresence reports whether the other participant in a chat room is
+// currently online, based on how recently they last made an authenticated
+// request — real activity, not a value the client can just set to "online"
+// itself. Polled by the chat screen alongside GetMessages.
+func GetRoomPresence(c *gin.Context) {
+	roomID := c.Param("room_id")
+	if !requireChatRoomAccess(c, roomID) {
+		return
+	}
+	userID := utils.UserID(c)
+
+	var lawyerID string
+	var clientID, studentID sql.NullString
+	err := config.DB.QueryRow(`
+		SELECT COALESCE(lawyer_id::text,''), client_id::text, student_id::text
+		FROM chat_rooms WHERE id=$1::uuid
+	`, roomID).Scan(&lawyerID, &clientID, &studentID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to fetch presence", err.Error())
+		return
+	}
+
+	// The other participant is whichever side of the room isn't the caller.
+	var otherUserID string
+	if lawyerID != "" && lawyerID != userID {
+		otherUserID = lawyerID
+	} else if studentID.Valid && studentID.String != "" {
+		otherUserID = studentID.String
+	} else if clientID.Valid && clientID.String != "" {
+		// client_id points at `clients`, not `users` — resolve to the
+		// client's own login by email, same join used everywhere else a
+		// client's user account needs to be found from their client row.
+		config.DB.QueryRow(`
+			SELECT u.id::text FROM clients cl
+			JOIN users u ON lower(u.email) = lower(cl.email)
+			WHERE cl.id = $1::uuid LIMIT 1
+		`, clientID.String).Scan(&otherUserID)
+	}
+
+	if otherUserID == "" {
+		utils.Success(c, http.StatusOK, "Presence fetched", gin.H{
+			"online": false, "last_seen": nil,
+		})
+		return
+	}
+
+	var lastActive sql.NullTime
+	config.DB.QueryRow(`SELECT last_active_at FROM users WHERE id=$1::uuid`, otherUserID).
+		Scan(&lastActive)
+
+	online := lastActive.Valid && time.Since(lastActive.Time) < onlineWindow
+	resp := gin.H{"online": online}
+	if lastActive.Valid {
+		resp["last_seen"] = lastActive.Time
+	} else {
+		resp["last_seen"] = nil
+	}
+	utils.Success(c, http.StatusOK, "Presence fetched", resp)
 }
 
 func GetUnreadCount(c *gin.Context) {
