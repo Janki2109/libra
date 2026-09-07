@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -46,6 +47,24 @@ func getOrCreateCallRoom(consultationID string) *callRoom {
 		callRooms[consultationID] = room
 	}
 	return room
+}
+
+// writeJSON/writeMessage serialize every write to a connection in this room
+// behind the same mutex that guards room.conns. gorilla/websocket requires
+// at most one concurrent writer per connection; without this, the relay loop
+// (writing to a peer's conn) and that peer's own goroutine (writing a ping,
+// or its own peer-joined/peer-left notice) could call WriteMessage on the
+// same underlying conn from two goroutines at once, corrupting the frame.
+func (r *callRoom) writeJSON(conn *websocket.Conn, v interface{}) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return conn.WriteJSON(v)
+}
+
+func (r *callRoom) writeMessage(conn *websocket.Conn, messageType int, data []byte) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return conn.WriteMessage(messageType, data)
 }
 
 func dropEmptyCallRoom(consultationID string) {
@@ -114,6 +133,34 @@ func CallSignalingWS(c *gin.Context) {
 
 	room := getOrCreateCallRoom(id)
 
+	// http.Server{ReadTimeout, WriteTimeout} (main.go) apply to the raw
+	// connection before Upgrade's Hijack() ever runs, and Hijack does not
+	// clear them — so without this, ReadMessage/WriteMessage below start
+	// failing with an i/o timeout once those windows pass, silently ending
+	// any call that runs long. A call's WS traffic is bursty (an offer/
+	// answer/ICE exchange at setup, then near-silence for the rest of the
+	// call, since media itself flows peer-to-peer, not through this socket),
+	// so a ping/pong keepalive is what actually keeps the connection (and
+	// any idle-timeout in front of it, e.g. a PaaS's own reverse proxy)
+	// alive for the call's whole duration, not just deadlines.
+	conn.SetReadDeadline(time.Time{})
+	_ = conn.SetWriteDeadline(time.Time{})
+	const pongWait = 60 * time.Second
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer pingTicker.Stop()
+	go func() {
+		for range pingTicker.C {
+			if err := room.writeMessage(conn, websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}()
+
 	room.mu.Lock()
 	// A stale connection under the same user (e.g. a refreshed tab) is
 	// replaced rather than left to leak.
@@ -129,8 +176,8 @@ func CallSignalingWS(c *gin.Context) {
 	room.mu.Unlock()
 
 	if peerPresent {
-		_ = peerConn.WriteJSON(gin.H{"type": "peer-joined"})
-		_ = conn.WriteJSON(gin.H{"type": "peer-joined"})
+		_ = room.writeJSON(peerConn, gin.H{"type": "peer-joined"})
+		_ = room.writeJSON(conn, gin.H{"type": "peer-joined"})
 	}
 
 	defer func() {
@@ -141,7 +188,7 @@ func CallSignalingWS(c *gin.Context) {
 		remaining, stillPresent := room.conns[peerID]
 		room.mu.Unlock()
 		if stillPresent {
-			_ = remaining.WriteJSON(gin.H{"type": "peer-left"})
+			_ = room.writeJSON(remaining, gin.H{"type": "peer-left"})
 		}
 		dropEmptyCallRoom(id)
 	}()
@@ -165,7 +212,7 @@ func CallSignalingWS(c *gin.Context) {
 		peer, ok := room.conns[peerID]
 		room.mu.Unlock()
 		if ok {
-			_ = peer.WriteMessage(websocket.TextMessage, raw)
+			_ = room.writeMessage(peer, websocket.TextMessage, raw)
 		}
 	}
 }

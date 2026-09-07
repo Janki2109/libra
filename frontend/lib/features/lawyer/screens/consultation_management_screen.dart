@@ -723,53 +723,84 @@ class _ConsultationManagementScreenState
                           ],
                           if (status == 'confirmed' && !isOfficeVisit) ...[
                             const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: Material(
-                                color: color,
-                                borderRadius: BorderRadius.circular(10),
-                                child: InkWell(
+                            Builder(builder: (context) {
+                              // A lawyer can Confirm a booking that was never
+                              // actually paid for (this screen's own "Confirm"
+                              // button above has no payment check, and the
+                              // paid badge further up is purely decorative) —
+                              // the call/chat button used to just work anyway,
+                              // silently, until it hit the backend's payment
+                              // guard (added alongside this fix) with a
+                              // generic failure. Gate it here too so the
+                              // lawyer sees a clear reason instead of a call
+                              // that mysteriously won't connect.
+                              final isPaid = c['payment_status'] == 'paid';
+                              return SizedBox(
+                                width: double.infinity,
+                                child: Material(
+                                  color: isPaid ? color : _textMuted,
                                   borderRadius: BorderRadius.circular(10),
-                                  onTap: () {
-                                    HapticFeedback.heavyImpact();
-                                    if (action == 'audio') {
-                                      _callClient(c);
-                                    } else if (action == 'video') {
-                                      _startVideoCall(c);
-                                    } else {
-                                      _openChat();
-                                    }
-                                  },
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(vertical: 10),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(typeIcon,
-                                            color: Colors.white, size: 16),
-                                        const SizedBox(width: 6),
-                                        Flexible(
-                                          child: Text(
-                                              action == 'audio'
-                                                  ? 'Call Client'
-                                                  : action == 'video'
-                                                      ? 'Video Call'
-                                                      : 'Chat with Client',
-                                              textAlign: TextAlign.center,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 13)),
-                                        ),
-                                      ],
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(10),
+                                    onTap: () {
+                                      if (!isPaid) {
+                                        HapticFeedback.vibrate();
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                          content: Text(
+                                              'This consultation has not been paid for yet — the client needs to complete payment before you can call or chat.'),
+                                          backgroundColor: Color(0xFFD9534F),
+                                          behavior: SnackBarBehavior.floating,
+                                        ));
+                                        return;
+                                      }
+                                      HapticFeedback.heavyImpact();
+                                      if (action == 'audio') {
+                                        _callClient(c);
+                                      } else if (action == 'video') {
+                                        _startVideoCall(c);
+                                      } else {
+                                        _openChat();
+                                      }
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                              isPaid
+                                                  ? typeIcon
+                                                  : Icons.lock_outline_rounded,
+                                              color: Colors.white,
+                                              size: 16),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                                !isPaid
+                                                    ? 'Payment Pending'
+                                                    : action == 'audio'
+                                                        ? 'Call Client'
+                                                        : action == 'video'
+                                                            ? 'Video Call'
+                                                            : 'Chat with Client',
+                                                textAlign: TextAlign.center,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 13)),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
+                              );
+                            }),
                           ],
                         ])),
               ]),

@@ -565,11 +565,18 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen>
 
   Widget _InfoRow(String label, String value, Color color) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: const TextStyle(color: _textMuted, fontSize: 13)),
-          Text(value,
-              style: TextStyle(
-                  color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(value,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+          ),
         ],
       );
 }

@@ -637,19 +637,48 @@ func CreatePayment(c *gin.Context) {
 	}
 
 	if req.InvoiceID != "" {
-		// One statement, not two: the old pair could interleave with a
-		// concurrent payment and leave status disagreeing with paid_amount.
-		config.DB.Exec(`
-			UPDATE invoices SET
-			  paid_amount = COALESCE(paid_amount,0) + $1,
-			  status = CASE
-			    WHEN COALESCE(paid_amount,0) + $1 >= total_amount THEN 'paid'
-			    WHEN COALESCE(paid_amount,0) + $1 > 0 THEN 'partial'
-			    ELSE status
-			  END,
-			  updated_at = NOW()
-			WHERE id=$2::uuid AND firm_id=$3::uuid
-		`, req.Amount, req.InvoiceID, fID)
+		if firmStaffRole(utils.Role(c)) {
+			// A lawyer/staff member is recording money they personally
+			// confirmed (cash in hand, a bank statement they checked) — credit
+			// it immediately. One statement, not two: the old pair could
+			// interleave with a concurrent payment and leave status
+			// disagreeing with paid_amount.
+			config.DB.Exec(`
+				UPDATE invoices SET
+				  paid_amount = COALESCE(paid_amount,0) + $1,
+				  status = CASE
+				    WHEN COALESCE(paid_amount,0) + $1 >= total_amount THEN 'paid'
+				    WHEN COALESCE(paid_amount,0) + $1 > 0 THEN 'partial'
+				    ELSE status
+				  END,
+				  updated_at = NOW()
+				WHERE id=$2::uuid AND firm_id=$3::uuid
+			`, req.Amount, req.InvoiceID, fID)
+		} else {
+			// A client is only ever submitting an unverified claim (a UTR they
+			// typed in, a screenshot) — this used to credit paid_amount and
+			// flip the invoice straight to 'paid'/'partial' on the client's own
+			// say-so, with no lawyer review at all, and the invoice never
+			// reached the Payment Verification queue because nothing here ever
+			// set status='pending_verification'. Now the claim just moves the
+			// invoice into that queue; paid_amount/status only change once a
+			// lawyer approves it via VerifyPayment. A 'paid' invoice does not
+			// get bumped back to pending by a stray extra submission.
+			//
+			// transaction_id/payment_slip_url are stored on the invoice itself
+			// (what Payment Verification's "View slip" reads) in this same
+			// request — this used to be a second PUT /invoices/:id call from
+			// the client, which 403'd because that route is firm-staff-only,
+			// silently discarding the slip/reference every time.
+			config.DB.Exec(`
+				UPDATE invoices SET
+				  status = 'pending_verification',
+				  transaction_id = CASE WHEN $1 != '' THEN $1 ELSE transaction_id END,
+				  payment_slip_url = CASE WHEN $2 != '' THEN $2 ELSE payment_slip_url END,
+				  updated_at = NOW()
+				WHERE id=$3::uuid AND firm_id=$4::uuid AND status != 'paid'
+			`, req.TransactionID, req.PaymentSlipURL, req.InvoiceID, fID)
+		}
 
 		var invoiceCreator, invoiceNum string
 		var invoiceTotal float64

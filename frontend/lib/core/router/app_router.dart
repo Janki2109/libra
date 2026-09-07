@@ -7,6 +7,7 @@ import '../../features/auth/screens/client_register_screen.dart';
 import '../../features/auth/screens/student_register_screen.dart';
 import '../../features/auth/screens/onboarding_screen.dart';
 import '../../features/auth/screens/subscription_screen.dart';
+import '../../features/auth/screens/subscription_wall_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/student/screens/legal_challenge_screen.dart';
 import '../../features/student/screens/news_tab.dart';
@@ -172,6 +173,9 @@ class AppRouter {
         GoRoute(
             path: '/subscription',
             builder: (_, __) => const SubscriptionScreen()),
+        GoRoute(
+            path: '/subscription-wall',
+            builder: (_, __) => const SubscriptionWallScreen()),
 
         // ─── DASHBOARDS ──────────────────────
         GoRoute(

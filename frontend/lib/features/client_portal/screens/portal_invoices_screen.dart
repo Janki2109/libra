@@ -233,8 +233,12 @@ class _PortalInvoicesScreenState extends State<PortalInvoicesScreen> {
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton.icon(
-                                        onPressed: () => context.push(
-                                            '/billing/pay/${inv['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${inv['invoice_number']}'),
+                                        onPressed: () => context
+                                            .push(
+                                                '/billing/pay/${inv['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${inv['invoice_number']}')
+                                            .then((_) => context
+                                                .read<PortalProvider>()
+                                                .refreshInvoices()),
                                         icon: const Icon(Icons.payment_rounded,
                                             size: 18, color: Colors.white),
                                         label: const Text('Pay Now',

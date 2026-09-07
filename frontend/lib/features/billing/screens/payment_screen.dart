@@ -222,6 +222,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _submitPaymentProof(String method) async {
     setState(() => _loading = true);
     try {
+      // A single call now does everything: records the payment claim, moves
+      // the invoice into the lawyer's Payment Verification queue, and stores
+      // the transaction id/slip URL on the invoice. This used to be a second
+      // PUT /invoices/:id call, which is a firm-staff-only route — a client
+      // calling it always got a 403, so the invoice never actually reached
+      // the verification queue and the slip URL was silently lost, even
+      // though this screen still told the client their payment was
+      // submitted.
       await DioClient.instance.post('/payments', data: {
         'invoice_id': widget.invoiceId,
         'amount': widget.amount,
@@ -231,11 +239,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
         'payment_slip_url': _slipUrlCtrl.text.trim(),
         'notes': 'Paid via $method | TXN: ${_transactionIdCtrl.text.trim()}',
       });
-      await DioClient.instance.put('/invoices/${widget.invoiceId}', data: {
-        'status': 'pending_verification',
-        'transaction_id': _transactionIdCtrl.text.trim(),
-        'payment_slip_url': _slipUrlCtrl.text.trim(),
-      });
       if (mounted) {
         setState(() => _loading = false);
         HapticFeedback.heavyImpact();
@@ -244,9 +247,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } catch (e) {
       setState(() => _loading = false);
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Something went wrong. Please try again.'),
-            backgroundColor: Color(0xFFD9534F)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(DioClient.describeError(e)),
+            backgroundColor: const Color(0xFFD9534F)));
     }
   }
 

@@ -11,10 +11,12 @@ import '../../../core/services/dio_client.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../auth/providers/auth_provider.dart';
 
-// Matches the backend's maxInlineChatFileBytes (chat_controller.go) — check
-// client-side too so a user finds out a file is too large immediately
-// instead of waiting on a round trip that the server will reject anyway.
-const _maxAttachmentBytes = 8 * 1024 * 1024;
+// The backend's maxInlineChatFileBytes (chat_controller.go) caps the
+// *base64-encoded* string at 8MB, and base64 inflates size by ~4/3 — so the
+// raw-byte cap here has to be 6MB, not 8MB, or a file between 6-8MB passes
+// this check and still gets rejected by the server as "too large" once
+// encoded (same calibration document_upload_sheet.dart already uses).
+const _maxAttachmentBytes = 6 * 1024 * 1024;
 const _allowedDocExtensions = [
   'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'
 ];
@@ -406,6 +408,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() => _pendingAttachments[tempId] =
           _PendingAttachment(bytes: bytes, uploading: false, failed: true));
+      // The bubble already shows a Retry action for "failed", but that alone
+      // doesn't say *why* — a 413 (too large) and a dropped connection look
+      // identical without this, so a user just sees "upload not working"
+      // with no way to tell whether retrying will ever help.
+      _showError('Attachment failed: ${DioClient.describeError(e)}');
     }
   }
 

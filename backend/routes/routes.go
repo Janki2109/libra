@@ -253,6 +253,7 @@ func SetupRoutes() *gin.Engine {
 			billed.GET("/invoices/pending-verification", controllers.GetPendingVerification)
 			billed.POST("/invoices", controllers.CreateInvoice)
 			billed.GET("/invoices/:id", controllers.GetInvoice)
+			billed.GET("/invoices/:id/pdf", controllers.ExportInvoicePdf)
 			billed.PUT("/invoices/:id", controllers.UpdateInvoice)
 			billed.GET("/payments", controllers.GetPayments)
 			billed.POST("/payments/razorpay/order", controllers.CreateRazorpayOrder)

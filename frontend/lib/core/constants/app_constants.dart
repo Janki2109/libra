@@ -20,6 +20,27 @@ class AppConstants {
   /// development and to fail loudly in a release build.
   static bool get isInsecureEndpoint => baseUrl.startsWith('http://');
 
+  // ─── WebRTC TURN (optional) ──────────────
+  //
+  // STUN alone (see webrtc_call_service.dart) fails to connect a call
+  // whenever either side is behind a symmetric or carrier-grade NAT — very
+  // common on Indian mobile data networks. A TURN server is what makes those
+  // calls connect anyway (relaying media when a direct peer-to-peer path
+  // can't be found), at the cost of running through a third party.
+  // Supplied at build time, same as API_BASE_URL, so calling without one
+  // configured degrades to STUN-only rather than breaking the build:
+  //
+  //   flutter build apk --release \
+  //     --dart-define=API_BASE_URL=https://libra-law.onrender.com/api/v1 \
+  //     --dart-define=TURN_URL=turn:standard.relay.metered.ca:80 \
+  //     --dart-define=TURN_USERNAME=... \
+  //     --dart-define=TURN_CREDENTIAL=...
+  static const String turnUrl = String.fromEnvironment('TURN_URL');
+  static const String turnUsername = String.fromEnvironment('TURN_USERNAME');
+  static const String turnCredential =
+      String.fromEnvironment('TURN_CREDENTIAL');
+  static bool get hasTurnServer => turnUrl.isNotEmpty;
+
   // ─── Storage Keys ────────────────────────
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';
@@ -32,7 +53,11 @@ class AppConstants {
   static const String appVersion = '1.0.0';
 
   // ─── Timeouts ────────────────────────────
-  static const int connectTimeout = 30000;
+  // connectTimeout was 30s, which is cutting it close on a free-tier host
+  // that can take 30-60s to wake from an idle spin-down before it even
+  // accepts the TCP connection — a cold start could time out before the
+  // server had a chance to respond at all.
+  static const int connectTimeout = 60000;
   static const int receiveTimeout = 60000;
   static const int sendTimeout = 60000;
 

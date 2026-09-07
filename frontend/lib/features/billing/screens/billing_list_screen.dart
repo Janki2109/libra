@@ -311,7 +311,7 @@ class _InvoicesTabState extends State<_InvoicesTab> {
                   opacity: v.clamp(0.0, 1.0),
                   child: Transform.translate(
                       offset: Offset(0, 20 * (1 - v)), child: child)),
-              child: _InvoiceCard(invoice: e.value),
+              child: _InvoiceCard(invoice: e.value, onReturn: widget.onRefresh),
             )),
 
         if (_filtered.isEmpty)
@@ -335,7 +335,8 @@ class _InvoicesTabState extends State<_InvoicesTab> {
 // ── Invoice Card ───────────────────────────────────
 class _InvoiceCard extends StatelessWidget {
   final dynamic invoice;
-  const _InvoiceCard({required this.invoice});
+  final VoidCallback onReturn;
+  const _InvoiceCard({required this.invoice, required this.onReturn});
 
   @override
   Widget build(BuildContext context) {
@@ -503,8 +504,10 @@ class _InvoiceCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () => context.push(
-                        '/billing/pay/${invoice['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${invoice['invoice_number']}'),
+                    onPressed: () => context
+                        .push(
+                            '/billing/pay/${invoice['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${invoice['invoice_number']}')
+                        .then((_) => onReturn()),
                     icon: const Icon(Icons.payment_rounded,
                         color: Colors.white, size: 16),
                     label: Text(

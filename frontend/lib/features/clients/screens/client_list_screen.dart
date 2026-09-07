@@ -207,7 +207,13 @@ class _ClientCard extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        context.push('/clients/${client['id']}');
+        // Editing a client's details happens on that screen, not here — a
+        // name/phone/city change made there (or from a Case tab) never
+        // reflected back on this list without this reload, leaving the old
+        // values showing until the user left and reopened the whole screen.
+        context
+            .push('/clients/${client['id']}')
+            .then((_) => context.read<ClientProvider>().loadClients());
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),

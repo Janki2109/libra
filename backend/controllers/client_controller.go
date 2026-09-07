@@ -127,55 +127,22 @@ func CreateClient(c *gin.Context) {
 		return
 	}
 
-	portalCreated := false
-	var portalUserID string
-
-	if portalEmail != "" {
-		var existingID, existingFirm string
-		err := config.DB.QueryRow(
-			`SELECT id, COALESCE(firm_id::text,'') FROM users WHERE lower(email)=$1`,
-			portalEmail,
-		).Scan(&existingID, &existingFirm)
-
-		switch {
-		case err == sql.ErrNoRows:
-			portalUserID, portalCreated = provisionPortalUser(clientID, fID, req.Name, portalEmail, req.Phone)
-
-		case err != nil:
-			log.Printf("[client] portal lookup failed for %s: %v", portalEmail, err)
-
-		case existingFirm == "":
-			// A self-registered client who has not yet been attached to a
-			// firm. Adopt them into this one.
-			config.DB.Exec(`UPDATE users SET firm_id=$1::uuid, updated_at=NOW() WHERE id=$2::uuid`,
-				fID, existingID)
-			portalUserID = existingID
-
-		case existingFirm == fID:
-			portalUserID = existingID
-
-		default:
-			// The address already belongs to a user in a different firm.
-			// Silently reusing that account — as the old code did — would have
-			// handed this firm a chat room and portal access into another
-			// firm's user record.
-			log.Printf("[client] email %s already belongs to firm %s; no portal account linked",
-				portalEmail, existingFirm)
-		}
-	}
-
-	if portalUserID != "" {
-		ensureChatRoom(fID, clientID, uID, req.Name)
-	}
+	// A client is just a record here — no portal login account is created
+	// automatically. Adding a client used to synchronously provision a portal
+	// user and send a blocking SMTP email inside this same request; on a slow
+	// or misconfigured mail server that held the HTTP response open long
+	// enough to look like the app had frozen, even though the client row
+	// above was already committed. A firm that wants a client to have portal
+	// access can invite them separately.
+	//
+	// The lawyer↔client chat thread is still opened up front (chat_rooms
+	// keys off the clients row directly, not a portal account), so messaging
+	// works immediately regardless of whether the client ever logs into a
+	// portal.
+	ensureChatRoom(fID, clientID, uID, req.Name)
 
 	utils.Success(c, http.StatusCreated, "Client created", gin.H{
-		"id":             clientID,
-		"portal_created": portalCreated,
-		// The generated password is emailed to the client. It used to come
-		// back in this response *and* get written verbatim into a
-		// notifications row, leaving a permanent plaintext credential in the
-		// database that any firm member could read.
-		"portal_email": portalEmail,
+		"id": clientID,
 	})
 }
 

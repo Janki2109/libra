@@ -112,7 +112,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
     HapticFeedback.lightImpact();
     setState(() => _loading = true);
 
-    final result = await context.read<ClientProvider>().addClientWithPortal({
+    final result = await context.read<ClientProvider>().addClient({
       'name': _nameCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
       'phone': _phoneCtrl.text.trim(),
@@ -150,22 +150,14 @@ class _AddClientScreenState extends State<AddClientScreen> {
 
     if (result != null && mounted) {
       HapticFeedback.heavyImpact();
-      if (result['portal_created'] == true) {
-        // The API no longer returns the generated password — it emails it to
-        // the client directly. It used to come back here and also get written
-        // verbatim into a notifications row, leaving a plaintext credential
-        // in the database permanently.
-        _showPortalCreated(email: result['portal_email'] ?? '');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Client added successfully!'),
-          backgroundColor: const Color(0xFF2E8B57),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ));
-        context.pop();
-      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Client added successfully!'),
+        backgroundColor: const Color(0xFF2E8B57),
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+      context.pop();
     } else if (mounted) {
       HapticFeedback.vibrate();
       final message =
@@ -177,79 +169,6 @@ class _AddClientScreenState extends State<AddClientScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ));
     }
-  }
-
-  /// Confirms the portal account was created.
-  ///
-  /// This used to display the generated password on screen with a "Copy
-  /// Credentials" button. The API now emails it to the client instead, so the
-  /// credential never travels back through the lawyer's device, never lands in
-  /// their clipboard, and is not recoverable from a screenshot.
-  void _showPortalCreated({required String email}) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        backgroundColor: _bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(children: [
-          Icon(Icons.check_circle_rounded, color: Color(0xFF2E8B57), size: 24),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text('Client Account Created',
-                style: TextStyle(
-                    color: _textPri,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700)),
-          ),
-        ]),
-        content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                  'Sign-in details have been emailed to your client. They will '
-                  'be asked to choose their own password on first sign-in.',
-                  style:
-                      TextStyle(color: _textMuted, fontSize: 13, height: 1.5)),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _bg,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _border),
-                ),
-                child: Row(children: [
-                  const Icon(Icons.email_outlined, color: _gold, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: Text(email,
-                          style: const TextStyle(
-                              color: _textPri,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13))),
-                ]),
-              ),
-            ]),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              context.pop();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _brown,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('Done',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -311,32 +230,6 @@ class _AddClientScreenState extends State<AddClientScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    // Info banner
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4A90D9).withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: const Color(0xFF4A90D9)
-                                .withValues(alpha: 0.25)),
-                      ),
-                      child: const Row(children: [
-                        Icon(Icons.info_outline_rounded,
-                            color: Color(0xFF4A90D9), size: 18),
-                        SizedBox(width: 10),
-                        Expanded(
-                            child: Text(
-                          'Client portal account will be automatically created when you add email address!',
-                          style: TextStyle(
-                              color: Color(0xFF2E6DB4),
-                              fontSize: 12,
-                              height: 1.4),
-                        )),
-                      ]),
-                    ),
-                    const SizedBox(height: 20),
-
                     _SectionHeader(
                         title: 'Personal Information',
                         icon: Icons.person_outline_rounded),
@@ -350,7 +243,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
                     const SizedBox(height: 10),
                     _buildField(
                         controller: _emailCtrl,
-                        label: 'Email Address (for portal access) *',
+                        label: 'Email Address *',
                         icon: Icons.email_outlined,
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) => v!.trim().isEmpty

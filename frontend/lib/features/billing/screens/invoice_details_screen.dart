@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/utils/file_opener.dart';
 
 class InvoiceDetailsScreen extends StatefulWidget {
   final String invoiceId;
@@ -13,6 +16,7 @@ class InvoiceDetailsScreen extends StatefulWidget {
 class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
   Map<String, dynamic>? _invoice;
   bool _loading = true;
+  bool _printing = false;
 
   @override
   void initState() {
@@ -36,6 +40,40 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
     }
   }
 
+  // "Bill print" didn't exist anywhere in the app before this — the backend
+  // renders the invoice as a real PDF, and this opens it in the device's own
+  // PDF viewer, which has its own Print action already — no need for a
+  // separate print package/dialog to get a physical or PDF printout.
+  Future<void> _printInvoice() async {
+    if (_printing) return;
+    setState(() => _printing = true);
+    try {
+      final res = await DioClient.instance
+          .get('/invoices/${widget.invoiceId}/pdf');
+      final data = res.data['data'];
+      final b64 = data?['file_base64'] as String?;
+      final fileName = data?['file_name'] as String? ?? 'invoice.pdf';
+      if (b64 == null) throw Exception('The server did not return a file');
+      final bytes = base64Decode(b64);
+      final result = await openDocumentBytes(
+          bytes: bytes, fileName: fileName, mimeType: 'application/pdf');
+      if (!mounted) return;
+      if (!result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message ?? 'Could not open the invoice PDF.'),
+            backgroundColor: AppColors.error));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Could not generate the invoice PDF: ${DioClient.describeError(e)}'),
+            backgroundColor: AppColors.error));
+      }
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final inv = _invoice;
@@ -49,6 +87,20 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
         leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
             onPressed: () => context.pop()),
+        actions: [
+          if (_invoice != null)
+            IconButton(
+              icon: _printing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.print_rounded, color: Colors.white),
+              tooltip: 'Print / Download PDF',
+              onPressed: _printing ? null : _printInvoice,
+            ),
+        ],
       ),
       body: _loading
           ? const Center(
@@ -173,8 +225,13 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                           onPressed: () {
                             final pending = _amount(inv['total_amount']) -
                                 _amount(inv['paid_amount']);
-                            context.push(
-                                '/billing/pay/${inv['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${inv['invoice_number']}');
+                            // Without the reload, this screen kept showing
+                            // the pre-payment status/amount after returning
+                            // from checkout until it was left and reopened.
+                            context
+                                .push(
+                                    '/billing/pay/${inv['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${inv['invoice_number']}')
+                                .then((_) => _load());
                           },
                           icon: const Icon(Icons.payment_rounded,
                               color: AppColors.primary, size: 20),

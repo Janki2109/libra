@@ -827,15 +827,16 @@ func InitiateConsultationCall(c *gin.Context) {
 	}
 	userID := utils.UserID(c)
 
-	var lawyerID, clientID, consultationType, status, lawyerName, clientName string
+	var lawyerID, clientID, consultationType, status, paymentStatus, lawyerName, clientName string
 	err := config.DB.QueryRow(`
 		SELECT co.lawyer_id::text, co.client_id::text, co.consultation_type, co.status,
+		       COALESCE(co.payment_status,'pending'),
 		       COALESCE(l.name,'Your lawyer'), COALESCE(cl.name,'The client')
 		FROM consultations co
 		JOIN users l ON co.lawyer_id = l.id
 		JOIN users cl ON co.client_id = cl.id
 		WHERE co.id = $1::uuid
-	`, id).Scan(&lawyerID, &clientID, &consultationType, &status, &lawyerName, &clientName)
+	`, id).Scan(&lawyerID, &clientID, &consultationType, &status, &paymentStatus, &lawyerName, &clientName)
 	if err != nil {
 		utils.Error(c, http.StatusNotFound, "Consultation not found", "")
 		return
@@ -846,6 +847,19 @@ func InitiateConsultationCall(c *gin.Context) {
 	}
 	if status != "confirmed" {
 		utils.Error(c, http.StatusBadRequest, "Consultation is not confirmed", "call requires a confirmed booking")
+		return
+	}
+	// UpdateConsultation lets a lawyer set status='confirmed' directly (e.g.
+	// confirming a booking made before payment, or a manually-arranged one)
+	// with no payment_status condition — so 'confirmed' alone never implied
+	// paid. This endpoint is the only path that actually starts a call, so
+	// it's the one place that has to check payment_status itself rather than
+	// trusting status='confirmed', or a lawyer could confirm and immediately
+	// call/be called on a booking nobody has paid for yet.
+	if paymentStatus != "paid" {
+		utils.Error(c, http.StatusPaymentRequired,
+			"Payment for this consultation has not been completed yet",
+			"call requires payment_status=paid")
 		return
 	}
 

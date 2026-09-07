@@ -10,9 +10,11 @@ import 'storage_service.dart';
 enum CallState { connecting, ringing, connected, ended, failed }
 
 /// Free, self-hosted in-app calling for a confirmed Audio/Video consultation
-/// booking. Media goes directly peer-to-peer over WebRTC using only free
-/// public STUN servers (no TURN, no paid relay, no Twilio/Agora); the
-/// backend's `/consultations/:id/call/ws` endpoint only relays the
+/// booking. Media goes peer-to-peer over WebRTC using free public STUN
+/// servers, falling back to a TURN relay when one is configured (see
+/// AppConstants.hasTurnServer) for the calls STUN alone can't connect across
+/// a restrictive NAT — no Twilio/Agora. The backend's
+/// `/consultations/:id/call/ws` endpoint only relays the
 /// offer/answer/ICE-candidate handshake, never the media itself.
 ///
 /// One instance is created per call attempt and owned by the screen that
@@ -63,6 +65,17 @@ class WebRTCCallSession extends ChangeNotifier {
         'iceServers': [
           {'urls': 'stun:stun.l.google.com:19302'},
           {'urls': 'stun:stun1.l.google.com:19302'},
+          // STUN alone can't connect a call across a symmetric/carrier-grade
+          // NAT (common on Indian mobile data) — a TURN server relays media
+          // in that case instead. Omitted entirely (rather than sent empty)
+          // when none is configured, since some platforms reject an
+          // ice-server entry with a blank username/credential.
+          if (AppConstants.hasTurnServer)
+            {
+              'urls': AppConstants.turnUrl,
+              'username': AppConstants.turnUsername,
+              'credential': AppConstants.turnCredential,
+            },
         ],
       });
 

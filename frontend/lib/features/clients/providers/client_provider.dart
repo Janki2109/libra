@@ -23,21 +23,7 @@ class ClientProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> addClient(Map<String, dynamic> data) async {
-    try {
-      await DioClient.instance.post('/clients', data: data);
-      await loadClients();
-      return true;
-    } catch (e) {
-      _error = DioClient.describeError(e);
-      notifyListeners();
-      return false;
-    }
-  }
-
-  // ✅ New method - returns full response with portal credentials
-  Future<Map<String, dynamic>?> addClientWithPortal(
-      Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> addClient(Map<String, dynamic> data) async {
     try {
       final res = await DioClient.instance.post('/clients', data: data);
       await loadClients();

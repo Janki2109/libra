@@ -274,6 +274,7 @@ class _CaseListScreenState extends State<CaseListScreen> {
                                   _statusColor(_filtered[i]['status'] ?? ''),
                               priorityColor: _priorityColor(
                                   _filtered[i]['priority'] ?? ''),
+                              onReturn: _loadCases,
                             ),
                           ),
                         ),
@@ -298,10 +299,12 @@ class _CaseCard extends StatelessWidget {
   final dynamic caseData;
   final Color statusColor;
   final Color priorityColor;
+  final VoidCallback onReturn;
   const _CaseCard(
       {required this.caseData,
       required this.statusColor,
-      required this.priorityColor});
+      required this.priorityColor,
+      required this.onReturn});
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +318,11 @@ class _CaseCard extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        context.push('/cases/${caseData['id']}');
+        // Status/priority changes made on the details screen never
+        // reflected back on this list's chips without this reload — the
+        // card kept showing whatever status it had when the list first
+        // loaded until the user left and reopened the whole screen.
+        context.push('/cases/${caseData['id']}').then((_) => onReturn());
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),

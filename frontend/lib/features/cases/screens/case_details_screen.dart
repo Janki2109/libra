@@ -56,10 +56,17 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
           await DioClient.instance.get('/cases/${widget.caseId}/hearings');
       final notesRes =
           await DioClient.instance.get('/cases/${widget.caseId}/notes');
+      // _documents was declared but never fetched from anywhere — the
+      // Documents tab always rendered its permanently-empty initial value,
+      // so an upload could succeed on the server and still look like nothing
+      // happened.
+      final documentsRes = await DioClient.instance
+          .get('/documents', queryParameters: {'case_id': widget.caseId});
       setState(() {
         _case = res.data['data'];
         _hearings = hearingsRes.data['data'] ?? [];
         _notes = notesRes.data['data'] ?? [];
+        _documents = documentsRes.data['data'] ?? [];
         _loading = false;
       });
     } catch (e) {
