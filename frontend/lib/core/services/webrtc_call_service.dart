@@ -69,13 +69,35 @@ class WebRTCCallSession extends ChangeNotifier {
           // NAT (common on Indian mobile data) — a TURN server relays media
           // in that case instead. Omitted entirely (rather than sent empty)
           // when none is configured, since some platforms reject an
-          // ice-server entry with a blank username/credential.
-          if (AppConstants.hasTurnServer)
+          // ice-server entry with a blank username/credential. Four
+          // variants of the same relay (plain UDP, TCP-on-80, UDP-on-443,
+          // TLS-on-443) rather than one: a network that blocks plain UDP
+          // outright often still lets 443 traffic through, so offering all
+          // of them gives ICE the best chance of finding one that works
+          // instead of gambling on a single transport.
+          if (AppConstants.hasTurnServer) ...[
+            {'urls': 'stun:stun.relay.metered.ca:80'},
             {
-              'urls': AppConstants.turnUrl,
+              'urls': 'turn:global.relay.metered.ca:80',
               'username': AppConstants.turnUsername,
               'credential': AppConstants.turnCredential,
             },
+            {
+              'urls': 'turn:global.relay.metered.ca:80?transport=tcp',
+              'username': AppConstants.turnUsername,
+              'credential': AppConstants.turnCredential,
+            },
+            {
+              'urls': 'turn:global.relay.metered.ca:443',
+              'username': AppConstants.turnUsername,
+              'credential': AppConstants.turnCredential,
+            },
+            {
+              'urls': 'turns:global.relay.metered.ca:443?transport=tcp',
+              'username': AppConstants.turnUsername,
+              'credential': AppConstants.turnCredential,
+            },
+          ],
         ],
       });
 

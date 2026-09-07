@@ -27,19 +27,22 @@ class AppConstants {
   // common on Indian mobile data networks. A TURN server is what makes those
   // calls connect anyway (relaying media when a direct peer-to-peer path
   // can't be found), at the cost of running through a third party.
-  // Supplied at build time, same as API_BASE_URL, so calling without one
-  // configured degrades to STUN-only rather than breaking the build:
+  // Username/credential are supplied at build time, same as API_BASE_URL, so
+  // building without them configured degrades to STUN-only rather than
+  // breaking the build:
   //
   //   flutter build apk --release \
   //     --dart-define=API_BASE_URL=https://libra-law.onrender.com/api/v1 \
-  //     --dart-define=TURN_URL=turn:standard.relay.metered.ca:80 \
   //     --dart-define=TURN_USERNAME=... \
   //     --dart-define=TURN_CREDENTIAL=...
-  static const String turnUrl = String.fromEnvironment('TURN_URL');
+  //
+  // The relay hostnames themselves (global.relay.metered.ca) are Metered's
+  // stable public TURN endpoint, not account-specific, so they're safe to
+  // hardcode rather than thread through another dart-define each.
   static const String turnUsername = String.fromEnvironment('TURN_USERNAME');
   static const String turnCredential =
       String.fromEnvironment('TURN_CREDENTIAL');
-  static bool get hasTurnServer => turnUrl.isNotEmpty;
+  static bool get hasTurnServer => turnUsername.isNotEmpty;
 
   // ─── Storage Keys ────────────────────────
   static const String tokenKey = 'auth_token';
