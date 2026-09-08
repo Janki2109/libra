@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/splash/screens/splash_screen.dart';
@@ -96,6 +97,17 @@ class AppRouter {
   // a duplicate-GlobalKey error that dropped users back on the splash screen
   // after registering.
   static GoRouter? current;
+
+  // main() awaits FcmService.instance.initialize() (which checks
+  // getInitialMessage() for a cold start from a tapped notification, e.g. an
+  // incoming call) *before* calling runApp() — so `current` above is still
+  // null at that point; a `current?.push(...)` from that cold-start check
+  // would silently no-op. FcmService awaits this instead so that navigation
+  // is only attempted once `current` actually exists, fixing incoming-call
+  // (and plain notification) taps that launch the app from a terminated
+  // state.
+  static final Completer<void> _ready = Completer<void>();
+  static Future<void> get ready => _ready.future;
 
   // Root cause of the "onboarding/splash reappears" bug: this used to build
   // a brand new GoRouter (fresh initialLocation: '/splash') every single time
@@ -504,6 +516,7 @@ class AppRouter {
       ],
     );
     current = router;
+    if (!_ready.isCompleted) _ready.complete();
     return router;
   }
 }

@@ -121,9 +121,14 @@ class FcmService {
       if (!_openIncomingCallIfAny(message.data)) _openNotifications();
     });
     final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-    if (initialMessage != null &&
-        !_openIncomingCallIfAny(initialMessage.data)) {
-      _openNotifications();
+    if (initialMessage != null) {
+      // main() awaits this whole initialize() call *before* runApp(), so
+      // AppRouter.current is still null right here — pushing now would
+      // silently no-op and the tap that cold-started the app (e.g. an
+      // incoming call) would go nowhere. Wait for the router to exist first.
+      AppRouter.ready.then((_) {
+        if (!_openIncomingCallIfAny(initialMessage.data)) _openNotifications();
+      });
     }
 
     FirebaseMessaging.instance.onTokenRefresh.listen((token) {

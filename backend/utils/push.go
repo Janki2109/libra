@@ -113,11 +113,37 @@ func SendPushToUser(userID, title, body, notifType, referenceID, referenceType s
 				Body:  body,
 			},
 			Data: map[string]string{
-				"title":           title,
-				"body":            body,
-				"type":            notifType,
-				"reference_id":    referenceID,
-				"reference_type":  referenceType,
+				"title":          title,
+				"body":           body,
+				"type":           notifType,
+				"reference_id":   referenceID,
+				"reference_type": referenceType,
+			},
+			// Without an explicit AndroidConfig, FCM defaults to NORMAL
+			// priority, which Doze/App Standby can delay by minutes — no good
+			// for an incoming-call alert. HIGH plus the channel this app
+			// already creates (see FcmService in the Flutter app) makes sure
+			// the system tray notification actually carries the sound +
+			// vibration that channel was configured with.
+			Android: &messaging.AndroidConfig{
+				Priority: "high",
+				Notification: &messaging.AndroidNotification{
+					ChannelID: "default_channel",
+				},
+			},
+			// Without an explicit APNSConfig, the Admin SDK does not set
+			// aps.sound, so iOS delivers the notification silently even
+			// though the app requested sound permission — this is what
+			// actually supplies it.
+			APNS: &messaging.APNSConfig{
+				Payload: &messaging.APNSPayload{
+					Aps: &messaging.Aps{
+						Sound: "default",
+					},
+				},
+				Headers: map[string]string{
+					"apns-priority": "10",
+				},
 			},
 		})
 		if err != nil {
