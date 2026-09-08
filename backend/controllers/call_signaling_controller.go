@@ -191,8 +191,20 @@ func CallSignalingWS(c *gin.Context) {
 
 	if peerPresent {
 		log.Printf("[call-signaling] peer-joined fired for consultation %s (user %s found peer %s already connected)", id, userID, peerID)
-		_ = room.writeJSON(peerConn, gin.H{"type": "peer-joined"})
-		_ = room.writeJSON(conn, gin.H{"type": "peer-joined"})
+		// The client used to decide for itself whether to send the offer,
+		// based on which screen navigated it here (the lawyer's "Call" button
+		// vs. the client's IncomingCallScreen accept). Whenever both sides
+		// ended up on the "I placed this call" path instead — e.g. a missed
+		// incoming-call push led the callee to just press their own "Call"
+		// button rather than answer — both believed they were the caller and
+		// both sent an offer, and the call died a few seconds later with no
+		// answer ever exchanged. The server already knows unambiguously who
+		// joined this room first, so it settles the question here instead:
+		// whoever was already waiting is told to offer, whoever just joined
+		// is told to wait for it. Exactly one offerer, regardless of what
+		// either client's own local state thinks its role is.
+		_ = room.writeJSON(peerConn, gin.H{"type": "peer-joined", "offerer": true})
+		_ = room.writeJSON(conn, gin.H{"type": "peer-joined", "offerer": false})
 	} else {
 		log.Printf("[call-signaling] user %s is first to join consultation %s, waiting for peer %s", userID, id, peerID)
 	}

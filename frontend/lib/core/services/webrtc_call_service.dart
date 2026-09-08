@@ -201,7 +201,18 @@ class WebRTCCallSession extends ChangeNotifier {
     }
     switch (data['type']) {
       case 'peer-joined':
-        if (_isCaller && !_madeOffer) {
+        // The server settles who offers (see CallSignalingWS) rather than
+        // trusting each client's own belief about whether it's the caller —
+        // that belief can be wrong on both sides at once (e.g. the callee
+        // pressing their own "Call" button instead of answering an
+        // incoming-call push that never arrived), which used to make both
+        // sides send an offer and neither an answer. Fall back to the local
+        // isCaller flag only if talking to an older server that doesn't send
+        // this field yet.
+        final serverSaysOfferer = data['offerer'];
+        final shouldOffer =
+            serverSaysOfferer is bool ? serverSaysOfferer : _isCaller;
+        if (shouldOffer && !_madeOffer) {
           _madeOffer = true;
           final offer = await _pc!.createOffer();
           await _pc!.setLocalDescription(offer);

@@ -21,31 +21,46 @@ var fcmClient *messaging.Client
 // app still runs and the in-app notifications table still works, exactly
 // like the existing SMTP/Razorpay "configured or 503" pattern.
 func InitFCM() {
+	// Two ways to supply the service-account credentials: a file path (works
+	// with Render's Secret Files, or any host that mounts one) or the raw
+	// JSON pasted straight into a normal env var (simpler on hosts — Render's
+	// free tier included — where uploading a secret file is an extra manual
+	// step; the whole service-account JSON fits in one env var value).
 	credPath := config.GetEnv("FIREBASE_CREDENTIALS_FILE", "")
-	if credPath == "" {
-		log.Println("[fcm] FIREBASE_CREDENTIALS_FILE is not set — push notifications disabled, " +
+	credJSON := config.GetEnv("FIREBASE_CREDENTIALS_JSON", "")
+	if credPath == "" && credJSON == "" {
+		log.Println("[fcm] FIREBASE_CREDENTIALS_FILE / FIREBASE_CREDENTIALS_JSON not set — " +
+			"push notifications disabled (incoming-call alerts will not ring the other party), " +
 			"in-app notifications still work")
 		return
 	}
 
 	ctx := context.Background()
 
+	var raw []byte
+	if credJSON != "" {
+		raw = []byte(credJSON)
+	} else if b, readErr := os.ReadFile(credPath); readErr == nil {
+		raw = b
+	} else {
+		log.Printf("[fcm] could not read FIREBASE_CREDENTIALS_FILE %q: %v", credPath, readErr)
+		return
+	}
+
 	// The Admin SDK's Messaging() client needs a project ID up front and
-	// doesn't reliably pull one from the credentials file on its own — read
-	// it directly from the same service-account JSON rather than requiring
-	// a second, separate env var just to repeat a value already in the file.
+	// doesn't reliably pull one from the credentials on its own — read it
+	// directly from the same service-account JSON rather than requiring a
+	// second, separate env var just to repeat a value already in it.
 	var projectID string
-	if raw, readErr := os.ReadFile(credPath); readErr == nil {
-		var cred struct {
-			ProjectID string `json:"project_id"`
-		}
-		if json.Unmarshal(raw, &cred) == nil {
-			projectID = cred.ProjectID
-		}
+	var cred struct {
+		ProjectID string `json:"project_id"`
+	}
+	if json.Unmarshal(raw, &cred) == nil {
+		projectID = cred.ProjectID
 	}
 
 	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: projectID},
-		option.WithCredentialsFile(credPath))
+		option.WithCredentialsJSON(raw))
 	if err != nil {
 		log.Printf("[fcm] failed to initialize Firebase app: %v", err)
 		return
