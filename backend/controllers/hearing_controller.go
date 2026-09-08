@@ -262,14 +262,17 @@ func UpdateHearing(c *gin.Context) {
 	// dropped entirely — the "Update After Hearing" sheet has always sent
 	// them, but nothing here read them off the request, so they never
 	// reached the database.
+	// $N::text on every placeholder — see UpdateProfile (auth_controller.go)
+	// for why: this same CASE-with-reused-placeholder shape is what broke
+	// UpdateCase in production with "inconsistent types deduced".
 	_, err := config.DB.Exec(`
 		UPDATE hearings SET
-		  status        = CASE WHEN $1 != '' THEN $1 ELSE status END,
-		  notes         = CASE WHEN $2 != '' THEN $2 ELSE notes END,
+		  status        = CASE WHEN $1::text != '' THEN $1::text ELSE status END,
+		  notes         = CASE WHEN $2::text != '' THEN $2::text ELSE notes END,
 		  next_date     = COALESCE($3::date, next_date),
-		  purpose       = CASE WHEN $4 != '' THEN $4 ELSE purpose END,
-		  order_summary = CASE WHEN $5 != '' THEN $5 ELSE order_summary END,
-		  remarks       = CASE WHEN $6 != '' THEN $6 ELSE remarks END,
+		  purpose       = CASE WHEN $4::text != '' THEN $4::text ELSE purpose END,
+		  order_summary = CASE WHEN $5::text != '' THEN $5::text ELSE order_summary END,
+		  remarks       = CASE WHEN $6::text != '' THEN $6::text ELSE remarks END,
 		  updated_at    = NOW()
 		WHERE id=$7::uuid AND firm_id=$8::uuid
 	`, req.Status, req.Notes, nullIfEmpty(req.NextDate), req.Purpose,

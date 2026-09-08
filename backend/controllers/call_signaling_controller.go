@@ -87,7 +87,15 @@ func dropEmptyCallRoom(consultationID string) {
 // middleware validates it everywhere else.
 func CallSignalingWS(c *gin.Context) {
 	id := c.Param("id")
+	// Every rejection below used to respond with a raw c.JSON(...) instead of
+	// utils.Error(...) — the only place in this codebase that does that —
+	// which meant none of them were ever logged. A call that failed here for
+	// any reason (expired token, wrong status, not a participant) looked
+	// completely silent in the logs: the whole reason "why is this call not
+	// connecting" was undiagnosable from the server side. Every exit path
+	// now logs, so the next failed call attempt actually shows up.
 	if !isUUID(id) {
+		log.Printf("[call-signaling] rejected: invalid consultation id %q", id)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid id"})
 		return
 	}
@@ -95,6 +103,7 @@ func CallSignalingWS(c *gin.Context) {
 	token := c.Query("token")
 	claims, err := utils.ValidateToken(token)
 	if err != nil {
+		log.Printf("[call-signaling] rejected for consultation %s: invalid/expired token: %v", id, err)
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Invalid or expired token"})
 		return
 	}
@@ -108,28 +117,33 @@ func CallSignalingWS(c *gin.Context) {
 		FROM consultations WHERE id=$1::uuid
 	`, id).Scan(&lawyerID, &clientID, &status, &consultationType)
 	if err != nil {
+		log.Printf("[call-signaling] rejected: consultation %s not found: %v", id, err)
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Consultation not found"})
 		return
 	}
 	if userID != lawyerID && userID != clientID {
+		log.Printf("[call-signaling] rejected: user %s is not a participant on consultation %s", userID, id)
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Not a participant on this consultation"})
 		return
 	}
 	if status != "confirmed" {
+		log.Printf("[call-signaling] rejected: consultation %s has status=%q, not confirmed (user %s)", id, status, userID)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Consultation is not confirmed"})
 		return
 	}
 	if consultationCallType(consultationType) == "chat" {
+		log.Printf("[call-signaling] rejected: consultation %s is chat-only (user %s)", id, userID)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "This consultation is chat-only"})
 		return
 	}
 
 	conn, err := callUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("[call-signaling] upgrade failed: %v", err)
+		log.Printf("[call-signaling] upgrade failed for consultation %s, user %s: %v", id, userID, err)
 		return
 	}
 	defer conn.Close()
+	log.Printf("[call-signaling] user %s connected to consultation %s", userID, id)
 
 	room := getOrCreateCallRoom(id)
 
@@ -176,8 +190,11 @@ func CallSignalingWS(c *gin.Context) {
 	room.mu.Unlock()
 
 	if peerPresent {
+		log.Printf("[call-signaling] peer-joined fired for consultation %s (user %s found peer %s already connected)", id, userID, peerID)
 		_ = room.writeJSON(peerConn, gin.H{"type": "peer-joined"})
 		_ = room.writeJSON(conn, gin.H{"type": "peer-joined"})
+	} else {
+		log.Printf("[call-signaling] user %s is first to join consultation %s, waiting for peer %s", userID, id, peerID)
 	}
 
 	defer func() {
@@ -191,11 +208,13 @@ func CallSignalingWS(c *gin.Context) {
 			_ = room.writeJSON(remaining, gin.H{"type": "peer-left"})
 		}
 		dropEmptyCallRoom(id)
+		log.Printf("[call-signaling] user %s disconnected from consultation %s", userID, id)
 	}()
 
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
+			log.Printf("[call-signaling] read ended for user %s on consultation %s: %v", userID, id, err)
 			return
 		}
 		// Opaque relay: offer/answer/ice-candidate/hangup payloads are
@@ -211,6 +230,14 @@ func CallSignalingWS(c *gin.Context) {
 		room.mu.Lock()
 		peer, ok := room.conns[peerID]
 		room.mu.Unlock()
+		// Logs the message type only (offer/answer/ice-candidate/hangup) and
+		// whether a live peer connection was found to relay it to — never the
+		// SDP/ICE payload itself. "ok=false" here, specifically, is what
+		// "rings but never connects" looks like from the server's side: the
+		// caller's offer has nowhere to go because the callee's socket was
+		// never in room.conns when this arrived.
+		log.Printf("[call-signaling] consultation %s: %s from %s -> peer %s (peer connected: %v)",
+			id, probe.Type, userID, peerID, ok)
 		if ok {
 			_ = room.writeMessage(peer, websocket.TextMessage, raw)
 		}

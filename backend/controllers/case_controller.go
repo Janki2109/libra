@@ -271,14 +271,23 @@ func UpdateCase(c *gin.Context) {
 
 	var err error
 
+	// Every $N below is explicitly cast to ::text. Postgres has to deduce
+	// each parameter's type before it ever sees an argument value, and a
+	// placeholder referenced twice in different-looking contexts within one
+	// query — $1 as a plain column assignment AND inside a CASE/IN check
+	// below, or the same $N used for both the CASE WHEN test and its THEN
+	// result in the second query — sometimes gets two different inferred
+	// types where an explicit cast would have made it unambiguous. That
+	// showed up in production as "inconsistent types deduced for parameter"
+	// (42P08), which failed every case edit outright.
 	if req.Status != "" {
 		_, err = config.DB.Exec(`
 			UPDATE cases SET
-			status = $1,
-			won_feedback = CASE WHEN $2 != '' THEN $2 ELSE COALESCE(won_feedback,'') END,
-			lost_reason = CASE WHEN $3 != '' THEN $3 ELSE COALESCE(lost_reason,'') END,
-			closed_reason = CASE WHEN $4 != '' THEN $4 ELSE COALESCE(closed_reason,'') END,
-			closed_at = CASE WHEN $1 IN ('closed','won','lost','settled')
+			status = $1::text,
+			won_feedback = CASE WHEN $2::text != '' THEN $2::text ELSE COALESCE(won_feedback,'') END,
+			lost_reason = CASE WHEN $3::text != '' THEN $3::text ELSE COALESCE(lost_reason,'') END,
+			closed_reason = CASE WHEN $4::text != '' THEN $4::text ELSE COALESCE(closed_reason,'') END,
+			closed_at = CASE WHEN $1::text IN ('closed','won','lost','settled')
 			                 THEN COALESCE(closed_at, NOW()) ELSE NULL END,
 			last_activity_at = NOW(),
 			updated_at = NOW()
@@ -287,11 +296,11 @@ func UpdateCase(c *gin.Context) {
 	} else {
 		_, err = config.DB.Exec(`
 			UPDATE cases SET
-			case_title = CASE WHEN $1 != '' THEN $1 ELSE case_title END,
-			case_type = CASE WHEN $2 != '' THEN $2 ELSE case_type END,
-			court_name = CASE WHEN $3 != '' THEN $3 ELSE court_name END,
-			priority = CASE WHEN $4 != '' THEN $4 ELSE priority END,
-			description = CASE WHEN $5 != '' THEN $5 ELSE description END,
+			case_title = CASE WHEN $1::text != '' THEN $1::text ELSE case_title END,
+			case_type = CASE WHEN $2::text != '' THEN $2::text ELSE case_type END,
+			court_name = CASE WHEN $3::text != '' THEN $3::text ELSE court_name END,
+			priority = CASE WHEN $4::text != '' THEN $4::text ELSE priority END,
+			description = CASE WHEN $5::text != '' THEN $5::text ELSE description END,
 			last_activity_at = NOW(),
 			updated_at = NOW()
 			WHERE id = $6::uuid AND firm_id = $7::uuid

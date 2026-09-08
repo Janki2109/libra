@@ -783,11 +783,14 @@ func UpdateConsultation(c *gin.Context) {
 
 	// Authorize and update in one statement, so nothing can change between the
 	// ownership check and the write.
+	// $N::text on every placeholder — see UpdateProfile (auth_controller.go)
+	// for why: this same CASE-with-reused-placeholder shape is what broke
+	// UpdateCase in production with "inconsistent types deduced".
 	res, err := config.DB.Exec(`
 		UPDATE consultations SET
-		  status       = CASE WHEN $1 != '' THEN $1 ELSE status END,
-		  lawyer_notes = CASE WHEN $2 != '' THEN $2 ELSE lawyer_notes END,
-		  meeting_link = CASE WHEN $3 != '' THEN $3 ELSE meeting_link END,
+		  status       = CASE WHEN $1::text != '' THEN $1::text ELSE status END,
+		  lawyer_notes = CASE WHEN $2::text != '' THEN $2::text ELSE lawyer_notes END,
+		  meeting_link = CASE WHEN $3::text != '' THEN $3::text ELSE meeting_link END,
 		  updated_at   = NOW()
 		WHERE id=$4::uuid AND lawyer_id=$5::uuid
 	`, req.Status, req.LawyerNotes, req.MeetingLink, id, userID)

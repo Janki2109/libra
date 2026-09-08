@@ -641,11 +641,16 @@ func UpdateProfile(c *gin.Context) {
 		return
 	}
 
+	// $N::text on every placeholder: Postgres deduces each parameter's type
+	// before it sees an argument, and a bare $N reused as both the CASE WHEN
+	// test and its THEN result can end up with two different inferred
+	// types — reproduced in UpdateCase (case_controller.go) as "inconsistent
+	// types deduced for parameter" (42P08), which failed the update outright.
 	if _, err := config.DB.Exec(`
 		UPDATE users SET
-		  name        = CASE WHEN $1 != '' THEN $1 ELSE name END,
-		  phone       = CASE WHEN $2 != '' THEN $2 ELSE phone END,
-		  designation = CASE WHEN $3 != '' THEN $3 ELSE designation END,
+		  name        = CASE WHEN $1::text != '' THEN $1::text ELSE name END,
+		  phone       = CASE WHEN $2::text != '' THEN $2::text ELSE phone END,
+		  designation = CASE WHEN $3::text != '' THEN $3::text ELSE designation END,
 		  updated_at  = NOW()
 		WHERE id=$4::uuid
 	`, req.Name, req.Phone, req.Designation, userID); err != nil {

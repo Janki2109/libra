@@ -468,12 +468,15 @@ func UpdateInvoice(c *gin.Context) {
 		return
 	}
 
+	// $N::text on every placeholder — see UpdateProfile (auth_controller.go)
+	// for why: this same CASE-with-reused-placeholder shape is what broke
+	// UpdateCase in production with "inconsistent types deduced".
 	_, err := config.DB.Exec(`
-		UPDATE invoices SET 
-		status = CASE WHEN $1 != '' THEN $1 ELSE status END,
-		notes = CASE WHEN $2 != '' THEN $2 ELSE notes END,
-		transaction_id = CASE WHEN $3 != '' THEN $3 ELSE COALESCE(transaction_id,'') END,
-		payment_slip_url = CASE WHEN $4 != '' THEN $4 ELSE COALESCE(payment_slip_url,'') END,
+		UPDATE invoices SET
+		status = CASE WHEN $1::text != '' THEN $1::text ELSE status END,
+		notes = CASE WHEN $2::text != '' THEN $2::text ELSE notes END,
+		transaction_id = CASE WHEN $3::text != '' THEN $3::text ELSE COALESCE(transaction_id,'') END,
+		payment_slip_url = CASE WHEN $4::text != '' THEN $4::text ELSE COALESCE(payment_slip_url,'') END,
 		updated_at = NOW()
 		WHERE id = $5::uuid AND firm_id = $6::uuid
 	`, req.Status, req.Notes, req.TransactionID, req.PaymentSlipURL, id, firmID)
@@ -673,8 +676,8 @@ func CreatePayment(c *gin.Context) {
 			config.DB.Exec(`
 				UPDATE invoices SET
 				  status = 'pending_verification',
-				  transaction_id = CASE WHEN $1 != '' THEN $1 ELSE transaction_id END,
-				  payment_slip_url = CASE WHEN $2 != '' THEN $2 ELSE payment_slip_url END,
+				  transaction_id = CASE WHEN $1::text != '' THEN $1::text ELSE transaction_id END,
+				  payment_slip_url = CASE WHEN $2::text != '' THEN $2::text ELSE payment_slip_url END,
 				  updated_at = NOW()
 				WHERE id=$3::uuid AND firm_id=$4::uuid AND status != 'paid'
 			`, req.TransactionID, req.PaymentSlipURL, req.InvoiceID, fID)
@@ -1042,11 +1045,15 @@ func UpdateStaffMember(c *gin.Context) {
 	// is_active is a pointer so an omitted field leaves the account alone.
 	// As a plain bool it defaulted to false, meaning a rename request also
 	// deactivated the person being renamed.
+	// $N::text on every text placeholder — see UpdateProfile
+	// (auth_controller.go) for why: this same CASE-with-reused-placeholder
+	// shape is what broke UpdateCase in production with "inconsistent types
+	// deduced".
 	res, err := config.DB.Exec(`
 		UPDATE users SET
-		  name        = CASE WHEN $1 != '' THEN $1 ELSE name END,
-		  phone       = CASE WHEN $2 != '' THEN $2 ELSE phone END,
-		  designation = CASE WHEN $3 != '' THEN $3 ELSE designation END,
+		  name        = CASE WHEN $1::text != '' THEN $1::text ELSE name END,
+		  phone       = CASE WHEN $2::text != '' THEN $2::text ELSE phone END,
+		  designation = CASE WHEN $3::text != '' THEN $3::text ELSE designation END,
 		  is_active   = COALESCE($4, is_active),
 		  updated_at  = NOW()
 		WHERE id=$5::uuid AND firm_id=$6::uuid

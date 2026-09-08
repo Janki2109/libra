@@ -339,15 +339,18 @@ func UpdateClient(c *gin.Context) {
 	// Every field was overwritten unconditionally, so a partial update — the
 	// only kind the app sends from its edit form — blanked out whatever it
 	// omitted. Keep the stored value when a field is absent.
+	// $N::text on every placeholder — see UpdateProfile (auth_controller.go)
+	// for why: this same CASE-with-reused-placeholder shape is what broke
+	// UpdateCase in production with "inconsistent types deduced".
 	_, err := config.DB.Exec(`
 		UPDATE clients SET
-		  name    = CASE WHEN $1 != '' THEN $1 ELSE name END,
-		  email   = CASE WHEN $2 != '' THEN $2 ELSE email END,
-		  phone   = CASE WHEN $3 != '' THEN $3 ELSE phone END,
-		  address = CASE WHEN $4 != '' THEN $4 ELSE address END,
-		  city    = CASE WHEN $5 != '' THEN $5 ELSE city END,
-		  state   = CASE WHEN $6 != '' THEN $6 ELSE state END,
-		  notes   = CASE WHEN $7 != '' THEN $7 ELSE notes END,
+		  name    = CASE WHEN $1::text != '' THEN $1::text ELSE name END,
+		  email   = CASE WHEN $2::text != '' THEN $2::text ELSE email END,
+		  phone   = CASE WHEN $3::text != '' THEN $3::text ELSE phone END,
+		  address = CASE WHEN $4::text != '' THEN $4::text ELSE address END,
+		  city    = CASE WHEN $5::text != '' THEN $5::text ELSE city END,
+		  state   = CASE WHEN $6::text != '' THEN $6::text ELSE state END,
+		  notes   = CASE WHEN $7::text != '' THEN $7::text ELSE notes END,
 		  updated_at = NOW()
 		WHERE id=$8::uuid AND firm_id=$9::uuid
 	`, req.Name, normalizeEmail(req.Email), req.Phone, req.Address,
