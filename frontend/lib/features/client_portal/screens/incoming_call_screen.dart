@@ -5,6 +5,30 @@ import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/fcm_service.dart';
 
+/// Loops the device's own default ringtone via a small native Android
+/// MethodChannel (see MainActivity.kt) rather than a plugin — the one
+/// package for this, flutter_ringtone_player, ships an AAR compiled against
+/// android-33 that fails this project's AGP metadata check against
+/// compileSdk 36 and can't be built at all.
+class _RingtoneChannel {
+  static const _channel = MethodChannel('com.libra.law/ringtone');
+
+  static Future<void> play() async {
+    try {
+      await _channel.invokeMethod('play');
+    } catch (_) {
+      // iOS (not implemented) or a platform error — the call still connects,
+      // it just won't audibly ring.
+    }
+  }
+
+  static Future<void> stop() async {
+    try {
+      await _channel.invokeMethod('stop');
+    } catch (_) {}
+  }
+}
+
 /// Shown when a push notification tells the client their lawyer is calling
 /// for a confirmed Audio/Video consultation (see FcmService's onMessage /
 /// onMessageOpenedApp handlers). On accept this hands off into the in-app
@@ -27,24 +51,28 @@ class IncomingCallScreen extends StatefulWidget {
 }
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
-  Timer? _ringTimer;
+  Timer? _hapticTimer;
   bool _responding = false;
   bool _endedByCaller = false;
 
   @override
   void initState() {
     super.initState();
-    // No ringtone-asset/audio-player dependency exists in this project yet,
-    // so the device is made to actually ring using capabilities Flutter
-    // already ships with: a repeating haptic buzz plus the platform alert
-    // sound, rather than adding a new package for one screen.
+    // The device's actual system ringtone, looping, so an incoming call
+    // sounds like a phone call instead of a single notification blip —
+    // this is what was missing before (a repeating haptic buzz plus a short
+    // system alert sound, with nothing that actually kept ringing).
     HapticFeedback.heavyImpact();
-    SystemSound.play(SystemSoundType.alert);
-    _ringTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
+    _RingtoneChannel.play();
+    _hapticTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
       HapticFeedback.heavyImpact();
-      SystemSound.play(SystemSoundType.alert);
     });
     FcmService.instance.callCancelled.addListener(_onCallCancelled);
+  }
+
+  void _stopRinging() {
+    _hapticTimer?.cancel();
+    _RingtoneChannel.stop();
   }
 
   void _onCallCancelled() {
@@ -59,7 +87,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       _responding = true;
       _endedByCaller = true;
     });
-    _ringTimer?.cancel();
+    _stopRinging();
     Future.delayed(const Duration(milliseconds: 900), () {
       if (mounted) context.pop();
     });
@@ -67,7 +95,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   @override
   void dispose() {
-    _ringTimer?.cancel();
+    _stopRinging();
     FcmService.instance.callCancelled.removeListener(_onCallCancelled);
     super.dispose();
   }
@@ -75,7 +103,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Future<void> _respond(String response) async {
     if (_responding) return;
     setState(() => _responding = true);
-    _ringTimer?.cancel();
+    _stopRinging();
     try {
       await DioClient.instance.post(
           '/portal/my-consultations/${widget.consultationId}/call-response',
