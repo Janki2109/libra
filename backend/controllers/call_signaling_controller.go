@@ -111,11 +111,11 @@ func CallSignalingWS(c *gin.Context) {
 
 	// Only the two people this consultation is actually between may join its
 	// call — never any other lawyer or client, even in the same firm.
-	var lawyerID, clientID, status, consultationType string
+	var lawyerID, clientID, status, sessionStatus, consultationType string
 	err = config.DB.QueryRow(`
-		SELECT lawyer_id::text, client_id::text, status, consultation_type
+		SELECT lawyer_id::text, client_id::text, status, session_status, consultation_type
 		FROM consultations WHERE id=$1::uuid
-	`, id).Scan(&lawyerID, &clientID, &status, &consultationType)
+	`, id).Scan(&lawyerID, &clientID, &status, &sessionStatus, &consultationType)
 	if err != nil {
 		log.Printf("[call-signaling] rejected: consultation %s not found: %v", id, err)
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Consultation not found"})
@@ -134,6 +134,19 @@ func CallSignalingWS(c *gin.Context) {
 	if consultationCallType(consultationType) == "chat" {
 		log.Printf("[call-signaling] rejected: consultation %s is chat-only (user %s)", id, userID)
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "This consultation is chat-only"})
+		return
+	}
+	// Only the client side is gated on session_status: the lawyer's own
+	// InitiateConsultationCall call is what sets it to 'started' in the
+	// first place, and the app fires that request without waiting for it
+	// before opening this socket, so requiring 'started' for the lawyer too
+	// would race its own start. A client's socket must never open before
+	// the lawyer has started the session — this is the actual enforcement
+	// point for that rule, independent of anything the app UI does or
+	// doesn't show.
+	if userID == clientID && sessionStatus != "started" {
+		log.Printf("[call-signaling] rejected: consultation %s session_status=%q, not started (client %s)", id, sessionStatus, userID)
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "The lawyer has not started this session yet"})
 		return
 	}
 

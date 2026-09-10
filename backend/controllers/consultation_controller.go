@@ -433,7 +433,7 @@ func GetMyConsultations(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT con.id, con.consultation_type,
 			con.consultation_date::text, con.consultation_time,
-			con.status, COALESCE(con.notes,''),
+			con.status, con.session_status, COALESCE(con.notes,''),
 			COALESCE(con.lawyer_notes,''), COALESCE(con.meeting_link,''),
 			con.lawyer_id::text,
 			COALESCE(u.name,'') as lawyer_name,
@@ -459,6 +459,7 @@ func GetMyConsultations(c *gin.Context) {
 		ConsultationDate    string    `json:"consultation_date"`
 		ConsultationTime    string    `json:"consultation_time"`
 		Status              string    `json:"status"`
+		SessionStatus       string    `json:"session_status"`
 		Notes               string    `json:"notes"`
 		LawyerNotes         string    `json:"lawyer_notes"`
 		MeetingLink         string    `json:"meeting_link"`
@@ -476,7 +477,7 @@ func GetMyConsultations(c *gin.Context) {
 		var con Consultation
 		rows.Scan(
 			&con.ID, &con.ConsultationType, &con.ConsultationDate,
-			&con.ConsultationTime, &con.Status, &con.Notes,
+			&con.ConsultationTime, &con.Status, &con.SessionStatus, &con.Notes,
 			&con.LawyerNotes, &con.MeetingLink, &con.LawyerID,
 			&con.LawyerName, &con.LawyerPhone,
 			&con.PaymentStatus, &con.AmountPaise, &con.CallDurationSeconds, &con.CreatedAt,
@@ -499,7 +500,7 @@ func GetLawyerConsultations(c *gin.Context) {
 	query := `
 		SELECT con.id, con.consultation_type,
 			con.consultation_date::text, con.consultation_time,
-			con.status, COALESCE(con.notes,''),
+			con.status, con.session_status, COALESCE(con.notes,''),
 			COALESCE(con.lawyer_notes,''), COALESCE(con.meeting_link,''),
 			COALESCE(u.name,'') as client_name,
 			COALESCE(u.email,'') as client_email,
@@ -531,6 +532,7 @@ func GetLawyerConsultations(c *gin.Context) {
 		ConsultationDate    string    `json:"consultation_date"`
 		ConsultationTime    string    `json:"consultation_time"`
 		Status              string    `json:"status"`
+		SessionStatus       string    `json:"session_status"`
 		Notes               string    `json:"notes"`
 		LawyerNotes         string    `json:"lawyer_notes"`
 		MeetingLink         string    `json:"meeting_link"`
@@ -548,7 +550,7 @@ func GetLawyerConsultations(c *gin.Context) {
 		var con Consultation
 		rows.Scan(
 			&con.ID, &con.ConsultationType, &con.ConsultationDate,
-			&con.ConsultationTime, &con.Status, &con.Notes,
+			&con.ConsultationTime, &con.Status, &con.SessionStatus, &con.Notes,
 			&con.LawyerNotes, &con.MeetingLink,
 			&con.ClientName, &con.ClientEmail, &con.ClientPhone,
 			&con.PaymentStatus, &con.AmountPaise, &con.CallDurationSeconds, &con.CreatedAt,
@@ -722,6 +724,7 @@ func GetConsultation(c *gin.Context) {
 		ConsultationDate string    `json:"consultation_date"`
 		ConsultationTime string    `json:"consultation_time"`
 		Status           string    `json:"status"`
+		SessionStatus    string    `json:"session_status"`
 		Notes            string    `json:"notes"`
 		LawyerNotes      string    `json:"lawyer_notes"`
 		MeetingLink      string    `json:"meeting_link"`
@@ -735,7 +738,7 @@ func GetConsultation(c *gin.Context) {
 	err := config.DB.QueryRow(`
 		SELECT con.id, con.consultation_type,
 			con.consultation_date::text, con.consultation_time,
-			con.status, COALESCE(con.notes,''),
+			con.status, con.session_status, COALESCE(con.notes,''),
 			COALESCE(con.lawyer_notes,''), COALESCE(con.meeting_link,''),
 			COALESCE(l.name,''), COALESCE(cl.name,''),
 			con.payment_status, COALESCE(con.amount_paise,0),
@@ -748,7 +751,7 @@ func GetConsultation(c *gin.Context) {
 	`, id, userID).Scan(
 		&con.ID, &con.ConsultationType,
 		&con.ConsultationDate, &con.ConsultationTime,
-		&con.Status, &con.Notes, &con.LawyerNotes, &con.MeetingLink,
+		&con.Status, &con.SessionStatus, &con.Notes, &con.LawyerNotes, &con.MeetingLink,
 		&con.LawyerName, &con.ClientName,
 		&con.PaymentStatus, &con.AmountPaise, &con.CreatedAt,
 	)
@@ -801,6 +804,7 @@ func UpdateConsultation(c *gin.Context) {
 		  status       = CASE WHEN $1::text != '' THEN $1::text ELSE status END,
 		  lawyer_notes = CASE WHEN $2::text != '' THEN $2::text ELSE lawyer_notes END,
 		  meeting_link = CASE WHEN $3::text != '' THEN $3::text ELSE meeting_link END,
+		  session_status = CASE WHEN $1::text = 'completed' THEN 'ended' ELSE session_status END,
 		  updated_at   = NOW()
 		WHERE id=$4::uuid AND lawyer_id=$5::uuid
 		RETURNING client_id::text, consultation_type, consultation_date::text, consultation_time
@@ -836,21 +840,34 @@ func UpdateConsultation(c *gin.Context) {
 	utils.Success(c, http.StatusOK, "Consultation updated", gin.H{"id": id, "status": req.Status})
 }
 
-// InitiateConsultationCall - Lawyer starts an Audio/Video call for a
-// confirmed consultation. This never places the call itself (that still
-// happens locally in the app — the phone's own dialer for audio, the
-// lawyer-set meeting link for video); it only rings the client through the
-// existing push-notification pipeline, carrying enough reference data
-// (consultation id + call type) for the client app to show an incoming-call
-// screen and fetch the rest of the consultation's details itself.
+// InitiateConsultationCall — the assigned LAWYER starts the communication
+// session (audio, video, or chat) for a confirmed, paid consultation. This is
+// the single "start session" action for every consultation type: it never
+// places the call/opens the chat room itself (that still happens locally —
+// the phone's own dialer/WebRTC session for audio-video, the existing chat
+// feature for chat); it flips the booking's session_status to 'started' and
+// rings/notifies the client through the existing push pipeline, carrying
+// enough reference data for the client app to join.
 //
-// Only the lawyer actually assigned to this confirmed booking may ring it —
-// verified by the same id+lawyer_id ownership check UpdateConsultation uses,
-// not by anything the client supplied.
-// InitiateConsultationCall rings the *other* party on a confirmed
-// Audio/Video consultation — either side may call the other (a lawyer
-// calling their client, or a client calling their lawyer), since the
-// in-app WebRTC call session (see CallSignalingWS) is symmetric.
+// Only the client may ever be rung here — a client can never reach this
+// action as the caller, by construction, not merely by hiding a button:
+//
+//  1. Ownership: the query below matches WHERE lawyer_id = $2 (the caller's
+//     own user id). A client's id never equals a consultation's lawyer_id,
+//     so the query returns sql.ErrNoRows and the request is rejected before
+//     anything else is even checked — a client cannot start their own
+//     consultation, and cannot start any other lawyer's consultation either.
+//  2. Both of this endpoint's route registrations (the client-portal path
+//     and the lawyer path — see routes.go) call this same function, so a
+//     client hitting the "wrong" (lawyer) route gets rejected the same way.
+//  3. The UPDATE is the only place session_status is ever written to
+//     'started', and it happens in the same statement as the ownership
+//     check (WHERE lawyer_id = $2), atomically — there is no separate
+//     "check, then write" window a second request could race.
+//  4. Idempotent: if session_status is already 'started', the WHERE clause
+//     excludes the row, RowsAffected is 0, and the handler just returns the
+//     already-started state without re-notifying — repeated lawyer taps (a
+//     slow network retry, a double-tap) never open a second session.
 func InitiateConsultationCall(c *gin.Context) {
 	id := c.Param("id")
 	if !isUUID(id) {
@@ -859,64 +876,95 @@ func InitiateConsultationCall(c *gin.Context) {
 	}
 	userID := utils.UserID(c)
 
-	var lawyerID, clientID, consultationType, status, paymentStatus, lawyerName, clientName string
+	var clientID, consultationType, status, paymentStatus, sessionStatus, lawyerName, clientName string
 	err := config.DB.QueryRow(`
-		SELECT co.lawyer_id::text, co.client_id::text, co.consultation_type, co.status,
-		       COALESCE(co.payment_status,'pending'),
+		SELECT co.client_id::text, co.consultation_type, co.status,
+		       COALESCE(co.payment_status,'pending'), co.session_status,
 		       COALESCE(l.name,'Your lawyer'), COALESCE(cl.name,'The client')
 		FROM consultations co
 		JOIN users l ON co.lawyer_id = l.id
 		JOIN users cl ON co.client_id = cl.id
-		WHERE co.id = $1::uuid
-	`, id).Scan(&lawyerID, &clientID, &consultationType, &status, &paymentStatus, &lawyerName, &clientName)
-	if err != nil {
-		utils.Error(c, http.StatusNotFound, "Consultation not found", "")
+		WHERE co.id = $1::uuid AND co.lawyer_id = $2::uuid
+	`, id, userID).Scan(&clientID, &consultationType, &status, &paymentStatus, &sessionStatus, &lawyerName, &clientName)
+	if err == sql.ErrNoRows {
+		// Either the consultation doesn't exist, or the caller is not its
+		// assigned lawyer (which is exactly the case for any client, on any
+		// consultation, including their own) — same response either way, so
+		// nothing about which one it was leaks to the caller.
+		utils.Error(c, http.StatusForbidden, "Only the assigned lawyer can start this consultation", "")
 		return
 	}
-	if userID != lawyerID && userID != clientID {
-		utils.Error(c, http.StatusForbidden, "Not a participant on this consultation", "")
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to load consultation", err.Error())
 		return
 	}
 	if status != "confirmed" {
-		utils.Error(c, http.StatusBadRequest, "Consultation is not confirmed", "call requires a confirmed booking")
+		utils.Error(c, http.StatusBadRequest, "Consultation is not confirmed",
+			"starting a session requires an accepted booking")
 		return
 	}
 	// UpdateConsultation lets a lawyer set status='confirmed' directly (e.g.
 	// confirming a booking made before payment, or a manually-arranged one)
 	// with no payment_status condition — so 'confirmed' alone never implied
-	// paid. This endpoint is the only path that actually starts a call, so
+	// paid. This endpoint is the only path that actually starts a session, so
 	// it's the one place that has to check payment_status itself rather than
 	// trusting status='confirmed', or a lawyer could confirm and immediately
-	// call/be called on a booking nobody has paid for yet.
+	// start a session on a booking nobody has paid for yet.
 	if paymentStatus != "paid" {
 		utils.Error(c, http.StatusPaymentRequired,
 			"Payment for this consultation has not been completed yet",
-			"call requires payment_status=paid")
+			"starting a session requires payment_status=paid")
 		return
 	}
 
 	callType := consultationCallType(consultationType)
-	if callType == "chat" {
-		utils.Error(c, http.StatusBadRequest, "This consultation is chat-only",
-			"audio/video calling is not available for a Chat booking")
+
+	if sessionStatus == "started" {
+		// Idempotent replay — already running, nothing to (re)notify.
+		utils.Success(c, http.StatusOK, "Session already started", gin.H{"call_type": callType})
 		return
 	}
 
-	title := "📞 Incoming Audio Call"
-	if callType == "video" {
-		title = "🎥 Incoming Video Call"
+	res, err := config.DB.Exec(`
+		UPDATE consultations SET session_status='started', updated_at=NOW()
+		WHERE id=$1::uuid AND lawyer_id=$2::uuid AND status='confirmed' AND session_status != 'started'
+	`, id, userID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to start session", err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// Lost a race with another concurrent start (or the booking's status
+		// changed between the SELECT above and here) — re-read and treat it
+		// the same as an idempotent replay rather than erroring.
+		utils.Success(c, http.StatusOK, "Session already started", gin.H{"call_type": callType})
+		return
 	}
 
-	// Ring whichever side didn't place the call.
-	calleeID, callerName := clientID, lawyerName
-	if userID == clientID {
-		calleeID, callerName = lawyerID, clientName
+	// Audio/video reuse the existing "incoming_call_<type>" push, which the
+	// client app already recognises to open IncomingCallScreen and join the
+	// WebRTC session directly. Chat has no such screen — a distinct type
+	// keeps it out of that path and falls back to a normal notification;
+	// the client's consultation card is the actual way they open the chat
+	// once session_status is 'started' (see GetMyConsultations).
+	var title, body, notifType string
+	switch callType {
+	case "video":
+		title = "🎥 Video consultation started"
+		body = fmt.Sprintf("%s has started your video consultation. Tap to join.", lawyerName)
+		notifType = "incoming_call_video"
+	case "audio":
+		title = "📞 Audio consultation started"
+		body = fmt.Sprintf("%s has started your audio consultation. Tap to join.", lawyerName)
+		notifType = "incoming_call_audio"
+	default: // chat
+		title = "💬 Chat consultation started"
+		body = fmt.Sprintf("%s has started your chat consultation. Tap to open the chat.", lawyerName)
+		notifType = "chat_session_started"
 	}
-	body := fmt.Sprintf("%s is calling you.", callerName)
+	utils.NotifyWithRef(clientID, "", title, body, notifType, id, "consultation")
 
-	utils.NotifyWithRef(calleeID, "", title, body, "incoming_call_"+callType, id, "consultation")
-
-	utils.Success(c, http.StatusOK, "Call initiated", gin.H{"call_type": callType})
+	utils.Success(c, http.StatusOK, "Session started", gin.H{"call_type": callType})
 }
 
 // RespondToConsultationCall - the callee accepts/declines an incoming call
@@ -1046,8 +1094,20 @@ func SaveCallDuration(c *gin.Context) {
 		return
 	}
 
+	// The call screen only ever posts a duration once the call has actually
+	// ended (see webrtc_call_service.dart's hangup path), so this is also the
+	// one place an audio/video session's end is known — closing the booking
+	// out to 'completed' here is what makes it show up in Call History
+	// automatically, instead of requiring the lawyer to separately remember
+	// to tap "Mark Completed" after every call. Only a still-'confirmed'
+	// booking is touched, so this can't resurrect one already
+	// cancelled/rejected/completed by something else in the meantime.
 	res, err := config.DB.Exec(`
-		UPDATE consultations SET call_duration_seconds = call_duration_seconds + $1, updated_at=NOW()
+		UPDATE consultations SET
+		  call_duration_seconds = call_duration_seconds + $1,
+		  status         = CASE WHEN status = 'confirmed' THEN 'completed' ELSE status END,
+		  session_status = CASE WHEN status = 'confirmed' THEN 'ended' ELSE session_status END,
+		  updated_at = NOW()
 		WHERE id=$2::uuid AND (lawyer_id=$3::uuid OR client_id=$3::uuid)
 	`, req.DurationSeconds, id, userID)
 	if err != nil {

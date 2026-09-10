@@ -192,7 +192,15 @@ class _ConsultationManagementScreenState
 
   Future<void> _startVideoCall(dynamic c) => _joinCall(c, video: true);
 
-  void _openChat() => context.push('/chat');
+  /// Chat has no WebRTC session to join, but it still needs the same
+  /// lawyer-only start (see InitiateConsultationCall on the backend) so the
+  /// client's booking flips out of "Waiting for Lawyer" — this used to open
+  /// chat directly with no start call at all, so the client's session never
+  /// actually started.
+  Future<void> _startChat(dynamic c) async {
+    await _ringClient(c);
+    if (mounted) context.push('/chat');
+  }
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -765,6 +773,7 @@ class _ConsultationManagementScreenState
                               // lawyer sees a clear reason instead of a call
                               // that mysteriously won't connect.
                               final isPaid = c['payment_status'] == 'paid';
+                              final sessionStarted = c['session_status'] == 'started';
                               return SizedBox(
                                 width: double.infinity,
                                 child: Material(
@@ -786,13 +795,13 @@ class _ConsultationManagementScreenState
                                       }
                                       HapticFeedback.heavyImpact();
                                       if (isOfficeVisit) {
-                                        _openChat();
+                                        _startChat(c);
                                       } else if (action == 'audio') {
                                         _callClient(c);
                                       } else if (action == 'video') {
                                         _startVideoCall(c);
                                       } else {
-                                        _openChat();
+                                        _startChat(c);
                                       }
                                     },
                                     child: Padding(
@@ -814,12 +823,20 @@ class _ConsultationManagementScreenState
                                                 !isPaid
                                                     ? 'Payment Pending'
                                                     : isOfficeVisit
-                                                        ? 'Client Visit Details'
+                                                        ? (sessionStarted
+                                                            ? 'Client Visit Details'
+                                                            : 'Start Visit')
                                                         : action == 'audio'
-                                                            ? 'Call Client'
+                                                            ? (sessionStarted
+                                                                ? 'Rejoin Call'
+                                                                : 'Start Call')
                                                             : action == 'video'
-                                                                ? 'Video Call'
-                                                                : 'Chat with Client',
+                                                                ? (sessionStarted
+                                                                    ? 'Rejoin Video Call'
+                                                                    : 'Start Video Call')
+                                                                : (sessionStarted
+                                                                    ? 'Open Chat'
+                                                                    : 'Start Chat'),
                                                 textAlign: TextAlign.center,
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,

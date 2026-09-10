@@ -2113,31 +2113,31 @@ class _ConsultationCard extends StatelessWidget {
         content: Text(message), backgroundColor: const Color(0xFFD9534F)));
   }
 
-  Future<void> _joinCall({required bool video}) async {
+  // The client only ever JOINS a session the lawyer already started — never
+  // places the call. This used to POST /portal/my-consultations/:id/call
+  // (the same start-session action the lawyer uses) and join as the caller;
+  // that endpoint is now lawyer-only on the backend (see
+  // InitiateConsultationCall), so a client calling it gets a 403 regardless
+  // of what this screen does. isCaller is false here because the client is
+  // answering an already-active session, not starting one.
+  void _joinCall({required bool video}) {
     final id = consultation['id'];
     if (id == null) {
       _showActionError('This booking is missing its consultation id.');
       return;
     }
     final lawyerName = (consultation['lawyer_name'] ?? 'Your Lawyer').toString();
-    // Best-effort ring — the client can still join even if the lawyer's push
-    // notification fails to deliver.
-    try {
-      await DioClient.instance.post('/portal/my-consultations/$id/call');
-    } catch (_) {}
-    if (context.mounted) {
-      context.push('/call', extra: {
-        'consultationId': id.toString(),
-        'peerName': lawyerName,
-        'video': video,
-        'isCaller': true,
-      });
-    }
+    context.push('/call', extra: {
+      'consultationId': id.toString(),
+      'peerName': lawyerName,
+      'video': video,
+      'isCaller': false,
+    });
   }
 
-  Future<void> _callLawyer() => _joinCall(video: false);
+  void _callLawyer() => _joinCall(video: false);
 
-  Future<void> _openVideoCall() => _joinCall(video: true);
+  void _openVideoCall() => _joinCall(video: true);
 
   Future<void> _startChat() async {
     final lawyerId = consultation['lawyer_id'] ?? '';
