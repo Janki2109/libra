@@ -51,6 +51,17 @@ String _formatCallDuration(int seconds) {
   return m > 0 ? '${m}m ${s}s' : '${s}s';
 }
 
+/// The booking/request date — when the client actually made the request
+/// (created_at), as distinct from the appointment date/time chosen for it.
+/// Already returned by GetLawyerConsultations; just not shown until now.
+String _formatRequestedAt(String isoTimestamp) {
+  try {
+    return DateFormat('d MMM yyyy, h:mm a').format(DateTime.parse(isoTimestamp).toLocal());
+  } catch (_) {
+    return isoTimestamp;
+  }
+}
+
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
 const _brown = Color(0xFF150E3D);
@@ -108,7 +119,10 @@ class _ConsultationManagementScreenState
   List<dynamic> get _confirmed =>
       _consultations.where((c) => c['status'] == 'confirmed').toList();
   List<dynamic> get _completed => _consultations
-      .where((c) => c['status'] == 'completed' || c['status'] == 'cancelled')
+      .where((c) =>
+          c['status'] == 'completed' ||
+          c['status'] == 'cancelled' ||
+          c['status'] == 'rejected')
       .toList();
 
   Future<void> _updateConsultation(dynamic c, String status,
@@ -134,7 +148,11 @@ class _ConsultationManagementScreenState
       }
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Consultation $status successfully!'),
+            content: Text(status == 'confirmed'
+                ? 'Booking accepted!'
+                : status == 'rejected'
+                    ? 'Booking rejected.'
+                    : 'Consultation $status successfully!'),
             backgroundColor: status == 'confirmed' ? _green : _red,
             behavior: SnackBarBehavior.floating));
     } catch (e) {
@@ -300,7 +318,7 @@ class _ConsultationManagementScreenState
                     },
                     icon: const Icon(Icons.check_rounded,
                         color: Colors.white, size: 16),
-                    label: const Text('Confirm',
+                    label: const Text('Accept',
                         style: TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
@@ -314,12 +332,12 @@ class _ConsultationManagementScreenState
                       child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      _updateConsultation(c, 'cancelled',
+                      _updateConsultation(c, 'rejected',
                           notes: notesCtrl.text);
                     },
                     icon:
                         const Icon(Icons.close_rounded, color: _red, size: 16),
-                    label: const Text('Decline',
+                    label: const Text('Reject',
                         style: TextStyle(
                             color: _red, fontWeight: FontWeight.w700)),
                     style: OutlinedButton.styleFrom(
@@ -440,7 +458,7 @@ class _ConsultationManagementScreenState
           final status = c['status'] ?? 'pending';
           final color = status == 'confirmed'
               ? _green
-              : status == 'cancelled'
+              : (status == 'cancelled' || status == 'rejected')
                   ? _red
                   : status == 'completed'
                       ? _blue
@@ -627,6 +645,18 @@ class _ConsultationManagementScreenState
                               ],
                             ),
                           ),
+                          if ((c['created_at'] ?? '').toString().isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(children: [
+                              const Icon(Icons.mark_email_unread_outlined,
+                                  color: _textMuted, size: 12),
+                              const SizedBox(width: 4),
+                              Text(
+                                  'Requested ${_formatRequestedAt(c['created_at'].toString())}',
+                                  style: const TextStyle(
+                                      color: _textMuted, fontSize: 11)),
+                            ]),
+                          ],
                           if ((c['notes'] ?? '').isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Container(
@@ -685,7 +715,7 @@ class _ConsultationManagementScreenState
                                         Icon(Icons.check_rounded,
                                             color: Colors.white, size: 14),
                                         SizedBox(width: 4),
-                                        Text('Confirm',
+                                        Text('Accept',
                                             style: TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w700,
@@ -721,7 +751,7 @@ class _ConsultationManagementScreenState
                               )),
                             ]),
                           ],
-                          if (status == 'confirmed' && !isOfficeVisit) ...[
+                          if (status == 'confirmed') ...[
                             const SizedBox(height: 10),
                             Builder(builder: (context) {
                               // A lawyer can Confirm a booking that was never
@@ -755,7 +785,9 @@ class _ConsultationManagementScreenState
                                         return;
                                       }
                                       HapticFeedback.heavyImpact();
-                                      if (action == 'audio') {
+                                      if (isOfficeVisit) {
+                                        _openChat();
+                                      } else if (action == 'audio') {
                                         _callClient(c);
                                       } else if (action == 'video') {
                                         _startVideoCall(c);
@@ -781,11 +813,13 @@ class _ConsultationManagementScreenState
                                             child: Text(
                                                 !isPaid
                                                     ? 'Payment Pending'
-                                                    : action == 'audio'
-                                                        ? 'Call Client'
-                                                        : action == 'video'
-                                                            ? 'Video Call'
-                                                            : 'Chat with Client',
+                                                    : isOfficeVisit
+                                                        ? 'Client Visit Details'
+                                                        : action == 'audio'
+                                                            ? 'Call Client'
+                                                            : action == 'video'
+                                                                ? 'Video Call'
+                                                                : 'Chat with Client',
                                                 textAlign: TextAlign.center,
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,

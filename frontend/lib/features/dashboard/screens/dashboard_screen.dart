@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/dio_client.dart';
@@ -134,56 +133,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (v >= 100000) return '₹${(v / 100000).toStringAsFixed(1)}L';
     if (v >= 1000) return '₹${(v / 1000).toStringAsFixed(1)}K';
     return '₹${v.toStringAsFixed(0)}';
-  }
-
-  Future<void> _pickPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (sheetContext) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 12),
-          Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.photo_camera_outlined),
-            title: const Text('Take Photo'),
-            onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
-          ),
-          ListTile(
-            leading: const Icon(Icons.photo_library_outlined),
-            title: const Text('Choose from Gallery'),
-            onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
-          ),
-          const SizedBox(height: 8),
-        ]),
-      ),
-    );
-    if (source == null) return;
-
-    final picker = ImagePicker();
-    final picked =
-        await picker.pickImage(source: source, imageQuality: 70, maxWidth: 400);
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    final base64Photo = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    if (mounted) {
-      final auth = context.read<AuthProvider>();
-      final synced = await auth.updateProfilePhoto(base64Photo);
-      setState(() {});
-      if (!synced && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Photo updated on this device, but could not sync — others may not see it yet.'),
-            backgroundColor: Color(0xFFD4A017)));
-      }
-    }
   }
 
   String _dayName() {
@@ -346,7 +295,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   auth: auth,
                                   hasPhoto: hasPhoto,
                                   greeting: _greeting(),
-                                  onPickPhoto: _pickPhoto,
                                 ),
                               ],
                             ),
@@ -495,7 +443,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   Uri.parse('https://services.ecourts.gov.in'),
                                   mode: LaunchMode.externalApplication)),
                           _ActionTile(
-                              'Consults',
+                              'My Bookings',
                               Icons.calendar_today_rounded,
                               const Color(0xFF2E8B57),
                               () => context.push('/lawyer/consultations')),
@@ -812,12 +760,10 @@ class _ProfileBanner extends StatelessWidget {
   final AuthProvider auth;
   final bool hasPhoto;
   final String greeting;
-  final VoidCallback onPickPhoto;
   const _ProfileBanner({
     required this.auth,
     required this.hasPhoto,
     required this.greeting,
-    required this.onPickPhoto,
   });
 
   @override
@@ -826,37 +772,20 @@ class _ProfileBanner extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // ── Big cutout photo - no box, no border ──────
-        GestureDetector(
-          onTap: onPickPhoto,
-          child: Stack(clipBehavior: Clip.none, children: [
-            SizedBox(
-              width: 110,
-              height: 155,
-              child: hasPhoto
-                  ? Image.memory(
-                      base64Decode(auth.user!.profilePhoto
-                          .replaceFirst('data:image/jpeg;base64,', '')),
-                      fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
-                      errorBuilder: (_, __, ___) => _initials(),
-                    )
-                  : _initials(),
-            ),
-            Positioned(
-                bottom: 6,
-                right: 6,
-                child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black26, blurRadius: 4)
-                        ]),
-                    child: const Icon(Icons.camera_alt_rounded,
-                        color: _brown, size: 13))),
-          ]),
+        // The photo option (tap to change) has been removed from the Lawyer
+        // section — this is now a plain, non-interactive display.
+        SizedBox(
+          width: 110,
+          height: 155,
+          child: hasPhoto
+              ? Image.memory(
+                  base64Decode(auth.user!.profilePhoto
+                      .replaceFirst('data:image/jpeg;base64,', '')),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (_, __, ___) => _initials(),
+                )
+              : _initials(),
         ),
         const SizedBox(width: 14),
 

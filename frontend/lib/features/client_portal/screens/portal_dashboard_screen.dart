@@ -2175,7 +2175,7 @@ class _ConsultationCard extends StatelessWidget {
 
     final Color color = status == 'confirmed'
         ? const Color(0xFF2E8B57)
-        : status == 'cancelled'
+        : (status == 'cancelled' || status == 'rejected')
             ? const Color(0xFFD9534F)
             : status == 'completed'
                 ? const Color(0xFF4A90D9)
@@ -2309,6 +2309,32 @@ class _ConsultationCard extends StatelessWidget {
                         child: Text('✅ Lawyer has confirmed your consultation!',
                             style: TextStyle(
                                 color: Color(0xFF2E8B57),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12))),
+                  ]),
+                ),
+              ],
+
+              // Lawyer rejected the request — the client previously had no
+              // clear indication of this at all, just a red "CANCELLED"-style
+              // badge with no explanation.
+              if (status == 'rejected') ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFD9534F).withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFFD9534F).withValues(alpha: 0.2))),
+                  child: const Row(children: [
+                    Icon(Icons.cancel_outlined,
+                        color: Color(0xFFD9534F), size: 16),
+                    SizedBox(width: 8),
+                    Expanded(
+                        child: Text('❌ The lawyer has rejected this booking.',
+                            style: TextStyle(
+                                color: Color(0xFFD9534F),
                                 fontWeight: FontWeight.w700,
                                 fontSize: 12))),
                   ]),

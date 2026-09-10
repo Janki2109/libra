@@ -591,7 +591,10 @@ func UpdateAvatar(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 
 	var req struct {
-		AvatarURL string `json:"avatar_url" binding:"required"`
+		// No `required` — an empty string is a valid request here, used to
+		// remove the current photo (falling back to the initials
+		// placeholder), not just to set a new one.
+		AvatarURL string `json:"avatar_url"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())

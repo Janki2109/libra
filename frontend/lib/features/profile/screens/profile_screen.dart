@@ -456,8 +456,18 @@ class _ProfilePhotoWidget extends StatelessWidget {
   final dynamic user;
   const _ProfilePhotoWidget({required this.user});
 
-  Future<void> _pickPhoto(BuildContext context) async {
-    final source = await showModalBottomSheet<ImageSource>(
+  Future<void> _removePhoto(BuildContext context) async {
+    final synced = await context.read<AuthProvider>().updateProfilePhoto('');
+    if (!synced && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Photo removed on this device, but could not sync yet.'),
+          backgroundColor: Color(0xFFD4A017)));
+    }
+  }
+
+  Future<void> _handleTap(BuildContext context, bool hasPhoto) async {
+    final action = await showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -473,33 +483,45 @@ class _ProfilePhotoWidget extends StatelessWidget {
           const SizedBox(height: 8),
           ListTile(
             leading: const Icon(Icons.photo_camera_outlined),
-            title: const Text('Take Photo'),
-            onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+            title: const Text('Camera'),
+            onTap: () => Navigator.pop(sheetContext, 'camera'),
           ),
           ListTile(
             leading: const Icon(Icons.photo_library_outlined),
-            title: const Text('Choose from Gallery'),
-            onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+            title: const Text('Gallery'),
+            onTap: () => Navigator.pop(sheetContext, 'gallery'),
           ),
+          if (hasPhoto)
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+              title: const Text('Remove Profile Photo',
+                  style: TextStyle(color: Colors.red)),
+              onTap: () => Navigator.pop(sheetContext, 'remove'),
+            ),
           const SizedBox(height: 8),
         ]),
       ),
     );
-    if (source == null) return;
+    if (action == null || !context.mounted) return;
 
+    if (action == 'remove') {
+      await _removePhoto(context);
+      return;
+    }
+
+    final source = action == 'camera' ? ImageSource.camera : ImageSource.gallery;
     final picker = ImagePicker();
     final picked =
         await picker.pickImage(source: source, imageQuality: 70, maxWidth: 600);
-    if (picked == null) return;
+    if (picked == null || !context.mounted) return;
     final bytes = await picked.readAsBytes();
     final base64Photo = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    if (!context.mounted) return;
     final synced =
         await context.read<AuthProvider>().updateProfilePhoto(base64Photo);
     if (!synced && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
-              'Photo updated on this device, but could not sync — others may not see it yet.'),
+              'Photo updated on this device, but could not sync — clients may not see it yet.'),
           backgroundColor: Color(0xFFD4A017)));
     }
   }
@@ -510,7 +532,7 @@ class _ProfilePhotoWidget extends StatelessWidget {
     final initials = user?.initials ?? 'U';
 
     return GestureDetector(
-      onTap: () => _pickPhoto(context),
+      onTap: () => _handleTap(context, hasPhoto),
       child: Stack(alignment: Alignment.center, children: [
         // Photo container — a true circle, so the photo is cropped to fit it
         // exactly rather than sitting in a rounded-rectangle badge.
@@ -547,13 +569,12 @@ class _ProfilePhotoWidget extends StatelessWidget {
             bottom: 4,
             right: 4,
             child: Container(
-              width: 32,
-              height: 32,
-              decoration: const BoxDecoration(
-                  color: Colors.white, shape: BoxShape.circle),
-              child:
-                  const Icon(Icons.camera_alt_rounded, color: _brown, size: 16),
-            )),
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                    color: Colors.white, shape: BoxShape.circle),
+                child: const Icon(Icons.camera_alt_rounded,
+                    color: _brown, size: 16))),
         // Online dot
         Positioned(
             top: 4,

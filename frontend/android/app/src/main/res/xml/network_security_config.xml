@@ -22,6 +22,6 @@
              This changes whenever the dev machine reconnects to Wi-Fi/gets a
              new DHCP lease — check with `ipconfig` before assuming it's
              still current. -->
-        <domain includeSubdomains="false">192.168.1.55</domain>
+        <domain includeSubdomains="false">192.168.1.6</domain>
     </domain-config>
 </network-security-config>

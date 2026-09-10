@@ -463,18 +463,24 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                 style: const TextStyle(color: Color(0xFFFFD700), fontSize: 11)),
           ]),
           actions: [
-            IconButton(
-                icon: const Icon(Icons.edit_rounded, color: Color(0xFFFFD700)),
-                onPressed: () => context
-                    .push('/cases/${widget.caseId}/edit')
-                    .then((_) => _loadCase())),
+            // A Won case is read-only — no edit, and no further status
+            // change either (the backend rejects both regardless, but the
+            // buttons are removed too so there's nothing to tap in the
+            // first place).
+            if (status != 'won')
+              IconButton(
+                  icon: const Icon(Icons.edit_rounded, color: Color(0xFFFFD700)),
+                  onPressed: () => context
+                      .push('/cases/${widget.caseId}/edit')
+                      .then((_) => _loadCase())),
             IconButton(
                 icon: const Icon(Icons.upload_file_rounded,
                     color: Color(0xFFFFD700)),
                 onPressed: _showUploadDialog),
-            IconButton(
-                icon: Icon(statusIcon, color: Colors.white),
-                onPressed: _showStatusDialog),
+            if (status != 'won')
+              IconButton(
+                  icon: Icon(statusIcon, color: Colors.white),
+                  onPressed: _showStatusDialog),
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(90),

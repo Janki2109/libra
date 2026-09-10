@@ -62,6 +62,34 @@ func Validate() error {
 				"use 'require' or stronger")
 	}
 
+	// A production deploy pointed at a loopback address is always wrong — it
+	// means the managed database's connection details (e.g. Render's
+	// PostgreSQL "Internal Database URL") were never actually set, and the
+	// process fell back to config.go's local-dev defaults instead. That used
+	// to surface only once ConnectDatabase tried to dial it and Postgres's own
+	// driver produced a bare "connection refused", with nothing pointing at
+	// the actual cause — refuse to start instead, with a message that names
+	// the real fix.
+	if IsProduction() {
+		if dbURL := GetEnv("DATABASE_URL", ""); dbURL != "" {
+			if strings.Contains(dbURL, "127.0.0.1") || strings.Contains(dbURL, "localhost") {
+				problems = append(problems,
+					"DATABASE_URL points at localhost/127.0.0.1 in production — use your managed "+
+						"PostgreSQL service's own connection string (e.g. Render's Internal or "+
+						"External Database URL for the 'libra database' service), not a local database")
+			}
+		} else {
+			switch GetEnv("DB_HOST", "localhost") {
+			case "localhost", "127.0.0.1", "::1":
+				problems = append(problems,
+					"DB_HOST resolves to localhost in production — set DATABASE_URL, or "+
+						"DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME, to your managed PostgreSQL "+
+						"service's own connection details (e.g. Render's 'libra database' service), "+
+						"not a local database")
+			}
+		}
+	}
+
 	if GetEnv("CORS_ORIGINS", "") == "" {
 		log.Println("[config] CORS_ORIGINS is empty — browser clients will be refused " +
 			"(fine for a mobile-only API)")

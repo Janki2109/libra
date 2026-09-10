@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/dio_client.dart';
 import '../utils/browser_download.dart';
+import '../utils/android_download.dart';
 
 // OneLegal theme — matches the splash screen and login screen exactly
 // (AppColors is the same palette those already use), so this page visually
@@ -517,9 +518,23 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
         return;
       }
 
-      // Non-web: no bare filesystem download, so save to a temp file and
-      // hand it to the OS share sheet (Save to Files, send to another app)
-      // — that stands in for "download" there.
+      // Android: save straight into the real Downloads folder — this used
+      // to skip straight to the share sheet below, which only saved the
+      // file if the user separately chose "Save to Files" there, so nothing
+      // was actually downloaded by default.
+      if (await saveToAndroidDownloads(bytes, fileName, mimeType)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('$fileName saved to Downloads'),
+            backgroundColor: const Color(0xFF2E8B57),
+            behavior: SnackBarBehavior.floating));
+        return;
+      }
+
+      // iOS / older Android without Downloads access: no bare filesystem
+      // download, so save to a temp file and hand it to the OS share sheet
+      // (Save to Files, send to another app) — that stands in for
+      // "download" there.
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/$fileName');
       await file.writeAsBytes(bytes);

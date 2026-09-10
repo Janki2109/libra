@@ -32,6 +32,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   String? _selectedPlanId;
   bool _isYearly = false;
   bool _loading = true;
+  bool _starting = false;
   String? _error;
 
   @override
@@ -66,6 +67,31 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         _loading = false;
       });
     }
+  }
+
+  // Checkout is temporarily disabled — clicking a plan/Subscribe just tells
+  // the user payment is coming soon and leaves them on this screen, instead
+  // of opening the Razorpay checkout flow below.
+  Future<void> _subscribe(Plan plan) async {
+    HapticFeedback.heavyImpact();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.bgCard,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Payment Coming Soon',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: const Text('Subscription payment will be available soon.',
+            style: TextStyle(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK', style: TextStyle(color: AppColors.gold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -354,13 +380,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             width: double.infinity,
             height: 54,
             child: _GoldButton(
-              label: selectedPlan == null
-                  ? 'Continue'
-                  : 'Continue with ${selectedPlan.displayName}',
-              onPressed: () {
-                HapticFeedback.heavyImpact();
-                context.go('/dashboard');
-              },
+              label: _starting
+                  ? 'Please wait…'
+                  : selectedPlan == null
+                      ? 'Continue'
+                      : 'Continue with ${selectedPlan.displayName}',
+              onPressed: (_starting || selectedPlan == null)
+                  ? () {}
+                  : () => _subscribe(selectedPlan),
             ),
           ),
           const SizedBox(height: 14),

@@ -34,7 +34,6 @@ class _AddClientScreenState extends State<AddClientScreen> {
   final _stateCtrl = TextEditingController();
   final _pincodeCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
-  final _idProofNumCtrl = TextEditingController();
   String _idProofType = 'Aadhaar';
   bool _loading = false;
   Uint8List? _idProofBytes;
@@ -60,7 +59,6 @@ class _AddClientScreenState extends State<AddClientScreen> {
     _stateCtrl.dispose();
     _pincodeCtrl.dispose();
     _notesCtrl.dispose();
-    _idProofNumCtrl.dispose();
     super.dispose();
   }
 
@@ -122,7 +120,6 @@ class _AddClientScreenState extends State<AddClientScreen> {
       'state': _stateCtrl.text.trim(),
       'pincode': _pincodeCtrl.text.trim(),
       'id_proof_type': _idProofType,
-      'id_proof_number': _idProofNumCtrl.text.trim(),
       'notes': _notesCtrl.text.trim(),
     });
 
@@ -138,7 +135,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
           'mime_type': _idProofMimeType,
           'category': 'ID Proof',
           'client_id': result['id'],
-          'description': '$_idProofType (${_idProofNumCtrl.text.trim()})',
+          'description': _idProofType,
         });
       } catch (_) {
         // Client is already created; a failed document upload shouldn't
@@ -238,8 +235,10 @@ class _AddClientScreenState extends State<AddClientScreen> {
                         controller: _nameCtrl,
                         label: 'Full Name *',
                         icon: Icons.person_rounded,
-                        validator: (v) =>
-                            v!.isEmpty ? 'Name is required' : null),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z ]')),
+                        ],
+                        validator: Validators.name),
                     const SizedBox(height: 10),
                     _buildField(
                         controller: _emailCtrl,
@@ -314,8 +313,11 @@ class _AddClientScreenState extends State<AddClientScreen> {
                         label: 'Pincode *',
                         icon: Icons.pin_outlined,
                         keyboardType: TextInputType.number,
-                        validator: (v) =>
-                            v!.trim().isEmpty ? 'Pincode required' : null),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                        validator: Validators.pincode),
                     const SizedBox(height: 20),
 
                     _SectionHeader(
@@ -350,14 +352,6 @@ class _AddClientScreenState extends State<AddClientScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    _buildField(
-                        controller: _idProofNumCtrl,
-                        label: 'ID Proof Number *',
-                        icon: Icons.numbers_outlined,
-                        validator: (v) => v!.trim().isEmpty
-                            ? 'ID proof number required'
-                            : null),
                     const SizedBox(height: 10),
                     _idProofBytes == null
                         ? OutlinedButton.icon(

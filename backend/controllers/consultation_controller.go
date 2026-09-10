@@ -279,9 +279,16 @@ func confirmConsultationPayment(orderID, paymentID, callerID string) (gin.H, err
 	}
 
 	if orderStatus != "paid" {
+		// Payment only proves the client paid — it does not grant them a slot
+		// on the lawyer's calendar. This used to jump straight to 'confirmed',
+		// which skipped the lawyer's accept/reject decision entirely: every
+		// paid booking silently confirmed itself and the lawyer's existing
+		// Pending/Confirm/Decline UI never actually saw a booking to act on.
+		// Leaving status at 'pending' here is what makes that already-built
+		// accept/reject flow (see UpdateConsultation) actually run.
 		if _, err := tx.Exec(`
 			UPDATE consultations SET
-				status='confirmed', payment_status='paid',
+				status='pending', payment_status='paid',
 				razorpay_payment_id=$1, paid_at=NOW(), updated_at=NOW()
 			WHERE id=$2::uuid
 		`, paymentID, consultationID); err != nil {
@@ -359,14 +366,14 @@ func notifyConsultationPaid(consultationID string, amountPaise int64) {
 	amount := formatINR(float64(amountPaise) / 100)
 
 	utils.NotifyWithRef(lawyerID, lawyerFirmID,
-		"New confirmed booking",
-		fmt.Sprintf("%s booked a %s consultation with you on %s at %s. Payment received: %s.",
+		"New booking request",
+		fmt.Sprintf("%s requested a %s consultation with you on %s at %s (paid: %s). Accept or reject it from My Bookings.",
 			clientName, consultType, consultDate, consultTime, amount),
-		"consultation_booked", consultationID, "consultation")
+		"booking_request", consultationID, "consultation")
 
 	utils.NotifyWithRef(clientID, "",
-		"Payment successful — booking confirmed",
-		fmt.Sprintf("Your payment of %s was successful. Your %s consultation with %s on %s at %s is confirmed.",
+		"Payment successful — awaiting lawyer confirmation",
+		fmt.Sprintf("Your payment of %s was successful. Your %s consultation request with %s on %s at %s is waiting for the lawyer to accept.",
 			amount, consultType, lawyerName, consultDate, consultTime),
 		"general", consultationID, "consultation")
 }
@@ -777,7 +784,7 @@ func UpdateConsultation(c *gin.Context) {
 
 	if req.Status != "" && !validConsultationStatus(req.Status) {
 		utils.Error(c, http.StatusBadRequest, "Invalid status",
-			"expected one of: pending, confirmed, completed, cancelled")
+			"expected one of: pending, confirmed, rejected, completed, cancelled")
 		return
 	}
 
@@ -786,22 +793,44 @@ func UpdateConsultation(c *gin.Context) {
 	// $N::text on every placeholder — see UpdateProfile (auth_controller.go)
 	// for why: this same CASE-with-reused-placeholder shape is what broke
 	// UpdateCase in production with "inconsistent types deduced".
-	res, err := config.DB.Exec(`
+	// RETURNING the booking's own details so the client can be notified of
+	// the lawyer's accept/reject decision below, without a second round trip.
+	var clientID, consultType, consultDate, consultTime string
+	err := config.DB.QueryRow(`
 		UPDATE consultations SET
 		  status       = CASE WHEN $1::text != '' THEN $1::text ELSE status END,
 		  lawyer_notes = CASE WHEN $2::text != '' THEN $2::text ELSE lawyer_notes END,
 		  meeting_link = CASE WHEN $3::text != '' THEN $3::text ELSE meeting_link END,
 		  updated_at   = NOW()
 		WHERE id=$4::uuid AND lawyer_id=$5::uuid
-	`, req.Status, req.LawyerNotes, req.MeetingLink, id, userID)
+		RETURNING client_id::text, consultation_type, consultation_date::text, consultation_time
+	`, req.Status, req.LawyerNotes, req.MeetingLink, id, userID).Scan(
+		&clientID, &consultType, &consultDate, &consultTime)
 
+	if err == sql.ErrNoRows {
+		utils.Error(c, http.StatusNotFound, "Consultation not found", "not the assigned lawyer")
+		return
+	}
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to update", err.Error())
 		return
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		utils.Error(c, http.StatusNotFound, "Consultation not found", "not the assigned lawyer")
-		return
+
+	// Tell the client the lawyer's decision — previously this endpoint never
+	// notified them at all, so a rejected booking just silently vanished
+	// from their perspective with no explanation.
+	if req.Status == "confirmed" {
+		utils.NotifyWithRef(clientID, "",
+			"Booking accepted",
+			fmt.Sprintf("Your %s consultation on %s at %s has been accepted by your lawyer.",
+				consultType, consultDate, consultTime),
+			"booking_accepted", id, "consultation")
+	} else if req.Status == "rejected" {
+		utils.NotifyWithRef(clientID, "",
+			"Booking rejected",
+			fmt.Sprintf("Your %s consultation request for %s at %s was rejected by the lawyer.",
+				consultType, consultDate, consultTime),
+			"booking_rejected", id, "consultation")
 	}
 
 	utils.Success(c, http.StatusOK, "Consultation updated", gin.H{"id": id, "status": req.Status})
@@ -1064,7 +1093,7 @@ func CancelConsultation(c *gin.Context) {
 
 func validConsultationStatus(s string) bool {
 	switch s {
-	case "pending", "confirmed", "completed", "cancelled":
+	case "pending", "confirmed", "rejected", "completed", "cancelled":
 		return true
 	}
 	return false

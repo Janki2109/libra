@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
-import '../../../core/services/trial_service.dart';
 import '../../billing/repositories/subscription_repository.dart';
-import '../../billing/screens/subscription_checkout_screen.dart';
-import '../providers/auth_provider.dart';
 
 const _bg = Color(0xFF0A0A14);
 const _bgCard = Color(0xFF150A2E);
@@ -74,62 +69,30 @@ class _SubscriptionWallScreenState extends State<SubscriptionWallScreen> {
     }
   }
 
+  // Checkout is temporarily disabled — Subscribe just tells the user payment
+  // is coming soon and leaves them on this screen, instead of opening the
+  // Razorpay checkout flow below.
   Future<void> _subscribe() async {
-    if (_plans.isEmpty || _starting) return;
+    if (_plans.isEmpty) return;
     HapticFeedback.lightImpact();
-
-    setState(() => _starting = true);
-    final plan = _plans[_selected];
-
-    try {
-      final checkout = await _repo.startCheckout(
-        plan: plan.name,
-        billingCycle: _cycle,
-      );
-      if (!mounted) return;
-
-      final user = context.read<AuthProvider>().user;
-      final outcome = await Navigator.of(context).push<CheckoutOutcome>(
-        MaterialPageRoute(
-          builder: (_) => SubscriptionCheckoutScreen(
-            checkout: checkout,
-            customerName: user?.name ?? '',
-            customerEmail: user?.email ?? '',
-            customerPhone: user?.phone ?? '',
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bgCard,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Payment Coming Soon',
+            style: TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
+        content: const Text('Subscription payment will be available soon.',
+            style: TextStyle(color: _textMuted)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK', style: TextStyle(color: _gold)),
           ),
-        ),
-      );
-
-      if (!mounted) return;
-      setState(() => _starting = false);
-
-      if (outcome == CheckoutOutcome.paid) {
-        // Re-read entitlement from the server rather than assuming — the
-        // whole point of this rewrite.
-        final status = await TrialService.refresh();
-        if (!mounted) return;
-        if (status.isActive) {
-          HapticFeedback.heavyImpact();
-          context.go('/dashboard');
-        } else {
-          // The webhook may not have landed yet.
-          _snack('Payment received. Activating your plan…');
-        }
-      }
-    } on BillingException catch (e) {
-      if (!mounted) return;
-      setState(() => _starting = false);
-      _snack(e.message);
-    }
-  }
-
-  void _snack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: _bgCard,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ));
+        ],
+      ),
+    );
   }
 
   double _price(Plan p) => _cycle == 'yearly' ? p.priceYearly : p.priceMonthly;

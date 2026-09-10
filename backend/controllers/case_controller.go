@@ -243,6 +243,18 @@ func UpdateCase(c *gin.Context) {
 		return
 	}
 
+	// A case marked Won is read-only — no further edits to its details and no
+	// further status changes. Enforced here, not just by hiding the Edit
+	// button in the app, so a direct API call can't bypass it either.
+	var currentStatus string
+	config.DB.QueryRow(`SELECT status FROM cases WHERE id=$1::uuid AND firm_id=$2::uuid`,
+		id, firmID).Scan(&currentStatus)
+	if currentStatus == "won" {
+		utils.Error(c, http.StatusForbidden,
+			"This case is marked Won and is read-only", "cannot edit or change the status of a won case")
+		return
+	}
+
 	var req struct {
 		Status       string `json:"status"`
 		WonFeedback  string `json:"won_feedback"`
@@ -376,6 +388,18 @@ func DeleteCase(c *gin.Context) {
 	if !ok {
 		return
 	}
+
+	// Same read-only rule as UpdateCase: a Won case cannot be closed/deleted
+	// either.
+	var currentStatus string
+	config.DB.QueryRow(`SELECT status FROM cases WHERE id=$1::uuid AND firm_id=$2::uuid`,
+		id, firmID).Scan(&currentStatus)
+	if currentStatus == "won" {
+		utils.Error(c, http.StatusForbidden,
+			"This case is marked Won and is read-only", "cannot delete a won case")
+		return
+	}
+
 	_, err := config.DB.Exec(`
 		UPDATE cases SET status='closed', closed_at=COALESCE(closed_at, NOW()),
 		updated_at=NOW()
