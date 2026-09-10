@@ -1565,6 +1565,32 @@ class _ProfileTab extends StatelessWidget {
                   end: Alignment.bottomCenter),
             ),
             child: Column(children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: () => context.push('/profile/edit'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.35)),
+                    ),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.edit_rounded, color: Colors.white, size: 13),
+                      SizedBox(width: 5),
+                      Text('Edit Profile',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
               Stack(children: [
                 Container(
                     width: 90,
@@ -1657,6 +1683,13 @@ class _ProfileTab extends StatelessWidget {
                     subtitle: 'Upload & manage files',
                     color: _teal,
                     onTap: () => context.push('/portal/documents')),
+                const SizedBox(height: 8),
+                _SettingsTile(
+                    icon: Icons.history_rounded,
+                    title: 'Call History',
+                    subtitle: 'Past chat, audio & video consultations',
+                    color: const Color(0xFF4A90D9),
+                    onTap: () => context.push('/portal/consultation-history')),
                 const SizedBox(height: 8),
                 _SettingsTile(
                     icon: Icons.notifications_outlined,
@@ -2166,6 +2199,7 @@ class _ConsultationCard extends StatelessWidget {
   @override
   Widget build(BuildContext ctx) {
     final status = consultation['status'] ?? 'pending';
+    final sessionStarted = consultation['session_status'] == 'started';
     final type = consultation['consultation_type'] ?? 'Consultation';
     final date = consultation['consultation_date'] ?? '';
     final time = consultation['consultation_time'] ?? '';
@@ -2175,7 +2209,7 @@ class _ConsultationCard extends StatelessWidget {
 
     final Color color = status == 'confirmed'
         ? const Color(0xFF2E8B57)
-        : (status == 'cancelled' || status == 'rejected')
+        : (status == 'cancelled' || status == 'rejected' || status == 'expired')
             ? const Color(0xFFD9534F)
             : status == 'completed'
                 ? const Color(0xFF4A90D9)
@@ -2341,6 +2375,33 @@ class _ConsultationCard extends StatelessWidget {
                 ),
               ],
 
+              // The lawyer never started the session within the booking
+              // window — the backend's ConsultationSweeper marks this
+              // automatically using server time, not the device clock.
+              if (status == 'expired') ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFD9534F).withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFFD9534F).withValues(alpha: 0.2))),
+                  child: const Row(children: [
+                    Icon(Icons.timer_off_outlined,
+                        color: Color(0xFFD9534F), size: 16),
+                    SizedBox(width: 8),
+                    Expanded(
+                        child: Text(
+                            '⏱ This booking expired — the lawyer did not start it in time.',
+                            style: TextStyle(
+                                color: Color(0xFFD9534F),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12))),
+                  ]),
+                ),
+              ],
+
               // Lawyer notes
               if (notes.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -2388,10 +2449,16 @@ class _ConsultationCard extends StatelessWidget {
               ],
 
               // Action buttons
+              //
+              // The client never initiates chat/audio/video — only the lawyer
+              // can (see InitiateConsultationCall, which now rejects a client
+              // outright). Until session_status is 'started', the only thing
+              // shown here is a waiting state; there is no "Call"/"Chat"
+              // button to tap even when the booking itself is confirmed.
               if (status == 'confirmed' || status == 'pending') ...[
                 const SizedBox(height: 12),
                 Row(children: [
-                  if (status == 'confirmed')
+                  if (status == 'confirmed' && sessionStarted)
                     Expanded(
                         child: _ConsultationActionButton(
                       icon: isOfficeVisit
@@ -2404,10 +2471,10 @@ class _ConsultationCard extends StatelessWidget {
                       label: isOfficeVisit
                           ? 'View Office Details'
                           : action == 'video'
-                              ? 'Video Call with Lawyer'
+                              ? 'Join Video Call'
                               : action == 'audio'
-                                  ? 'Call Lawyer'
-                                  : 'Chat with Lawyer',
+                                  ? 'Join Call'
+                                  : 'Open Chat',
                       onTap: () {
                         HapticFeedback.heavyImpact();
                         if (isOfficeVisit) {
@@ -2430,14 +2497,17 @@ class _ConsultationCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                               color: const Color(0xFFD4A017).withValues(alpha: 0.3))),
-                      child: const Row(
+                      child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.hourglass_empty_rounded,
+                            const Icon(Icons.hourglass_empty_rounded,
                                 color: Color(0xFFD4A017), size: 16),
-                            SizedBox(width: 6),
-                            Text('Awaiting Confirmation',
-                                style: TextStyle(
+                            const SizedBox(width: 6),
+                            Text(
+                                status == 'pending'
+                                    ? 'Awaiting Confirmation'
+                                    : 'Waiting for Lawyer to Start',
+                                style: const TextStyle(
                                     color: Color(0xFFD4A017),
                                     fontWeight: FontWeight.w700,
                                     fontSize: 12)),

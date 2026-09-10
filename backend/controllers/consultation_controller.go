@@ -13,7 +13,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
+
+// isSlotTaken reports whether err is the uq_consultations_active_slot unique
+// violation (see migration 024) — i.e. someone else's booking already holds
+// this exact lawyer+date+time. Centralized so every insert path that can hit
+// it reports the same clear message instead of a raw constraint error.
+func isSlotTaken(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505" &&
+		pqErr.Constraint == "uq_consultations_active_slot"
+}
 
 // consultationCallType maps whatever the booking screen stored in
 // consultation_type ("Audio Call", "Video Call", "Chat", "audio_call", ...)
@@ -73,6 +84,12 @@ func BookConsultation(c *gin.Context) {
 		req.ConsultationDate, req.ConsultationTime, req.Notes)
 
 	if err != nil {
+		if isSlotTaken(err) {
+			utils.Error(c, http.StatusConflict,
+				"This slot has just been booked by someone else. Please choose another time.",
+				"active booking already exists for this lawyer/date/time")
+			return
+		}
 		utils.Error(c, http.StatusInternalServerError, "Failed to book consultation", err.Error())
 		return
 	}
@@ -85,6 +102,46 @@ func BookConsultation(c *gin.Context) {
 		"status":            "pending",
 		"lawyer_name":       lawyerName,
 	})
+}
+
+// GetLawyerBookedSlots - the client's slot picker calls this before showing
+// available times, so a slot another client already holds (or that this
+// same client already holds) shows as taken instead of only being caught
+// after they try to pay for it. The real enforcement is still the database
+// constraint in confirmConsultationPayment/BookConsultation (see
+// uq_consultations_active_slot) — this is purely so the UI doesn't offer a
+// slot it already knows is gone.
+func GetLawyerBookedSlots(c *gin.Context) {
+	lawyerID := c.Param("id")
+	if !isUUID(lawyerID) {
+		utils.Error(c, http.StatusBadRequest, "Invalid id", "not a uuid")
+		return
+	}
+	date := c.Query("date")
+	if date == "" {
+		utils.Error(c, http.StatusBadRequest, "date is required", "expected ?date=YYYY-MM-DD")
+		return
+	}
+
+	rows, err := config.DB.Query(`
+		SELECT consultation_time FROM consultations
+		WHERE lawyer_id = $1::uuid AND consultation_date = $2::date
+		  AND status NOT IN ('rejected', 'cancelled')
+	`, lawyerID, date)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to fetch booked slots", err.Error())
+		return
+	}
+	defer rows.Close()
+
+	slots := []string{}
+	for rows.Next() {
+		var t string
+		if rows.Scan(&t) == nil {
+			slots = append(slots, t)
+		}
+	}
+	utils.Success(c, http.StatusOK, "Booked slots fetched", gin.H{"booked_times": slots})
 }
 
 // consultationPricePaise is the single place a consultation's price is
@@ -190,6 +247,12 @@ func CreateConsultationCheckout(c *gin.Context) {
 				'pending', $8, NOW())
 		`, consultationID, userID, lawyerID, consultType, consultDate, consultTime,
 			req.Notes, consultationPricePaise(lawyerID, consultType)); err != nil {
+			if isSlotTaken(err) {
+				utils.Error(c, http.StatusConflict,
+					"This slot has just been booked by someone else. Please choose another time.",
+					"active booking already exists for this lawyer/date/time")
+				return
+			}
 			utils.Error(c, http.StatusInternalServerError, "Failed to start booking", err.Error())
 			return
 		}
@@ -440,6 +503,7 @@ func GetMyConsultations(c *gin.Context) {
 			COALESCE(u.phone,'') as lawyer_phone,
 			con.payment_status, COALESCE(con.amount_paise,0),
 			COALESCE(con.call_duration_seconds,0),
+			con.session_started_at, con.session_ended_at,
 			con.created_at
 		FROM consultations con
 		LEFT JOIN users u ON con.lawyer_id = u.id
@@ -454,34 +518,44 @@ func GetMyConsultations(c *gin.Context) {
 	defer rows.Close()
 
 	type Consultation struct {
-		ID                  string    `json:"id"`
-		ConsultationType    string    `json:"consultation_type"`
-		ConsultationDate    string    `json:"consultation_date"`
-		ConsultationTime    string    `json:"consultation_time"`
-		Status              string    `json:"status"`
-		SessionStatus       string    `json:"session_status"`
-		Notes               string    `json:"notes"`
-		LawyerNotes         string    `json:"lawyer_notes"`
-		MeetingLink         string    `json:"meeting_link"`
-		LawyerID            string    `json:"lawyer_id"`
-		LawyerName          string    `json:"lawyer_name"`
-		LawyerPhone         string    `json:"lawyer_phone"`
-		PaymentStatus       string    `json:"payment_status"`
-		AmountPaise         int64     `json:"amount_paise"`
-		CallDurationSeconds int       `json:"call_duration_seconds"`
-		CreatedAt           time.Time `json:"created_at"`
+		ID                  string     `json:"id"`
+		ConsultationType    string     `json:"consultation_type"`
+		ConsultationDate    string     `json:"consultation_date"`
+		ConsultationTime    string     `json:"consultation_time"`
+		Status              string     `json:"status"`
+		SessionStatus       string     `json:"session_status"`
+		Notes               string     `json:"notes"`
+		LawyerNotes         string     `json:"lawyer_notes"`
+		MeetingLink         string     `json:"meeting_link"`
+		LawyerID            string     `json:"lawyer_id"`
+		LawyerName          string     `json:"lawyer_name"`
+		LawyerPhone         string     `json:"lawyer_phone"`
+		PaymentStatus       string     `json:"payment_status"`
+		AmountPaise         int64      `json:"amount_paise"`
+		CallDurationSeconds int        `json:"call_duration_seconds"`
+		SessionStartedAt    *time.Time `json:"session_started_at"`
+		SessionEndedAt      *time.Time `json:"session_ended_at"`
+		CreatedAt           time.Time  `json:"created_at"`
 	}
 
 	consultations := []Consultation{}
 	for rows.Next() {
 		var con Consultation
+		var startedAt, endedAt sql.NullTime
 		rows.Scan(
 			&con.ID, &con.ConsultationType, &con.ConsultationDate,
 			&con.ConsultationTime, &con.Status, &con.SessionStatus, &con.Notes,
 			&con.LawyerNotes, &con.MeetingLink, &con.LawyerID,
 			&con.LawyerName, &con.LawyerPhone,
-			&con.PaymentStatus, &con.AmountPaise, &con.CallDurationSeconds, &con.CreatedAt,
+			&con.PaymentStatus, &con.AmountPaise, &con.CallDurationSeconds,
+			&startedAt, &endedAt, &con.CreatedAt,
 		)
+		if startedAt.Valid {
+			con.SessionStartedAt = &startedAt.Time
+		}
+		if endedAt.Valid {
+			con.SessionEndedAt = &endedAt.Time
+		}
 		consultations = append(consultations, con)
 	}
 
@@ -507,6 +581,7 @@ func GetLawyerConsultations(c *gin.Context) {
 			COALESCE(u.phone,'') as client_phone,
 			con.payment_status, COALESCE(con.amount_paise,0),
 			COALESCE(con.call_duration_seconds,0),
+			con.session_started_at, con.session_ended_at,
 			con.created_at
 		FROM consultations con
 		LEFT JOIN users u ON con.client_id = u.id
@@ -527,34 +602,44 @@ func GetLawyerConsultations(c *gin.Context) {
 	defer rows.Close()
 
 	type Consultation struct {
-		ID                  string    `json:"id"`
-		ConsultationType    string    `json:"consultation_type"`
-		ConsultationDate    string    `json:"consultation_date"`
-		ConsultationTime    string    `json:"consultation_time"`
-		Status              string    `json:"status"`
-		SessionStatus       string    `json:"session_status"`
-		Notes               string    `json:"notes"`
-		LawyerNotes         string    `json:"lawyer_notes"`
-		MeetingLink         string    `json:"meeting_link"`
-		ClientName          string    `json:"client_name"`
-		ClientEmail         string    `json:"client_email"`
-		ClientPhone         string    `json:"client_phone"`
-		PaymentStatus       string    `json:"payment_status"`
-		AmountPaise         int64     `json:"amount_paise"`
-		CallDurationSeconds int       `json:"call_duration_seconds"`
-		CreatedAt           time.Time `json:"created_at"`
+		ID                  string     `json:"id"`
+		ConsultationType    string     `json:"consultation_type"`
+		ConsultationDate    string     `json:"consultation_date"`
+		ConsultationTime    string     `json:"consultation_time"`
+		Status              string     `json:"status"`
+		SessionStatus       string     `json:"session_status"`
+		Notes               string     `json:"notes"`
+		LawyerNotes         string     `json:"lawyer_notes"`
+		MeetingLink         string     `json:"meeting_link"`
+		ClientName          string     `json:"client_name"`
+		ClientEmail         string     `json:"client_email"`
+		ClientPhone         string     `json:"client_phone"`
+		PaymentStatus       string     `json:"payment_status"`
+		AmountPaise         int64      `json:"amount_paise"`
+		CallDurationSeconds int        `json:"call_duration_seconds"`
+		SessionStartedAt    *time.Time `json:"session_started_at"`
+		SessionEndedAt      *time.Time `json:"session_ended_at"`
+		CreatedAt           time.Time  `json:"created_at"`
 	}
 
 	consultations := []Consultation{}
 	for rows.Next() {
 		var con Consultation
+		var startedAt, endedAt sql.NullTime
 		rows.Scan(
 			&con.ID, &con.ConsultationType, &con.ConsultationDate,
 			&con.ConsultationTime, &con.Status, &con.SessionStatus, &con.Notes,
 			&con.LawyerNotes, &con.MeetingLink,
 			&con.ClientName, &con.ClientEmail, &con.ClientPhone,
-			&con.PaymentStatus, &con.AmountPaise, &con.CallDurationSeconds, &con.CreatedAt,
+			&con.PaymentStatus, &con.AmountPaise, &con.CallDurationSeconds,
+			&startedAt, &endedAt, &con.CreatedAt,
 		)
+		if startedAt.Valid {
+			con.SessionStartedAt = &startedAt.Time
+		}
+		if endedAt.Valid {
+			con.SessionEndedAt = &endedAt.Time
+		}
 		consultations = append(consultations, con)
 	}
 
@@ -926,7 +1011,7 @@ func InitiateConsultationCall(c *gin.Context) {
 	}
 
 	res, err := config.DB.Exec(`
-		UPDATE consultations SET session_status='started', updated_at=NOW()
+		UPDATE consultations SET session_status='started', session_started_at=NOW(), updated_at=NOW()
 		WHERE id=$1::uuid AND lawyer_id=$2::uuid AND status='confirmed' AND session_status != 'started'
 	`, id, userID)
 	if err != nil {
@@ -1105,8 +1190,9 @@ func SaveCallDuration(c *gin.Context) {
 	res, err := config.DB.Exec(`
 		UPDATE consultations SET
 		  call_duration_seconds = call_duration_seconds + $1,
-		  status         = CASE WHEN status = 'confirmed' THEN 'completed' ELSE status END,
-		  session_status = CASE WHEN status = 'confirmed' THEN 'ended' ELSE session_status END,
+		  status             = CASE WHEN status = 'confirmed' THEN 'completed' ELSE status END,
+		  session_status     = CASE WHEN status = 'confirmed' THEN 'ended' ELSE session_status END,
+		  session_ended_at   = CASE WHEN status = 'confirmed' THEN NOW() ELSE session_ended_at END,
 		  updated_at = NOW()
 		WHERE id=$2::uuid AND (lawyer_id=$3::uuid OR client_id=$3::uuid)
 	`, req.DurationSeconds, id, userID)
@@ -1153,7 +1239,7 @@ func CancelConsultation(c *gin.Context) {
 
 func validConsultationStatus(s string) bool {
 	switch s {
-	case "pending", "confirmed", "rejected", "completed", "cancelled":
+	case "pending", "confirmed", "rejected", "completed", "cancelled", "expired":
 		return true
 	}
 	return false

@@ -147,12 +147,15 @@ func SetupRoutes() *gin.Engine {
 			// there is exactly one path to an actual confirmed, paid booking.
 			portal.POST("/book-consultation/checkout", controllers.CreateConsultationCheckout)
 			portal.POST("/book-consultation/verify", controllers.VerifyConsultationPayment)
+			portal.GET("/lawyers/:id/booked-slots", controllers.GetLawyerBookedSlots)
 			portal.GET("/my-consultations", controllers.GetMyConsultations)
 			portal.GET("/my-consultations/:id", controllers.GetConsultation)
 			portal.PUT("/my-consultations/:id/cancel", controllers.CancelConsultation)
 			portal.POST("/my-consultations/:id/call-response", controllers.RespondToConsultationCall)
-			// Symmetric to the lawyer-side /consultations/:id/call below — a
-			// client can ring their lawyer the same way.
+			// Same handler as the lawyer-side /consultations/:id/call below —
+			// InitiateConsultationCall itself now only accepts the assigned
+			// lawyer as caller, so a client hitting this route gets a 403
+			// rather than being able to start the session themselves.
 			portal.POST("/my-consultations/:id/call", controllers.InitiateConsultationCall)
 		}
 

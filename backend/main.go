@@ -51,6 +51,9 @@ func main() {
 	sweeperCtx, stopSweeper := context.WithCancel(context.Background())
 	defer stopSweeper()
 	services.NewSubscriptionSweeper(config.DB, 7*24*time.Hour).Start(sweeperCtx)
+	// A lawyer has 30 minutes past a confirmed slot's scheduled time to
+	// start the session before it's automatically marked expired.
+	services.NewConsultationSweeper(config.DB, 30*time.Minute).Start(sweeperCtx)
 
 	r := routes.SetupRoutes()
 

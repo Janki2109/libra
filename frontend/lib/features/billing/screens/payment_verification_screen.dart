@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/utils/file_opener.dart';
 
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
@@ -56,6 +58,43 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen>
       });
     } catch (e) {
       setState(() => _loading = false);
+    }
+  }
+
+  /// Opens the client's uploaded payment-proof image/document. The client
+  /// side now uploads a real file (a data: URI, same inline-storage trick
+  /// avatar_url/documents already use) instead of pasting a URL, so this can
+  /// no longer assume it's a link to launch — that's also why this row used
+  /// to do nothing at all when tapped.
+  Future<void> _viewPaymentSlip(String slipUrl) async {
+    if (!slipUrl.startsWith('data:')) {
+      // A URL entered before this fix, or by an older client build — still
+      // worth trying to open externally rather than failing silently.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('This proof was submitted as a link; opening links '
+              'from here is not supported — ask the client to re-upload.'),
+          backgroundColor: Color(0xFFD9534F)));
+      return;
+    }
+    try {
+      final commaIndex = slipUrl.indexOf(',');
+      final header = slipUrl.substring(5, commaIndex); // after "data:"
+      final mimeType = header.split(';').first;
+      final bytes = base64Decode(slipUrl.substring(commaIndex + 1));
+      final ext = mimeType.contains('pdf') ? 'pdf' : 'jpg';
+      final result = await openDocumentBytes(
+          bytes: bytes, fileName: 'payment_proof.$ext', mimeType: mimeType);
+      if (!result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message ?? 'Could not open payment proof.'),
+            backgroundColor: const Color(0xFFD9534F)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not open payment proof.'),
+            backgroundColor: Color(0xFFD9534F)));
+      }
     }
   }
 
@@ -400,8 +439,11 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen>
                         txnId.isNotEmpty ? _textPri : const Color(0xFFD9534F)),
                     if (slipUrl.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      _InfoRow('Payment Slip', 'View slip →',
-                          const Color(0xFF4A90D9)),
+                      GestureDetector(
+                        onTap: () => _viewPaymentSlip(slipUrl),
+                        child: _InfoRow('Payment Slip', 'View slip →',
+                            const Color(0xFF4A90D9)),
+                      ),
                     ],
                     const SizedBox(height: 14),
                     Row(children: [

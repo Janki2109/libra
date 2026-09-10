@@ -39,6 +39,8 @@ func TestAllMigrationsAreEmbedded(t *testing.T) {
 		"021_user_presence.sql",
 		"022_chat_attachments.sql",
 		"023_consultation_session_status.sql",
+		"024_consultation_slot_lock.sql",
+		"025_consultation_session_timestamps.sql",
 	}
 
 	if len(names) != len(want) {

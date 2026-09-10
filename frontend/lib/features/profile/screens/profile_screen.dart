@@ -200,7 +200,15 @@ class ProfileScreen extends StatelessWidget {
                   label: 'Notifications',
                   subtitle: 'Manage alerts & reminders',
                   color: _gold,
-                  onTap: () => context.push('/notifications'),
+                  // The actual toggles ("manage alerts") this promises live in
+                  // SettingsScreen's App Preferences section (push
+                  // notifications + haptics, both persisted and backed by a
+                  // real FCM token register/unregister) — this used to open
+                  // the notification feed instead, which has nothing to
+                  // "manage". The feed is still reachable from the dashboard's
+                  // own bell icon, so nothing is removed by pointing this at
+                  // the settings screen instead.
+                  onTap: () => context.push('/settings'),
                 ),
                 const SizedBox(height: 22),
 
@@ -220,7 +228,7 @@ class ProfileScreen extends StatelessWidget {
                   label: 'Help Center',
                   subtitle: 'Get support & guidance',
                   color: const Color(0xFF2E8B57),
-                  onTap: () {},
+                  onTap: () => _showHelpCenter(context),
                 ),
                 const SizedBox(height: 8),
                 _SettingTile(
@@ -322,6 +330,88 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ],
             ));
+  }
+
+  /// A real, self-contained FAQ — this used to be a completely dead button
+  /// (`onTap: () {}`). No support email/phone is invented here: the app has
+  /// none configured anywhere, and showing a fake one would be worse than
+  /// this. Every answer below describes a feature that actually exists
+  /// elsewhere in this app (Add Client, Consultations, Smart Draft, etc.).
+  void _showHelpCenter(BuildContext context) {
+    final faqs = <(String, String)>[
+      (
+        'How do I add a new client?',
+        'Go to Dashboard → Quick Actions → Add Client, or Clients → the + button.',
+      ),
+      (
+        'How do I start a chat, audio or video consultation?',
+        'Open My Bookings from the Dashboard, find the accepted booking, and '
+            'tap Start Chat / Start Call / Start Video Call. The client is '
+            'notified and can join once you start it.',
+      ),
+      (
+        'Where can I see my past consultations and call durations?',
+        'My Bookings has a History tab showing every completed, rejected and '
+            'cancelled consultation with the client\'s name, date and call '
+            'duration.',
+      ),
+      (
+        'How do I change my password?',
+        'Profile → Change Password.',
+      ),
+      (
+        'How do I turn notifications on or off?',
+        'Profile → Notifications, under App Preferences.',
+      ),
+      (
+        'How do I generate a legal draft or PDF?',
+        'Profile → More Tools → Smart Draft, then use the Word/PDF export '
+            'buttons once your draft is ready.',
+      ),
+    ];
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: _bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(children: [
+          Icon(Icons.help_outline_rounded, color: Color(0xFF2E8B57), size: 22),
+          SizedBox(width: 8),
+          Text('Help Center',
+              style: TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
+        ]),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (question, answer) in faqs) ...[
+                  Text(question,
+                      style: const TextStyle(
+                          color: _textPri,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5)),
+                  const SizedBox(height: 4),
+                  Text(answer,
+                      style: const TextStyle(
+                          color: _textMuted, fontSize: 12.5, height: 1.4)),
+                  const SizedBox(height: 14),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close',
+                style: TextStyle(color: _textMuted, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAbout(BuildContext context) {

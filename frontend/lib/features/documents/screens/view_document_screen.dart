@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/utils/file_opener.dart';
+import '../../lawyer/utils/android_download.dart';
 
 class ViewDocumentScreen extends StatefulWidget {
   final String documentId;
@@ -19,6 +20,7 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
   bool _loading = true;
   String? _loadError;
   bool _opening = false;
+  bool _downloading = false;
 
   @override
   void initState() {
@@ -83,6 +85,45 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
     if (!result.success) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(result.message ?? 'Could not open this file.'),
+          backgroundColor: AppColors.error));
+    }
+  }
+
+  /// Saves straight to the device's Downloads folder on Android (same
+  /// mechanism Smart Draft's exports and the client portal's document
+  /// download already use); elsewhere falls back to the OS viewer/share
+  /// sheet, same as _open, since there's no bare Downloads folder to write
+  /// to on iOS/desktop/web.
+  Future<void> _download() async {
+    final bytes = _bytes;
+    if (bytes == null || bytes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('This document has no content to download.'),
+          backgroundColor: AppColors.error));
+      return;
+    }
+    setState(() => _downloading = true);
+    final fileName = (_doc?['file_name'] ?? 'document').toString();
+    final mimeType = (_doc?['mime_type'] ?? '').toString().isNotEmpty
+        ? _doc!['mime_type'].toString()
+        : 'application/octet-stream';
+
+    if (await saveToAndroidDownloads(bytes, fileName, mimeType)) {
+      if (!mounted) return;
+      setState(() => _downloading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$fileName saved to Downloads'),
+          backgroundColor: const Color(0xFF2E8B57)));
+      return;
+    }
+
+    final result = await openDocumentBytes(
+        bytes: bytes, fileName: fileName, mimeType: mimeType);
+    if (!mounted) return;
+    setState(() => _downloading = false);
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result.message ?? 'Could not download this file.'),
           backgroundColor: AppColors.error));
     }
   }
@@ -247,34 +288,63 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
                         ),
                         const SizedBox(height: 20),
                         if (_bytes != null)
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _opening ? null : _open,
-                              icon: _opening
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppColors.primary))
-                                  : const Icon(Icons.open_in_new_rounded,
-                                      color: AppColors.primary, size: 20),
-                              label: Text(
-                                  _opening ? 'Opening...' : 'Open Document',
-                                  style: const TextStyle(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.gold,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
+                          Row(children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _opening ? null : _open,
+                                icon: _opening
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppColors.primary))
+                                    : const Icon(Icons.open_in_new_rounded,
+                                        color: AppColors.primary, size: 20),
+                                label: Text(
+                                    _opening ? 'Opening...' : 'Open Document',
+                                    style: const TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.gold,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _downloading ? null : _download,
+                                icon: _downloading
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppColors.gold))
+                                    : const Icon(Icons.download_rounded,
+                                        color: AppColors.gold, size: 20),
+                                label: Text(
+                                    _downloading ? 'Saving...' : 'Download',
+                                    style: const TextStyle(
+                                        color: AppColors.gold,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15)),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppColors.gold),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ),
+                          ]),
                       ]),
                     ),
     );

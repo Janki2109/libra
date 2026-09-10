@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/services/dio_client.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../billing/screens/subscription_checkout_screen.dart' show CheckoutOutcome;
 import '../repositories/consultation_repository.dart';
@@ -42,6 +44,68 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
   // reported cancellation/failure). Never treated as a failure: money was
   // already taken, so the UI must not invite a second charge.
   bool _stillConfirming = false;
+
+  // The lawyer's profile photo — this screen previously showed only the name
+  // everywhere (header and the final confirmation summary), with no visual
+  // confirmation of which lawyer this booking/payment is actually for.
+  // /student/lawyer/:id is the existing lawyer-directory detail endpoint
+  // (already reachable by a client — find_lawyer_screen.dart uses the list
+  // form of the same route), so this reuses it rather than adding a new one.
+  String _avatarUrl = '';
+
+  // Which of this lawyer's slots on the selected date are already held by an
+  // active booking (theirs or someone else's) — refetched every time the
+  // date changes so the picker reflects reality instead of only finding out
+  // a slot is gone when payment is attempted. The database is still the real
+  // enforcement (see uq_consultations_active_slot / 409 handling in
+  // _payAndConfirm's catch below); this is purely so the UI doesn't offer a
+  // slot it already knows is taken.
+  Set<String> _bookedTimes = {};
+  bool _loadingSlots = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLawyerPhoto();
+  }
+
+  Future<void> _loadBookedSlots(DateTime date) async {
+    setState(() => _loadingSlots = true);
+    try {
+      final iso = date.toIso8601String().substring(0, 10);
+      final res = await DioClient.instance
+          .get('/portal/lawyers/${widget.lawyerId}/booked-slots',
+              queryParameters: {'date': iso});
+      final times = (res.data['data']?['booked_times'] as List?) ?? [];
+      if (!mounted) return;
+      setState(() {
+        _bookedTimes = times.map((t) => t.toString()).toSet();
+        _loadingSlots = false;
+        // The previously selected time may have just become unavailable on
+        // this date (or a different date was picked) — don't leave a now-
+        // taken slot silently selected.
+        if (_bookedTimes.contains(_selectedTime)) _selectedTime = '';
+      });
+    } catch (_) {
+      // Best-effort — the real enforcement is server-side at payment time
+      // regardless, so a failed fetch here just means the picker doesn't
+      // pre-emptively grey anything out.
+      if (mounted) setState(() => _loadingSlots = false);
+    }
+  }
+
+  Future<void> _loadLawyerPhoto() async {
+    try {
+      final res =
+          await DioClient.instance.get('/student/lawyer/${widget.lawyerId}');
+      final url =
+          (res.data['data']?['lawyer']?['avatar_url'] ?? '').toString();
+      if (mounted && url.isNotEmpty) setState(() => _avatarUrl = url);
+    } catch (_) {
+      // No photo shown is a fine fallback — this is a nice-to-have, not
+      // something that should block or error the booking flow.
+    }
+  }
 
   final List<Map<String, dynamic>> _consultTypes = [
     {
@@ -347,7 +411,10 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
                           style: const TextStyle(
                               color: Colors.white70, fontSize: 12)),
                     ])),
-                    const SizedBox(width: 48),
+                    _LawyerAvatar(
+                        avatarUrl: _avatarUrl,
+                        name: widget.lawyerName,
+                        size: 36),
                   ]),
                 ),
                 // Step indicator
@@ -566,6 +633,7 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
                 onTap: () {
                   HapticFeedback.lightImpact();
                   setState(() => _selectedDate = date);
+                  _loadBookedSlots(date);
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -602,35 +670,68 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
       const SizedBox(height: 20),
 
       // Time slots
-      const Text('Time',
-          style: TextStyle(
-              color: _textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+      Row(children: [
+        const Text('Time',
+            style: TextStyle(
+                color: _textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+        if (_loadingSlots) ...[
+          const SizedBox(width: 8),
+          const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 1.6, color: _green)),
+        ],
+      ]),
       const SizedBox(height: 8),
       Wrap(
           spacing: 8,
           runSpacing: 8,
           children: _timeSlots.map((time) {
             final sel = _selectedTime == time;
+            final booked = _bookedTimes.contains(time);
             return GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                setState(() => _selectedTime = time);
-              },
+              onTap: booked
+                  ? null
+                  : () {
+                      HapticFeedback.lightImpact();
+                      setState(() => _selectedTime = time);
+                    },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: sel ? _green : _bgCard,
+                  color: booked
+                      ? _border.withValues(alpha: 0.4)
+                      : sel
+                          ? _green
+                          : _bgCard,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: sel ? _green : _border, width: sel ? 2 : 0.8),
+                      color: booked ? _border : (sel ? _green : _border),
+                      width: sel && !booked ? 2 : 0.8),
                 ),
-                child: Text(time,
-                    style: TextStyle(
-                        color: sel ? Colors.white : _textPri,
-                        fontSize: 12,
-                        fontWeight: sel ? FontWeight.w700 : FontWeight.w400)),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(time,
+                      style: TextStyle(
+                          color: booked
+                              ? _textMuted
+                              : sel
+                                  ? Colors.white
+                                  : _textPri,
+                          fontSize: 12,
+                          decoration: booked
+                              ? TextDecoration.lineThrough
+                              : TextDecoration.none,
+                          fontWeight:
+                              sel && !booked ? FontWeight.w700 : FontWeight.w400)),
+                  if (booked)
+                    const Text('Booked',
+                        style: TextStyle(
+                            color: _textMuted,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700)),
+                ]),
               ),
             );
           }).toList()),
@@ -676,6 +777,20 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
                       offset: const Offset(0, 3))
                 ]),
             child: Column(children: [
+              Row(children: [
+                _LawyerAvatar(
+                    avatarUrl: _avatarUrl, name: widget.lawyerName, size: 44),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Text(widget.lawyerName,
+                        style: const TextStyle(
+                            color: _textPri,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis)),
+              ]),
+              Divider(color: _border, height: 20, thickness: 0.6),
               _ConfirmRow('Lawyer', widget.lawyerName, Icons.person_rounded),
               Divider(color: _border, height: 20, thickness: 0.6),
               _ConfirmRow('Type', _selectedType, Icons.category_rounded),
@@ -770,6 +885,51 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
               ])),
         ],
       ]);
+}
+
+/// Shows the lawyer's uploaded profile photo (same avatar_url/data-URI format
+/// used everywhere else this app renders one — profile_screen.dart,
+/// find_lawyer_screen.dart, dashboard_screen.dart), falling back to an
+/// initial in a circle when there is none, exactly like those screens do.
+class _LawyerAvatar extends StatelessWidget {
+  final String avatarUrl;
+  final String name;
+  final double size;
+  const _LawyerAvatar(
+      {required this.avatarUrl, required this.name, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'L';
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _green.withValues(alpha: 0.12),
+        border: Border.all(color: Colors.white, width: 1.5),
+      ),
+      child: ClipOval(
+        child: avatarUrl.isNotEmpty
+            ? Image.memory(
+                base64Decode(
+                    avatarUrl.replaceFirst(RegExp(r'^data:image/\w+;base64,'), '')),
+                fit: BoxFit.cover,
+                width: size,
+                height: size,
+                errorBuilder: (_, __, ___) => _initialText(initial),
+              )
+            : _initialText(initial),
+      ),
+    );
+  }
+
+  Widget _initialText(String initial) => Center(
+      child: Text(initial,
+          style: TextStyle(
+              color: _green,
+              fontWeight: FontWeight.w800,
+              fontSize: size * 0.4)));
 }
 
 class _ConfirmRow extends StatelessWidget {

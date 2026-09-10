@@ -43,12 +43,25 @@ bool _isStartingSoon(String isoDate, String timeLabel) {
   }
 }
 
-/// 125 -> "2m 5s". Call duration was recorded (migration
-/// 018_consultation_call_duration.sql) but never surfaced anywhere in the UI.
+/// 125 -> "02 min 05 sec". Zero-padded minutes/seconds, computed from the
+/// actual accumulated call_duration_seconds — never a fake/default value.
 String _formatCallDuration(int seconds) {
   final m = seconds ~/ 60;
   final s = seconds % 60;
-  return m > 0 ? '${m}m ${s}s' : '${s}s';
+  return '${m.toString().padLeft(2, '0')} min ${s.toString().padLeft(2, '0')} sec';
+}
+
+/// The real wall-clock time a session started/ended (session_started_at /
+/// session_ended_at, set by InitiateConsultationCall and SaveCallDuration
+/// respectively) — distinct from the booked appointment time, and only
+/// present once the session actually ran.
+String _formatSessionTime(String? isoTimestamp) {
+  if (isoTimestamp == null || isoTimestamp.isEmpty) return '—';
+  try {
+    return DateFormat('d MMM, h:mm a').format(DateTime.parse(isoTimestamp).toLocal());
+  } catch (_) {
+    return '—';
+  }
 }
 
 /// The booking/request date — when the client actually made the request
@@ -122,7 +135,8 @@ class _ConsultationManagementScreenState
       .where((c) =>
           c['status'] == 'completed' ||
           c['status'] == 'cancelled' ||
-          c['status'] == 'rejected')
+          c['status'] == 'rejected' ||
+          c['status'] == 'expired')
       .toList();
 
   Future<void> _updateConsultation(dynamic c, String status,
@@ -466,7 +480,7 @@ class _ConsultationManagementScreenState
           final status = c['status'] ?? 'pending';
           final color = status == 'confirmed'
               ? _green
-              : (status == 'cancelled' || status == 'rejected')
+              : (status == 'cancelled' || status == 'rejected' || status == 'expired')
                   ? _red
                   : status == 'completed'
                       ? _blue
@@ -622,7 +636,7 @@ class _ConsultationManagementScreenState
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700)),
                                   ]),
-                                if (((c['call_duration_seconds'] ?? 0) as num) > 0)
+                                if (((c['call_duration_seconds'] ?? 0) as num) > 0) ...[
                                   Row(mainAxisSize: MainAxisSize.min, children: [
                                     const Icon(Icons.timer_outlined,
                                         color: _blue, size: 13),
@@ -636,6 +650,17 @@ class _ConsultationManagementScreenState
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700)),
                                   ]),
+                                  if (c['session_started_at'] != null)
+                                    Text(
+                                        'Started ${_formatSessionTime(c['session_started_at']?.toString())}',
+                                        style: const TextStyle(
+                                            color: _textMuted, fontSize: 11)),
+                                  if (c['session_ended_at'] != null)
+                                    Text(
+                                        'Ended ${_formatSessionTime(c['session_ended_at']?.toString())}',
+                                        style: const TextStyle(
+                                            color: _textMuted, fontSize: 11)),
+                                ],
                                 if (startingSoon)
                                   Container(
                                     padding: const EdgeInsets.symmetric(

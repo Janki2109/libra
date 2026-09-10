@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -34,7 +36,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _bankName = '';
   double _subtotal = 0, _gstRate = 18, _gstAmount = 0, _platformFee = 100;
   final _transactionIdCtrl = TextEditingController();
-  final _slipUrlCtrl = TextEditingController();
+
+  // Payment proof — a real uploaded file, not a pasted URL. Encoded the same
+  // way documents/avatars already are (a data: URI in payment_slip_url,
+  // still a plain TEXT column — no schema change needed) rather than typed
+  // in by hand.
+  Uint8List? _proofBytes;
+  String _proofFileName = '';
+  String _proofMimeType = '';
+  bool _pickingProof = false;
 
   @override
   void initState() {
@@ -45,8 +55,64 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   void dispose() {
     _transactionIdCtrl.dispose();
-    _slipUrlCtrl.dispose();
     super.dispose();
+  }
+
+  static const Map<String, String> _proofExtToMime = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'webp': 'image/webp',
+    'pdf': 'application/pdf',
+  };
+
+  Future<void> _pickPaymentProof(void Function(void Function()) setDialogState) async {
+    setDialogState(() => _pickingProof = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+        withData: true,
+      );
+      final file = result?.files.single;
+      if (file?.bytes == null) {
+        setDialogState(() => _pickingProof = false);
+        return;
+      }
+      final ext = (file!.extension ?? '').toLowerCase();
+      final mime = _proofExtToMime[ext];
+      if (mime == null) {
+        setDialogState(() => _pickingProof = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Please choose an image or PDF file.'),
+              backgroundColor: Color(0xFFD9534F)));
+        }
+        return;
+      }
+      if (file.bytes!.length > 6 * 1024 * 1024) {
+        setDialogState(() => _pickingProof = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('File is too large — please pick one under 6MB.'),
+              backgroundColor: Color(0xFFD9534F)));
+        }
+        return;
+      }
+      setDialogState(() {
+        _proofBytes = file.bytes;
+        _proofFileName = file.name;
+        _proofMimeType = mime;
+        _pickingProof = false;
+      });
+    } catch (_) {
+      setDialogState(() => _pickingProof = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not access the file picker.'),
+            backgroundColor: Color(0xFFD9534F)));
+      }
+    }
   }
 
   Future<void> _loadInvoiceDetails() async {
@@ -106,7 +172,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   void _showPaymentProofDialog(String method) {
     _transactionIdCtrl.clear();
-    _slipUrlCtrl.clear();
+    setState(() {
+      _proofBytes = null;
+      _proofFileName = '';
+      _proofMimeType = '';
+    });
     showDialog(
         context: context,
         barrierDismissible: false,
@@ -139,8 +209,62 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   _inputField(_transactionIdCtrl,
                       'Transaction ID / UTR Number *', Icons.tag_rounded),
                   const SizedBox(height: 10),
-                  _inputField(_slipUrlCtrl, 'Screenshot URL (optional)',
-                      Icons.link_rounded),
+                  // Upload Payment Proof — replaces a URL field the client
+                  // had to paste a link into by hand. The actual file is
+                  // read here and uploaded as part of Submit Proof below,
+                  // the same inline-storage approach documents/avatars use.
+                  if (_proofBytes == null)
+                    OutlinedButton.icon(
+                      onPressed: _pickingProof
+                          ? null
+                          : () => _pickPaymentProof(setS),
+                      icon: _pickingProof
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: _green))
+                          : const Icon(Icons.upload_file_rounded,
+                              color: _green, size: 18),
+                      label: Text(
+                          _pickingProof
+                              ? 'Selecting…'
+                              : 'Upload Payment Proof (optional)',
+                          style: const TextStyle(color: _green)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: _border),
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                          color: _green.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: _green.withValues(alpha: 0.3))),
+                      child: Row(children: [
+                        const Icon(Icons.check_circle_rounded,
+                            color: _green, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: Text(_proofFileName,
+                                style: const TextStyle(
+                                    color: _textPri, fontSize: 12.5),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis)),
+                        TextButton(
+                          onPressed: () => _pickPaymentProof(setS),
+                          child: const Text('Replace',
+                              style: TextStyle(
+                                  color: _green, fontWeight: FontWeight.w700)),
+                        ),
+                      ]),
+                    ),
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -236,7 +360,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
         'payment_date': DateTime.now().toIso8601String().substring(0, 10),
         'payment_method': method,
         'transaction_id': _transactionIdCtrl.text.trim(),
-        'payment_slip_url': _slipUrlCtrl.text.trim(),
+        'payment_slip_url': _proofBytes != null
+            ? 'data:$_proofMimeType;base64,${base64Encode(_proofBytes!)}'
+            : '',
         'notes': 'Paid via $method | TXN: ${_transactionIdCtrl.text.trim()}',
       });
       if (mounted) {

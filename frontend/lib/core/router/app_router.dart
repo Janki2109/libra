@@ -45,6 +45,7 @@ import '../../features/calls/screens/call_screen.dart';
 import '../../features/client_portal/screens/portal_messages_screen.dart';
 import '../../features/client_portal/screens/find_lawyer_screen.dart';
 import '../../features/client_portal/screens/book_consultation_screen.dart';
+import '../../features/client_portal/screens/consultation_history_screen.dart';
 import '../../features/calendar/screens/calendar_screen.dart';
 import '../../features/billing/screens/invoice_details_screen.dart';
 import '../../features/billing/screens/payment_history_screen.dart';
@@ -249,6 +250,9 @@ class AppRouter {
             lawyerName: state.uri.queryParameters['name'] ?? '',
           ),
         ),
+        GoRoute(
+            path: '/portal/consultation-history',
+            builder: (_, __) => const ConsultationHistoryScreen()),
         GoRoute(
             path: '/portal/cases',
             builder: (_, __) => const PortalCaseScreen()),
