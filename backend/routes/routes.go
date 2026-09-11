@@ -64,6 +64,11 @@ func SetupRoutes() *gin.Engine {
 		auth.POST("/student/register", signupLimiter.Middleware(), controllers.StudentRegister)
 		auth.POST("/send-otp", otpLimiter.Middleware(), controllers.SendOTP)
 		auth.POST("/verify-otp", otpLimiter.Middleware(), controllers.VerifyOTP)
+		// Forgot Password — same otpLimiter as the codes above (5 per 15
+		// minutes per caller), which is also the resend cooldown/rate limit.
+		auth.POST("/forgot-password", otpLimiter.Middleware(), controllers.ForgotPassword)
+		auth.POST("/forgot-password/verify-otp", otpLimiter.Middleware(), controllers.VerifyPasswordResetOTP)
+		auth.POST("/reset-password", otpLimiter.Middleware(), controllers.ResetPassword)
 		auth.POST("/logout", controllers.Logout)
 		auth.GET("/plans", controllers.GetPlans)
 	}

@@ -379,7 +379,22 @@ class _LoginScreenState extends State<LoginScreen>
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: accentColor))),
               onSubmitted: (_) => onLogin?.call()),
-          const SizedBox(height: 20),
+          const SizedBox(height: 8),
+
+          // Forgot Password — same for all three tabs (Lawyer/Client/
+          // Student), since this one shared card builds all of them.
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onTap: () => context.push('/forgot-password'),
+              child: const Text('Forgot Password?',
+                  style: TextStyle(
+                      color: AppColors.gold,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(height: 12),
 
           // Login Button
           SizedBox(

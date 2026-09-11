@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/splash/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
+import '../../features/auth/screens/forgot_password_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/client_register_screen.dart';
 import '../../features/auth/screens/student_register_screen.dart';
@@ -176,6 +177,9 @@ class AppRouter {
         GoRoute(
             path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
         GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+        GoRoute(
+            path: '/forgot-password',
+            builder: (_, __) => const ForgotPasswordScreen()),
         GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
         GoRoute(
             path: '/client/register',

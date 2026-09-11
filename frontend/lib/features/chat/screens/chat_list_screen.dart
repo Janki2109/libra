@@ -88,11 +88,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                   color: Colors.white,
                                   fontSize: 17,
                                   fontWeight: FontWeight.w700))),
-                      IconButton(
-                        icon: const Icon(Icons.edit_rounded,
-                            color: Color(0xFFFFD700)),
-                        onPressed: () {},
-                      ),
+                      // Top-right pencil/compose icon removed — it had no
+                      // handler of its own; the bottom-right FloatingAction
+                      // Button below is the existing new-chat entry point and
+                      // is left untouched.
+                      const SizedBox(width: 48),
                     ]),
                   )),
             ),

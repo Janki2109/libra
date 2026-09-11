@@ -550,6 +550,177 @@ func VerifyOTP(c *gin.Context) {
 	})
 }
 
+// ─── FORGOT PASSWORD ─────────────────────────
+// Same OTP mechanism SendOTP/VerifyOTP already use (otps table, bcrypt-style
+// hash comparison, SMTP delivery via mailerClient) with its own 'purpose' so
+// a code issued here can never be replayed against the passwordless-login
+// flow or vice versa. Works identically for lawyer, client and student
+// accounts — the otps/users tables aren't role-specific.
+func ForgotPassword(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	email := normalizeEmail(req.Email)
+
+	// Identical response whether or not the address is registered — this
+	// endpoint must never let a caller enumerate accounts.
+	const genericMsg = "If an account exists for that address, a reset code has been sent."
+
+	var userID string
+	err := config.DB.QueryRow(
+		`SELECT id FROM users WHERE lower(email) = $1 AND is_active = true`, email,
+	).Scan(&userID)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			utils.Error(c, http.StatusInternalServerError, "Could not send code", err.Error())
+			return
+		}
+		utils.Success(c, http.StatusOK, genericMsg, nil)
+		return
+	}
+
+	otp, err := utils.GenerateOTP()
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not generate code", err.Error())
+		return
+	}
+
+	// Retire any still-outstanding reset codes for this address first, same
+	// as the login-OTP flow — only one live code at a time per purpose.
+	config.DB.Exec(`UPDATE otps SET is_used = true WHERE email = $1 AND purpose = 'password_reset' AND is_used = false`, email)
+
+	_, err = config.DB.Exec(`
+		INSERT INTO otps (id, email, otp_hash, purpose, attempts, expires_at)
+		VALUES ($1, $2, $3, 'password_reset', 0, NOW() + ($4 || ' minutes')::interval)
+	`, uuid.New().String(), email, utils.HashOTP(email, otp), otpValidMinutes)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not send code", err.Error())
+		return
+	}
+
+	// Never returned in the response, and never logged in production — only
+	// the user's own inbox ever sees the actual code.
+	if err := mailerClient().SendOTP(email, otp, otpValidMinutes); err != nil {
+		if errors.Is(err, services.ErrMailNotConfigured) && !utils.IsProduction() {
+			log.Printf("[dev] password reset code for %s is %s", email, otp)
+			utils.Success(c, http.StatusOK, genericMsg, nil)
+			return
+		}
+		utils.Error(c, http.StatusInternalServerError, "Could not send code", err.Error())
+		return
+	}
+
+	utils.Success(c, http.StatusOK, genericMsg, nil)
+}
+
+// verifyPasswordResetOTP is shared by VerifyPasswordResetOTP (checks only,
+// lets the UI advance to the new-password screen) and ResetPassword (checks
+// again immediately before actually burning the code and changing the
+// password). consume=false never marks the code used, so failing to submit
+// a new password afterward doesn't strand the user's one live code.
+func verifyPasswordResetOTP(email, otp string, consume bool) (otpID string, code int, msg string) {
+	var storedHash string
+	var attempts int
+	err := config.DB.QueryRow(`
+		SELECT id, otp_hash, attempts FROM otps
+		WHERE email = $1 AND purpose = 'password_reset' AND is_used = false AND expires_at > NOW()
+		ORDER BY created_at DESC LIMIT 1
+	`, email).Scan(&otpID, &storedHash, &attempts)
+	if err == sql.ErrNoRows {
+		return "", http.StatusBadRequest, "Invalid or expired code"
+	}
+	if err != nil {
+		return "", http.StatusInternalServerError, "Could not verify code"
+	}
+	if attempts >= maxOTPAttempts {
+		config.DB.Exec(`UPDATE otps SET is_used = true WHERE id = $1`, otpID)
+		return "", http.StatusTooManyRequests, "Too many incorrect attempts. Request a new code."
+	}
+	if !utils.CompareOTPHash(storedHash, utils.HashOTP(email, otp)) {
+		config.DB.Exec(`UPDATE otps SET attempts = attempts + 1 WHERE id = $1`, otpID)
+		return "", http.StatusBadRequest, "Invalid or expired code"
+	}
+	if consume {
+		res, err := config.DB.Exec(
+			`UPDATE otps SET is_used = true WHERE id = $1 AND is_used = false`, otpID)
+		if err != nil {
+			return "", http.StatusInternalServerError, "Could not verify code"
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return "", http.StatusBadRequest, "Invalid or expired code"
+		}
+	}
+	return otpID, 0, ""
+}
+
+// VerifyPasswordResetOTP - Step 5: lets the app confirm the code before
+// showing the New Password screen, without spending the code yet.
+func VerifyPasswordResetOTP(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+		OTP   string `json:"otp" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	_, code, msg := verifyPasswordResetOTP(normalizeEmail(req.Email), req.OTP, false)
+	if code != 0 {
+		utils.Error(c, code, msg, "")
+		return
+	}
+	utils.Success(c, http.StatusOK, "Code verified", nil)
+}
+
+// ResetPassword - Steps 6-7: re-verifies the same code (never trusts the
+// earlier "verified" response alone) and, only if it still checks out,
+// burns it and writes the new password hash in the same request.
+func ResetPassword(c *gin.Context) {
+	var req struct {
+		Email       string `json:"email" binding:"required,email"`
+		OTP         string `json:"otp" binding:"required"`
+		NewPassword string `json:"new_password" binding:"required,min=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	email := normalizeEmail(req.Email)
+	_, code, msg := verifyPasswordResetOTP(email, req.OTP, true)
+	if code != 0 {
+		utils.Error(c, code, msg, "")
+		return
+	}
+
+	hash, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not reset password", err.Error())
+		return
+	}
+
+	res, err := config.DB.Exec(
+		`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE lower(email) = $2 AND is_active = true`,
+		hash, email)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not reset password", err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// The OTP matched an account that's since been deactivated between
+		// send and reset — same generic shape as everywhere else here.
+		utils.Error(c, http.StatusBadRequest, "Could not reset password", "account not available")
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "Password reset successfully", nil)
+}
+
 // ─── GET ME ──────────────────────────────────
 func GetMe(c *gin.Context) {
 	userID, _ := c.Get("user_id")
