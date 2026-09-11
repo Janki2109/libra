@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/realtime_events.dart';
 import '../../auth/providers/auth_provider.dart';
 
 // Same allow-list/format helpers used by the dedicated My Documents screen
@@ -108,10 +109,25 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
       ..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadData();
+    // The lawyer accepting/rejecting, starting a session, or a payment/
+    // document update all already push a notification (see
+    // utils.NotifyWithRef on the backend) — this refreshes the same data
+    // this screen already loads on open, the instant one of those arrives,
+    // instead of only on the next manual pull-to-refresh.
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
+  }
+
+  void _onRealtimeEvent() {
+    if (RealtimeEvents.instance.matches([
+      'booking_', 'incoming_call_', 'chat_session_started', 'call_response_',
+    ])) {
+      _loadData();
+    }
   }
 
   @override
   void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
     _fadeCtrl.dispose();
     super.dispose();
   }

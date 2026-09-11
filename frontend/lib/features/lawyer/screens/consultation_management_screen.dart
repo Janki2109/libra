@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/fcm_service.dart';
+import '../../../core/services/realtime_events.dart';
 
 // Same case-insensitive mapping used on the client portal and lawyer
 // dashboard sides, so "Audio Call"/"audio_call"/"audio" all resolve the same
@@ -106,10 +107,25 @@ class _ConsultationManagementScreenState
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
     _load();
+    // A new booking request, a client paying/cancelling, or a session
+    // starting/ending all already push a notification (see
+    // utils.NotifyWithRef on the backend) — this is what makes this screen
+    // reflect that the instant it happens instead of only on the next
+    // manual pull-to-refresh.
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
+  }
+
+  void _onRealtimeEvent() {
+    if (RealtimeEvents.instance.matches([
+      'booking_', 'incoming_call_', 'chat_session_started', 'call_response_',
+    ])) {
+      _load();
+    }
   }
 
   @override
   void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
     _tabCtrl.dispose();
     super.dispose();
   }

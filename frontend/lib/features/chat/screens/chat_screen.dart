@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/realtime_events.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../auth/providers/auth_provider.dart';
 
@@ -87,14 +88,27 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _sendScale = Tween<double>(begin: 1.0, end: 0.9).animate(_sendCtrl);
     _loadMessages();
     _loadPresence();
+    // The 3s poll below is a safety net only now — a new message already
+    // pushes a real notification the instant it's sent (see
+    // notifyOtherChatParticipants on the backend), so this listener is what
+    // makes the thread actually update immediately instead of waiting for
+    // the next poll tick.
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       _loadMessages(silent: true);
       _loadPresence();
     });
   }
 
+  void _onRealtimeEvent() {
+    if (RealtimeEvents.instance.lastType == 'chat_message') {
+      _loadMessages(silent: true);
+    }
+  }
+
   @override
   void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
     _pollingTimer?.cancel();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();

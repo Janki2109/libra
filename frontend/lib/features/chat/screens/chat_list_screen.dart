@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/realtime_events.dart';
 
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
@@ -25,6 +26,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     _load();
+    // New-message pushes (notifyOtherChatParticipants on the backend) keep
+    // the room list's last-message preview/ordering current without a
+    // manual reload.
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
+  }
+
+  void _onRealtimeEvent() {
+    if (RealtimeEvents.instance.lastType == 'chat_message') _load();
+  }
+
+  @override
+  void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    super.dispose();
   }
 
   Future<void> _load() async {

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"database/sql"
+	"fmt"
 	"libra/config"
 	"libra/utils"
 	"net/http"
@@ -450,6 +451,14 @@ func SendMessage(c *gin.Context) {
 		WHERE id=$2::uuid
 	`, lastMessagePreview, roomID)
 
+	// The other side of this conversation previously never learned a message
+	// had arrived except by reopening the chat — nothing notified them at
+	// all. Same participant shape as requireChatRoomAccess above (lawyer,
+	// student, or the client mapped through their portal email), sent after
+	// the INSERT has already committed so this can never fire for a message
+	// that didn't actually save.
+	go notifyOtherChatParticipants(roomID, userID, senderName, lastMessagePreview)
+
 	utils.Success(c, http.StatusCreated, "Message sent", gin.H{
 		"id":           id,
 		"sender_name":  senderName,
@@ -464,6 +473,40 @@ func SendMessage(c *gin.Context) {
 		"is_read":      false,
 		"created_at":   now,
 	})
+}
+
+// notifyOtherChatParticipants pushes a "new message" notification (existing
+// FCM pipeline — utils.NotifyWithRef) to every participant on the room
+// except whoever just sent it. A room has at most a lawyer, a student and a
+// client, and any of them may be empty, so this notifies whichever of those
+// resolve to a real user id and aren't the sender.
+func notifyOtherChatParticipants(roomID, senderID, senderName, preview string) {
+	var lawyerID, studentID, clientUserID, firmID sql.NullString
+	err := config.DB.QueryRow(`
+		SELECT cr.lawyer_id::text, cr.student_id::text,
+		       (SELECT u.id::text FROM users u
+		        JOIN clients cl ON cr.client_id = cl.id
+		        WHERE lower(u.email) = lower(cl.email) LIMIT 1),
+		       cr.firm_id::text
+		FROM chat_rooms cr
+		WHERE cr.id = $1::uuid
+	`, roomID).Scan(&lawyerID, &studentID, &clientUserID, &firmID)
+	if err != nil {
+		return
+	}
+
+	title := fmt.Sprintf("New message from %s", senderName)
+	for _, recipient := range []sql.NullString{lawyerID, studentID, clientUserID} {
+		if !recipient.Valid || recipient.String == "" || recipient.String == senderID {
+			continue
+		}
+		firm := ""
+		if firmID.Valid {
+			firm = firmID.String
+		}
+		utils.NotifyWithRef(recipient.String, firm, title, preview,
+			"chat_message", roomID, "chat_room")
+	}
 }
 
 // maxInlineChatFileBytes caps a base64 attachment stored directly on the

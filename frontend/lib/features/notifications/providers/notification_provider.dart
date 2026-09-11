@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/realtime_events.dart';
 
 class NotificationProvider extends ChangeNotifier {
   List<dynamic> _notifications = [];
@@ -9,6 +10,24 @@ class NotificationProvider extends ChangeNotifier {
   bool get loading => _loading;
   int get unreadCount =>
       _notifications.where((n) => !(n['is_read'] ?? false)).length;
+
+  NotificationProvider() {
+    // Every existing push (booking accepted/rejected, chat message,
+    // session started, payment/billing updates, ...) already writes a real
+    // notifications row on the backend (see utils.Notify/NotifyWithRef) —
+    // this is what makes the bell badge/count update the instant one
+    // arrives instead of only on the next manual open of the Notifications
+    // screen.
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
+  }
+
+  void _onRealtimeEvent() => loadNotifications();
+
+  @override
+  void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    super.dispose();
+  }
 
   Future<void> loadNotifications() async {
     _loading = true;

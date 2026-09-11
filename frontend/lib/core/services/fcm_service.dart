@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../router/app_router.dart';
 import 'dio_client.dart';
+import 'realtime_events.dart';
 
 /// Handles a push that arrives while the app is backgrounded/terminated.
 /// Must be a top-level (or static) function — it runs in its own isolate,
@@ -95,6 +96,12 @@ class FcmService {
     // the incoming-call screen directly — the app is already in front, so
     // there's no reason to make the client tap a tray notification first.
     FirebaseMessaging.onMessage.listen((message) {
+      // The one place every foreground push passes through, regardless of
+      // which branch below handles it — this is what lets an already-open
+      // screen (My Bookings, a chat, Notifications) refresh itself the
+      // instant the backend event that changed its data arrives, instead of
+      // only finding out on the next manual reload.
+      RealtimeEvents.instance.emit(message.data['type'] as String?);
       if (_openIncomingCallIfAny(message.data)) return;
       if (_handleCallCancelledIfAny(message.data)) return;
       final n = message.notification;
@@ -118,6 +125,7 @@ class FcmService {
     // Tapped a notification while the app was backgrounded, or launched the
     // app cold from a notification tap.
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      RealtimeEvents.instance.emit(message.data['type'] as String?);
       if (!_openIncomingCallIfAny(message.data)) _openNotifications();
     });
     final initialMessage = await FirebaseMessaging.instance.getInitialMessage();

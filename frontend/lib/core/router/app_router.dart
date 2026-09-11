@@ -137,6 +137,11 @@ class AppRouter {
           '/register',
           '/client/register',
           '/student/register',
+          // Reachable from the Login screen before the user is signed in —
+          // without this, the redirect below bounced it straight back to
+          // /login on every tap, which is why "Forgot Password?" looked
+          // like it did nothing at all.
+          '/forgot-password',
         ];
 
         // Still loading session
