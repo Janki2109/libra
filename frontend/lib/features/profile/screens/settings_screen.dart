@@ -1,13 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/fcm_service.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../auth/providers/auth_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -25,9 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _loading = false;
 
   static const _pushPrefKey = 'pref_push_notifications';
-  static const _hapticPrefKey = 'pref_haptic_feedback';
   bool _pushEnabled = true;
-  bool _hapticEnabled = true;
   bool _prefsLoaded = false;
 
   @override
@@ -40,7 +35,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _pushEnabled = prefs.getBool(_pushPrefKey) ?? true;
-      _hapticEnabled = prefs.getBool(_hapticPrefKey) ?? true;
       _prefsLoaded = true;
     });
   }
@@ -56,58 +50,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } else {
       await FcmService.instance.clearToken();
     }
-  }
-
-  Future<void> _setHapticEnabled(bool value) async {
-    setState(() => _hapticEnabled = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_hapticPrefKey, value);
-  }
-
-  Future<void> _exportMyData() async {
-    final user = context.read<AuthProvider>().user;
-    if (user == null) return;
-    final data = {
-      'name': user.name,
-      'email': user.email,
-      'phone': user.phone,
-      'designation': user.designation,
-      'role': user.roleName,
-      'account_created': user.createdAt,
-    };
-    final json = const JsonEncoder.withIndent('  ').convert(data);
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Your Data',
-            style: TextStyle(color: AppColors.textPrimary)),
-        content: SingleChildScrollView(
-          child: SelectableText(json,
-              style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontFamily: 'monospace',
-                  fontSize: 12)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: json));
-              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                  content: Text('Copied to clipboard'),
-                  backgroundColor: AppColors.success));
-            },
-            child: const Text('Copy'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showTextDialog(String title, String body) {
@@ -307,20 +249,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _pushEnabled,
                   onChanged: _setPushEnabled,
                 ),
-                const Divider(color: AppColors.border, height: 1, indent: 56),
-                _ToggleTile(
-                  icon: Icons.vibration_rounded,
-                  label: 'Haptic Feedback',
-                  subtitle: 'Vibration on interactions',
-                  color: AppColors.warning,
-                  value: _hapticEnabled,
-                  onChanged: _setHapticEnabled,
-                ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          _SectionHeader(title: 'Data & Privacy', icon: Icons.security_rounded),
+          _SectionHeader(title: 'Legal', icon: Icons.gavel_rounded),
           const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
@@ -330,13 +263,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: Column(
               children: [
-                _ActionTile(
-                  icon: Icons.download_rounded,
-                  label: 'Export My Data',
-                  color: AppColors.success,
-                  onTap: _exportMyData,
-                ),
-                const Divider(color: AppColors.border, height: 1, indent: 56),
                 _ActionTile(
                   icon: Icons.privacy_tip_outlined,
                   label: 'Privacy Policy',

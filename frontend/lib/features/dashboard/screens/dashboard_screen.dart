@@ -615,9 +615,22 @@ class _BookingCard extends StatelessWidget {
     final time = (booking['consultation_time'] ?? '').toString();
     final clientName = (booking['client_name'] ?? 'Client').toString();
 
-    return Container(
+    return Material(
+      color: _bgCard,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        // The card itself did nothing when tapped — only the Call/Video/Chat
+        // button inside a confirmed one worked. Tapping anywhere on it now
+        // opens the existing My Bookings screen (the same one the "My
+        // Bookings" quick action already opens) so a lawyer can act on the
+        // full booking, not just this dashboard preview.
+        onTap: () {
+          HapticFeedback.lightImpact();
+          context.push('/lawyer/consultations');
+        },
+        child: Container(
       decoration: BoxDecoration(
-        color: _bgCard,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: statusColor.withValues(alpha: 0.35),
@@ -751,6 +764,8 @@ class _BookingCard extends StatelessWidget {
           ]),
         ),
       ]),
+        ),
+      ),
     );
   }
 }

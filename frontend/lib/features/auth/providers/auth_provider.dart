@@ -193,6 +193,12 @@ class AuthProvider extends ChangeNotifier {
           phone: phone,
           roleName: 'admin',
           firmId: data['firm_id']?.toString() ?? '',
+          // The register response itself never echoes designation back —
+          // it's stored server-side correctly, but this model is built
+          // straight from the request without it, so a lawyer's own
+          // designation showed "Not set" from the moment they signed up
+          // until something else (e.g. Edit Profile) happened to refetch it.
+          designation: designation,
         );
         if (_token!.isNotEmpty) {
           await StorageService.saveToken(_token!);

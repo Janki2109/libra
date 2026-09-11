@@ -498,32 +498,10 @@ class _InvoiceCard extends StatelessWidget {
                     style: const TextStyle(color: _textMuted, fontSize: 10)),
               ]),
 
-              // Pay Now button for unpaid
-              if (!isPaid) ...[
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => context
-                        .push(
-                            '/billing/pay/${invoice['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${invoice['invoice_number']}')
-                        .then((_) => onReturn()),
-                    icon: const Icon(Icons.payment_rounded,
-                        color: Colors.white, size: 16),
-                    label: Text(
-                        isPartial
-                            ? 'Pay Remaining ₹${pending.toStringAsFixed(0)}'
-                            : 'Pay ₹${pending.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: _brown,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(vertical: 10)),
-                  ),
-                ),
-              ],
+              // "Pay Now"/"Pay ₹X" was here — Lawyer Billing is a view of
+              // what the Client owes/paid, not something the Lawyer pays
+              // themselves. Tapping the card still opens the full detail
+              // sheet below, which is where the payment proof is shown.
             ]),
           ),
         ]),

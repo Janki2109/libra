@@ -40,6 +40,39 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
     }
   }
 
+  /// Opens the client's uploaded proof (a data: URI, the same inline-storage
+  /// trick documents/avatars already use). This row previously just sat
+  /// there as inert text — nothing let a lawyer actually see what the
+  /// client submitted.
+  Future<void> _viewPaymentProof(String slipUrl) async {
+    if (!slipUrl.startsWith('data:')) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('This proof was submitted as a link; opening links '
+              'from here is not supported — ask the client to re-upload.'),
+          backgroundColor: AppColors.error));
+      return;
+    }
+    try {
+      final commaIndex = slipUrl.indexOf(',');
+      final mimeType = slipUrl.substring(5, commaIndex).split(';').first;
+      final bytes = base64Decode(slipUrl.substring(commaIndex + 1));
+      final ext = mimeType.contains('pdf') ? 'pdf' : 'jpg';
+      final result = await openDocumentBytes(
+          bytes: bytes, fileName: 'payment_proof.$ext', mimeType: mimeType);
+      if (!result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message ?? 'Could not open payment proof.'),
+            backgroundColor: AppColors.error));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not open payment proof.'),
+            backgroundColor: AppColors.error));
+      }
+    }
+  }
+
   // "Bill print" didn't exist anywhere in the app before this — the backend
   // renders the invoice as a real PDF, and this opens it in the device's own
   // PDF viewer, which has its own Print action already — no need for a
@@ -128,6 +161,14 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                                       color: AppColors.primary,
                                       fontSize: 20,
                                       fontWeight: FontWeight.w800)),
+                              if ((inv['client_name'] ?? '').toString().isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(inv['client_name'],
+                                    style: const TextStyle(
+                                        color: AppColors.primaryDark,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600)),
+                              ],
                               const SizedBox(height: 4),
                               Text(
                                   'Issued: ${_safe(inv['issue_date'])}',
@@ -216,39 +257,43 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                                 fontSize: 13)),
                       ]),
                     ],
-                    if (inv['status'] == 'unpaid' ||
-                        inv['status'] == 'partial') ...[
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            final pending = _amount(inv['total_amount']) -
-                                _amount(inv['paid_amount']);
-                            // Without the reload, this screen kept showing
-                            // the pre-payment status/amount after returning
-                            // from checkout until it was left and reopened.
-                            context
-                                .push(
-                                    '/billing/pay/${inv['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${inv['invoice_number']}')
-                                .then((_) => _load());
-                          },
-                          icon: const Icon(Icons.payment_rounded,
-                              color: AppColors.primary, size: 20),
-                          label: const Text('Pay Now',
-                              style: TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.gold,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                    // "Pay Now" is a Client-only action — a Lawyer never pays
+                    // their own invoice, they verify what the client already
+                    // paid. In its place: the transaction id and the actual
+                    // uploaded payment proof, when the client has submitted
+                    // one (already returned by GetInvoice, just never shown
+                    // here before).
+                    if ((inv['transaction_id'] ?? '').toString().isNotEmpty ||
+                        (inv['payment_slip_url'] ?? '').toString().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      _Card(children: [
+                        if ((inv['transaction_id'] ?? '').toString().isNotEmpty)
+                          _AmountRow('Transaction ID', inv['transaction_id'],
+                              AppColors.textSecondary),
+                        if ((inv['payment_slip_url'] ?? '').toString().isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _viewPaymentProof(
+                                  inv['payment_slip_url'].toString()),
+                              icon: const Icon(Icons.receipt_long_rounded,
+                                  color: AppColors.gold, size: 18),
+                              label: const Text('View Payment Proof',
+                                  style: TextStyle(
+                                      color: AppColors.gold,
+                                      fontWeight: FontWeight.w700)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppColors.gold),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        ],
+                      ]),
                     ],
                   ]),
                 ),
