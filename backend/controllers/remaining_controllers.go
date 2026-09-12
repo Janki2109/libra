@@ -1262,10 +1262,24 @@ func UpdateFirmBankDetails(c *gin.Context) {
 // booking instead, so the directory only carries what is needed to choose
 // someone.
 func GetAllLawyers(c *gin.Context) {
+	// The client-facing category filter (Corporate/Tax/Labour/Consumer/...)
+	// had nothing real to match against — this endpoint never returned any
+	// specialization field at all, and 'designation' is a job title
+	// ("Advocate", "Partner"), not a practice area. There is no dedicated
+	// specialization column anywhere in the schema; the closest existing,
+	// already-stored equivalent is the set of case_type values on the
+	// lawyer's own firm's cases (the same Civil/Criminal/Family/Property/
+	// Corporate/Labour/Tax list add_case_screen.dart already uses) —
+	// GetLawyerProfile already treats case_type the same way for its "won
+	// cases" track record. Reused here instead of adding a new column.
 	rows, err := config.DB.Query(`
 		SELECT u.id, u.name,
 		       COALESCE(u.designation,'Advocate'), COALESCE(f.name,'') as firm_name,
-		       COALESCE(f.city,''), COALESCE(f.state,''), COALESCE(u.avatar_url,'')
+		       COALESCE(f.city,''), COALESCE(f.state,''), COALESCE(u.avatar_url,''),
+		       COALESCE((
+		           SELECT string_agg(DISTINCT c.case_type, ',')
+		           FROM cases c WHERE c.firm_id = u.firm_id AND c.case_type != ''
+		       ), '') as practice_areas
 		FROM users u
 		LEFT JOIN firms f ON u.firm_id = f.id
 		LEFT JOIN roles r ON u.role_id = r.id
@@ -1280,20 +1294,21 @@ func GetAllLawyers(c *gin.Context) {
 	defer rows.Close()
 
 	type Lawyer struct {
-		ID          string `json:"id"`
-		Name        string `json:"name"`
-		Designation string `json:"designation"`
-		FirmName    string `json:"firm_name"`
-		City        string `json:"city"`
-		State       string `json:"state"`
-		AvatarURL   string `json:"avatar_url"`
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		Designation   string `json:"designation"`
+		FirmName      string `json:"firm_name"`
+		City          string `json:"city"`
+		State         string `json:"state"`
+		AvatarURL     string `json:"avatar_url"`
+		PracticeAreas string `json:"practice_areas"`
 	}
 
 	lawyers := []Lawyer{}
 	for rows.Next() {
 		var l Lawyer
 		if err := rows.Scan(&l.ID, &l.Name, &l.Designation,
-			&l.FirmName, &l.City, &l.State, &l.AvatarURL); err != nil {
+			&l.FirmName, &l.City, &l.State, &l.AvatarURL, &l.PracticeAreas); err != nil {
 			utils.Error(c, http.StatusInternalServerError, "Failed to read lawyers", err.Error())
 			return
 		}

@@ -379,3 +379,88 @@ func DeleteClient(c *gin.Context) {
 	}
 	utils.Success(c, http.StatusOK, "Client deleted", nil)
 }
+
+// GetClientBookings returns this client's consultation/booking history with
+// the logged-in lawyer. There is no direct foreign key between the firm's
+// manually-managed `clients` table and the portal `users` accounts that
+// actually create `consultations` rows, so the two are correlated by email
+// or phone — the only fields a firm-added client record and a self-registered
+// portal account can share.
+func GetClientBookings(c *gin.Context) {
+	id := c.Param("id")
+	firmID, ok := requireFirmResource(c, tblClients, id)
+	if !ok {
+		return
+	}
+	lawyerID := utils.UserID(c)
+
+	var email, phone string
+	err := config.DB.QueryRow(`
+		SELECT COALESCE(email,''), COALESCE(phone,'')
+		FROM clients WHERE id=$1::uuid AND firm_id=$2::uuid
+	`, id, firmID).Scan(&email, &phone)
+	if err == sql.ErrNoRows {
+		utils.Error(c, http.StatusNotFound, "Client not found", "")
+		return
+	}
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Database error", err.Error())
+		return
+	}
+
+	rows, err := config.DB.Query(`
+		SELECT con.id, con.consultation_type,
+			con.consultation_date::text, con.consultation_time,
+			con.status, con.session_status,
+			con.payment_status, COALESCE(con.amount_paise,0),
+			COALESCE(con.call_duration_seconds,0),
+			con.session_started_at, con.session_ended_at, con.created_at
+		FROM consultations con
+		JOIN users u ON con.client_id = u.id
+		WHERE con.lawyer_id = $1::uuid
+		  AND ((($2::text) != '' AND u.email = $2::text)
+		       OR (($3::text) != '' AND u.phone = $3::text))
+		ORDER BY con.consultation_date DESC, con.consultation_time DESC
+	`, lawyerID, email, phone)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to fetch bookings", err.Error())
+		return
+	}
+	defer rows.Close()
+
+	type Booking struct {
+		ID                  string     `json:"id"`
+		ConsultationType    string     `json:"consultation_type"`
+		ConsultationDate    string     `json:"consultation_date"`
+		ConsultationTime    string     `json:"consultation_time"`
+		Status              string     `json:"status"`
+		SessionStatus       string     `json:"session_status"`
+		PaymentStatus       string     `json:"payment_status"`
+		AmountPaise         int64      `json:"amount_paise"`
+		CallDurationSeconds int        `json:"call_duration_seconds"`
+		SessionStartedAt    *time.Time `json:"session_started_at"`
+		SessionEndedAt      *time.Time `json:"session_ended_at"`
+		CreatedAt           time.Time  `json:"created_at"`
+	}
+
+	bookings := []Booking{}
+	for rows.Next() {
+		var b Booking
+		var startedAt, endedAt sql.NullTime
+		if err := rows.Scan(&b.ID, &b.ConsultationType, &b.ConsultationDate,
+			&b.ConsultationTime, &b.Status, &b.SessionStatus,
+			&b.PaymentStatus, &b.AmountPaise, &b.CallDurationSeconds,
+			&startedAt, &endedAt, &b.CreatedAt); err != nil {
+			utils.Error(c, http.StatusInternalServerError, "Failed to read bookings", err.Error())
+			return
+		}
+		if startedAt.Valid {
+			b.SessionStartedAt = &startedAt.Time
+		}
+		if endedAt.Valid {
+			b.SessionEndedAt = &endedAt.Time
+		}
+		bookings = append(bookings, b)
+	}
+	utils.Success(c, http.StatusOK, "Bookings fetched", bookings)
+}

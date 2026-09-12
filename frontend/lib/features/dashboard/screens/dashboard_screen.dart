@@ -320,19 +320,23 @@ class _DashboardScreenState extends State<DashboardScreen>
                               ),
                               child: Row(children: [
                                 _DateStatCell('Today',
-                                    '${_dayName()}, ${DateTime.now().day} ${_monthName()}'),
+                                    '${_dayName()}, ${DateTime.now().day} ${_monthName()}',
+                                    onTap: () => context.push('/calendar')),
                                 _statDivider(),
                                 _StatCard('${stats.totalClients}', 'Clients',
                                     const Color(0xFF4A90D9),
-                                    icon: Icons.people_alt_rounded),
+                                    icon: Icons.people_alt_rounded,
+                                    onTap: () => context.push('/clients')),
                                 _statDivider(),
                                 _StatCard(
                                     '${stats.activeCases}', 'Cases', _brown,
-                                    icon: Icons.folder_rounded),
+                                    icon: Icons.folder_rounded,
+                                    onTap: () => context.push('/cases')),
                                 _statDivider(),
                                 _StatCard('${stats.upcomingHearings}',
                                     'Hearings', _brownLight,
-                                    icon: Icons.gavel_rounded),
+                                    icon: Icons.gavel_rounded,
+                                    onTap: () => context.push('/hearings')),
                               ]),
                             ),
                           ),
@@ -817,15 +821,16 @@ class _ProfileBanner extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 11)),
               const SizedBox(height: 3),
-              // Big bold name
+              // Big bold name — wraps to a second line instead of being cut
+              // off with "..." for a longer name.
               Text(auth.user?.name ?? 'Advocate',
                   style: const TextStyle(
                       color: Colors.white,
                       fontSize: 26,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.2),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
+                  maxLines: 2,
+                  overflow: TextOverflow.visible),
               const SizedBox(height: 6),
               // Advocate badge — gold accent per the premium branding
               Container(
@@ -896,11 +901,15 @@ class _ProfileBanner extends StatelessWidget {
 // ("Today" / "Sat, 29 Aug") instead of one bold value + muted label.
 class _DateStatCell extends StatelessWidget {
   final String today, dateLabel;
-  const _DateStatCell(this.today, this.dateLabel);
+  final VoidCallback? onTap;
+  const _DateStatCell(this.today, this.dateLabel, {this.onTap});
 
   @override
   Widget build(BuildContext context) => Expanded(
-        child: Padding(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.calendar_today_rounded, color: _brown, size: 16),
@@ -920,6 +929,7 @@ class _DateStatCell extends StatelessWidget {
             ),
           ]),
         ),
+        ),
       );
 }
 
@@ -928,11 +938,15 @@ class _StatCard extends StatelessWidget {
   final String value, label;
   final Color color;
   final IconData? icon;
-  const _StatCard(this.value, this.label, this.color, {this.icon});
+  final VoidCallback? onTap;
+  const _StatCard(this.value, this.label, this.color, {this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) => Expanded(
-        child: Padding(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             if (icon != null) ...[
@@ -953,6 +967,7 @@ class _StatCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis),
             ],
           ]),
+        ),
         ),
       );
 }

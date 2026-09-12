@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/realtime_events.dart';
 import '../../documents/widgets/document_upload_sheet.dart';
 
 const _bg = Color(0xFFF6F5FB);
@@ -26,20 +27,47 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
   List<dynamic> _cases = [];
   List<dynamic> _documents = [];
   List<dynamic> _hearings = [];
+  List<dynamic> _bookings = [];
   bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadClient();
+    // New bookings and status transitions (pending/accepted/rejected/
+    // completed/expired) push through the existing FCM-backed event bus —
+    // refresh this client's booking history without a manual pull.
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
+  }
+
+  void _onRealtimeEvent() {
+    if (RealtimeEvents.instance.matches(
+        ['booking_', 'incoming_call_', 'chat_session_started', 'call_response_'])) {
+      _loadBookings();
+    }
   }
 
   @override
   void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadBookings() async {
+    try {
+      final res =
+          await DioClient.instance.get('/clients/${widget.clientId}/bookings');
+      if (mounted) {
+        setState(() {
+          _bookings = res.data['data'] as List? ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Bookings error: $e');
+    }
   }
 
   Future<void> _loadClient() async {
@@ -90,6 +118,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
       } catch (e) {
         debugPrint('Hearings error: $e');
       }
+      await _loadBookings();
     } catch (e) {
       setState(() {
         _error = 'Failed to load client details';
@@ -253,6 +282,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
               unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
               tabs: const [
                 Tab(text: 'Details'),
+                Tab(text: 'Bookings'),
                 Tab(text: 'Cases'),
                 Tab(text: 'Documents'),
               ],
@@ -264,6 +294,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
               controller: _tabController,
               children: [
                 _DetailsTab(client: _client!, hearings: _hearings),
+                _BookingsTab(bookings: _bookings, onRefresh: _loadBookings),
                 _CasesTab(
                     cases: _cases,
                     clientId: widget.clientId,
@@ -623,6 +654,194 @@ class _InfoItem extends StatelessWidget {
                       fontSize: 13,
                       fontWeight: FontWeight.w500))),
         ]),
+      );
+}
+
+// ── Bookings Tab ───────────────────────────────────
+// Real consultation/booking data for this client — which service they
+// booked (chat/audio/video/visit), when, for how long, and the current
+// status — pulled from the existing consultations table via
+// GET /clients/:id/bookings, not just their name.
+class _BookingsTab extends StatelessWidget {
+  final List<dynamic> bookings;
+  final Future<void> Function() onRefresh;
+  const _BookingsTab({required this.bookings, required this.onRefresh});
+
+  String _serviceLabel(String type) {
+    switch (type) {
+      case 'chat':
+        return 'Chat';
+      case 'audio':
+        return 'Audio Call';
+      case 'video':
+        return 'Video Call';
+      case 'visit':
+        return 'In-Person Visit';
+      default:
+        return type.isEmpty ? '-' : type;
+    }
+  }
+
+  IconData _serviceIcon(String type) {
+    switch (type) {
+      case 'chat':
+        return Icons.chat_bubble_outline_rounded;
+      case 'audio':
+        return Icons.call_rounded;
+      case 'video':
+        return Icons.videocam_rounded;
+      case 'visit':
+        return Icons.meeting_room_outlined;
+      default:
+        return Icons.event_note_rounded;
+    }
+  }
+
+  String _fmtDate(String? iso) {
+    final d = DateTime.tryParse(iso ?? '');
+    if (d == null) return iso ?? '-';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  String _fmtDuration(int seconds) {
+    if (seconds <= 0) return '-';
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return s > 0 ? '$m min $s sec' : '$m minutes';
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'confirmed':
+        return const Color(0xFF4A90D9);
+      case 'completed':
+        return const Color(0xFF2E8B57);
+      case 'rejected':
+      case 'cancelled':
+        return const Color(0xFFD9534F);
+      case 'expired':
+        return const Color(0xFF7B7594);
+      default:
+        return const Color(0xFFB8860B); // pending
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'confirmed':
+        return 'Accepted';
+      case 'rejected':
+        return 'Rejected';
+      case 'completed':
+        return 'Completed';
+      case 'expired':
+        return 'Expired';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return 'Pending';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (bookings.isEmpty) {
+      return Center(
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(Icons.event_busy_rounded,
+            color: _brownLight.withValues(alpha: 0.4), size: 52),
+        const SizedBox(height: 12),
+        const Text('No bookings yet',
+            style: TextStyle(color: _textMuted, fontSize: 15)),
+      ]));
+    }
+    return RefreshIndicator(
+      color: _brown,
+      onRefresh: onRefresh,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: bookings.length,
+        itemBuilder: (_, i) {
+          final b = bookings[i];
+          final type = b['consultation_type'] ?? '';
+          final status = b['status'] ?? 'pending';
+          final duration = b['call_duration_seconds'] ?? 0;
+          final amountPaise = b['amount_paise'] ?? 0;
+          final paymentStatus = b['payment_status'] ?? '';
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _bgCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _border, width: 0.8),
+              boxShadow: [
+                BoxShadow(
+                    color: _brown.withValues(alpha: 0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2))
+              ],
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                        color: _brown.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Icon(_serviceIcon(type), color: _brown, size: 18)),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: Text(_serviceLabel(type),
+                        style: const TextStyle(
+                            color: _textPri,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14))),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: _statusColor(status).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Text(_statusLabel(status),
+                      style: TextStyle(
+                          color: _statusColor(status),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              Wrap(spacing: 14, runSpacing: 6, children: [
+                _bookingFact(Icons.calendar_today_rounded,
+                    _fmtDate(b['consultation_date'])),
+                _bookingFact(
+                    Icons.access_time_rounded, b['consultation_time'] ?? '-'),
+                if (duration > 0)
+                  _bookingFact(
+                      Icons.timer_outlined, _fmtDuration(duration)),
+                if (amountPaise > 0)
+                  _bookingFact(Icons.payments_outlined,
+                      '₹${(amountPaise / 100).toStringAsFixed(0)} • ${paymentStatus.isEmpty ? '-' : paymentStatus}'),
+              ]),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _bookingFact(IconData icon, String text) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: _textMuted, size: 13),
+          const SizedBox(width: 4),
+          Text(text, style: const TextStyle(color: _textMuted, fontSize: 12)),
+        ],
       );
 }
 

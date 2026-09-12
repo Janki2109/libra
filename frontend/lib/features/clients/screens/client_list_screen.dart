@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/services/realtime_events.dart';
 import '../providers/client_provider.dart';
 
 // ── Premium Navy/Gold Theme (matches LibraTheme) ────
@@ -29,10 +30,21 @@ class _ClientListScreenState extends State<ClientListScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ClientProvider>().loadClients();
     });
+    // A new paid booking (a brand-new client, from the lawyer's point of
+    // view) pushes through the existing FCM-backed event bus — refresh this
+    // list without a manual pull.
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
+  }
+
+  void _onRealtimeEvent() {
+    if (RealtimeEvents.instance.matches(['booking_'])) {
+      context.read<ClientProvider>().loadClients();
+    }
   }
 
   @override
   void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
     _searchCtrl.dispose();
     super.dispose();
   }

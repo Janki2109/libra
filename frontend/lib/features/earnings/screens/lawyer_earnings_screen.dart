@@ -386,7 +386,9 @@ class _TransactionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final date = t.paidAt ?? t.createdAt;
-    return Container(
+    return GestureDetector(
+      onTap: () => context.push('/lawyer/earnings/${t.id}'),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -464,6 +466,7 @@ class _TransactionCard extends StatelessWidget {
           ]),
         ),
       ]),
+      ),
     );
   }
 }

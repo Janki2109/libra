@@ -85,6 +85,7 @@ import '../../features/lawyer/screens/ai_drafting_screen.dart';
 import '../../features/lawyer/screens/ecourts_screen.dart';
 import '../../features/lawyer/screens/consultation_management_screen.dart';
 import '../../features/earnings/screens/lawyer_earnings_screen.dart';
+import '../../features/earnings/screens/bill_details_screen.dart';
 import '../../features/student/screens/legal_notes_screen.dart';
 import '../../features/student/screens/quiz_screen.dart';
 import '../../features/student/screens/mock_court_screen.dart';
@@ -480,6 +481,10 @@ class AppRouter {
         GoRoute(
             path: '/lawyer/earnings',
             builder: (_, __) => const LawyerEarningsScreen()),
+        GoRoute(
+            path: '/lawyer/earnings/:id',
+            builder: (_, state) => BillDetailsScreen(
+                consultationId: state.pathParameters['id']!)),
 
         // ─── ADMIN ───────────────────────────
         GoRoute(

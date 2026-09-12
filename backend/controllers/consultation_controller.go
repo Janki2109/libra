@@ -804,46 +804,79 @@ func GetConsultation(c *gin.Context) {
 	userID := utils.UserID(c)
 
 	var con struct {
-		ID               string    `json:"id"`
-		ConsultationType string    `json:"consultation_type"`
-		ConsultationDate string    `json:"consultation_date"`
-		ConsultationTime string    `json:"consultation_time"`
-		Status           string    `json:"status"`
-		SessionStatus    string    `json:"session_status"`
-		Notes            string    `json:"notes"`
-		LawyerNotes      string    `json:"lawyer_notes"`
-		MeetingLink      string    `json:"meeting_link"`
-		LawyerName       string    `json:"lawyer_name"`
-		ClientName       string    `json:"client_name"`
-		PaymentStatus    string    `json:"payment_status"`
-		AmountPaise      int64     `json:"amount_paise"`
-		CreatedAt        time.Time `json:"created_at"`
+		ID                  string     `json:"id"`
+		ConsultationType    string     `json:"consultation_type"`
+		ConsultationDate    string     `json:"consultation_date"`
+		ConsultationTime    string     `json:"consultation_time"`
+		Status              string     `json:"status"`
+		SessionStatus       string     `json:"session_status"`
+		Notes               string     `json:"notes"`
+		LawyerNotes         string     `json:"lawyer_notes"`
+		MeetingLink         string     `json:"meeting_link"`
+		LawyerName          string     `json:"lawyer_name"`
+		ClientName          string     `json:"client_name"`
+		ClientEmail         string     `json:"client_email"`
+		ClientPhone         string     `json:"client_phone"`
+		PaymentStatus       string     `json:"payment_status"`
+		AmountPaise         int64      `json:"amount_paise"`
+		RazorpayPaymentID   string     `json:"razorpay_payment_id"`
+		RazorpayOrderID     string     `json:"razorpay_order_id"`
+		PaymentMethod       string     `json:"payment_method"`
+		PaidAt              *time.Time `json:"paid_at"`
+		CallDurationSeconds int        `json:"call_duration_seconds"`
+		SessionStartedAt    *time.Time `json:"session_started_at"`
+		SessionEndedAt      *time.Time `json:"session_ended_at"`
+		CreatedAt           time.Time  `json:"created_at"`
 	}
 
+	var paidAt, startedAt, endedAt sql.NullTime
 	err := config.DB.QueryRow(`
 		SELECT con.id, con.consultation_type,
 			con.consultation_date::text, con.consultation_time,
 			con.status, con.session_status, COALESCE(con.notes,''),
 			COALESCE(con.lawyer_notes,''), COALESCE(con.meeting_link,''),
 			COALESCE(l.name,''), COALESCE(cl.name,''),
+			COALESCE(cl.email,''), COALESCE(cl.phone,''),
 			con.payment_status, COALESCE(con.amount_paise,0),
+			COALESCE(con.razorpay_payment_id,''),
+			COALESCE(o.order_id,''),
+			COALESCE(con.payment_method,''), con.paid_at,
+			COALESCE(con.call_duration_seconds,0),
+			con.session_started_at, con.session_ended_at,
 			con.created_at
 		FROM consultations con
 		LEFT JOIN users l  ON con.lawyer_id = l.id
 		LEFT JOIN users cl ON con.client_id = cl.id
+		LEFT JOIN LATERAL (
+			SELECT order_id FROM payment_orders po
+			WHERE po.consultation_id = con.id
+			ORDER BY po.updated_at DESC LIMIT 1
+		) o ON true
 		WHERE con.id = $1::uuid
 		  AND (con.lawyer_id = $2::uuid OR con.client_id = $2::uuid)
 	`, id, userID).Scan(
 		&con.ID, &con.ConsultationType,
 		&con.ConsultationDate, &con.ConsultationTime,
 		&con.Status, &con.SessionStatus, &con.Notes, &con.LawyerNotes, &con.MeetingLink,
-		&con.LawyerName, &con.ClientName,
-		&con.PaymentStatus, &con.AmountPaise, &con.CreatedAt,
+		&con.LawyerName, &con.ClientName, &con.ClientEmail, &con.ClientPhone,
+		&con.PaymentStatus, &con.AmountPaise,
+		&con.RazorpayPaymentID, &con.RazorpayOrderID, &con.PaymentMethod, &paidAt,
+		&con.CallDurationSeconds, &startedAt, &endedAt,
+		&con.CreatedAt,
 	)
 
 	if err != nil {
 		utils.Error(c, http.StatusNotFound, "Consultation not found", err.Error())
 		return
+	}
+	if paidAt.Valid {
+		con.PaidAt = &paidAt.Time
+	}
+	if startedAt.Valid {
+		con.SessionStartedAt = &startedAt.Time
+	}
+	if endedAt.Valid {
+		con.SessionEndedAt = &endedAt.Time
 	}
 
 	utils.Success(c, http.StatusOK, "Consultation fetched", con)

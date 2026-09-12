@@ -102,9 +102,24 @@ class _FindLawyerScreenState extends State<FindLawyerScreen> {
             speciality.contains(query) ||
             firmName.contains(query);
 
+        // The lawyer's actual specialization — GetAllLawyers now returns it
+        // as practice_areas, a comma-separated list of the case_type values
+        // on that lawyer's own cases (there is no separate specialization
+        // field; designation/speciality above are a job title and an
+        // always-empty field respectively, which is why this never matched
+        // anything before). Compared as trimmed, lower-cased tokens so
+        // "Tax"/"tax "/"TAX" all match regardless of how it was typed on a
+        // case.
+        final practiceAreas = (l['practice_areas'] ?? '')
+            .toString()
+            .toLowerCase()
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toSet();
+
         final matchCategory = _selectedCategory == 'All' ||
-            designation.contains(_selectedCategory.toLowerCase()) ||
-            speciality.contains(_selectedCategory.toLowerCase());
+            practiceAreas.contains(_selectedCategory.toLowerCase());
 
         final matchCity = _selectedCity == 'All' ||
             city.contains(_selectedCity.toLowerCase());

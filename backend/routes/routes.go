@@ -199,6 +199,7 @@ func SetupRoutes() *gin.Engine {
 			billed.GET("/clients", controllers.GetClients)
 			billed.POST("/clients", controllers.CreateClient)
 			billed.GET("/clients/:id", controllers.GetClient)
+			billed.GET("/clients/:id/bookings", controllers.GetClientBookings)
 			billed.PUT("/clients/:id", controllers.UpdateClient)
 			billed.DELETE("/clients/:id", controllers.DeleteClient)
 
