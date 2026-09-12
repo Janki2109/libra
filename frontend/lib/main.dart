@@ -11,6 +11,7 @@ import 'features/clients/providers/client_provider.dart';
 import 'features/cases/providers/case_provider.dart';
 import 'features/hearings/providers/hearing_provider.dart';
 import 'features/notifications/providers/notification_provider.dart';
+import 'features/chat/providers/chat_unread_provider.dart';
 import 'features/billing/providers/billing_provider.dart';
 import 'features/documents/providers/document_provider.dart';
 import 'features/client_portal/providers/portal_provider.dart';
@@ -46,6 +47,7 @@ class LibraApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CaseProvider()),
         ChangeNotifierProvider(create: (_) => HearingProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => ChatUnreadProvider()),
         ChangeNotifierProvider(create: (_) => BillingProvider()),
         ChangeNotifierProvider(create: (_) => DocumentProvider()),
         ChangeNotifierProvider(create: (_) => PortalProvider()),

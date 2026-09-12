@@ -102,6 +102,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         onTap: () {
                           HapticFeedback.lightImpact();
                           provider.markAsRead(n['id']);
+                          _openReference(context, n);
                         },
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 10),
@@ -191,6 +192,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ),
     );
+  }
+
+  // Every notification already carries the reference_id/reference_type the
+  // backend wrote via utils.NotifyWithRef — this just routes to the existing
+  // screen for that reference instead of leaving the tap as a no-op read.
+  void _openReference(BuildContext context, dynamic n) {
+    final refId = (n['reference_id'] ?? '').toString();
+    final refType = (n['reference_type'] ?? '').toString();
+    if (refId.isEmpty) return;
+    switch (refType) {
+      case 'case':
+        context.push('/cases/$refId');
+        break;
+      case 'chat_room':
+        context.push('/chat/$refId');
+        break;
+      case 'consultation':
+        context.push('/lawyer/consultations');
+        break;
+      case 'invoice':
+      case 'payment':
+        context.push('/billing');
+        break;
+    }
   }
 
   String _formatTime(String dateStr) {

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../repositories/earnings_repository.dart';
+import '../../../core/services/realtime_events.dart';
 
 // Same palette as the rest of the Lawyer Panel (dashboard_screen.dart,
 // consultation_management_screen.dart, profile_screen.dart) — kept identical
@@ -47,6 +48,23 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
   void initState() {
     super.initState();
     _load();
+    // A payment completing/refunding or a call ending (recording duration)
+    // pushes through the existing FCM-backed event bus — refresh this ledger
+    // without a manual pull.
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
+  }
+
+  void _onRealtimeEvent() {
+    if (RealtimeEvents.instance
+        .matches(['booking_', 'incoming_call_', 'call_response_'])) {
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    super.dispose();
   }
 
   Future<void> _load() async {

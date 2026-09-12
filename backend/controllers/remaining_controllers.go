@@ -712,7 +712,7 @@ func GetNotifications(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	rows, err := config.DB.Query(`
 		SELECT id, title, COALESCE(message,''), COALESCE(type,'general'),
-		is_read, created_at
+		is_read, created_at, COALESCE(reference_id,''), COALESCE(reference_type,'')
 		FROM notifications WHERE user_id=$1::uuid
 		ORDER BY created_at DESC LIMIT 50
 	`, userID)
@@ -723,17 +723,20 @@ func GetNotifications(c *gin.Context) {
 	defer rows.Close()
 
 	type Notif struct {
-		ID        string    `json:"id"`
-		Title     string    `json:"title"`
-		Message   string    `json:"message"`
-		Type      string    `json:"type"`
-		IsRead    bool      `json:"is_read"`
-		CreatedAt time.Time `json:"created_at"`
+		ID            string    `json:"id"`
+		Title         string    `json:"title"`
+		Message       string    `json:"message"`
+		Type          string    `json:"type"`
+		IsRead        bool      `json:"is_read"`
+		CreatedAt     time.Time `json:"created_at"`
+		ReferenceID   string    `json:"reference_id"`
+		ReferenceType string    `json:"reference_type"`
 	}
 	notifs := []Notif{}
 	for rows.Next() {
 		var n Notif
-		rows.Scan(&n.ID, &n.Title, &n.Message, &n.Type, &n.IsRead, &n.CreatedAt)
+		rows.Scan(&n.ID, &n.Title, &n.Message, &n.Type, &n.IsRead, &n.CreatedAt,
+			&n.ReferenceID, &n.ReferenceType)
 		notifs = append(notifs, n)
 	}
 	utils.Success(c, http.StatusOK, "Notifications fetched", notifs)

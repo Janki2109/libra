@@ -11,6 +11,7 @@ import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../providers/chat_unread_provider.dart';
 
 // The backend's maxInlineChatFileBytes (chat_controller.go) caps the
 // *base64-encoded* string at 8MB, and base64 inflates size by ~4/3 — so the
@@ -158,6 +159,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           _loading = false;
         });
         if (msgs.isNotEmpty && !silent) _scrollToBottom();
+        // GET /chat/rooms/:id/messages marks the other side's messages read
+        // on the backend (chat_controller.go) — refresh the Home badge so it
+        // drops immediately instead of waiting for the next chat_message push.
+        if (!silent) context.read<ChatUnreadProvider>().load();
       }
     } catch (e) {
       if (!silent && mounted) setState(() => _loading = false);

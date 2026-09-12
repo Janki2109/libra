@@ -12,6 +12,7 @@ import '../../../core/services/trial_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../../notifications/providers/notification_provider.dart';
+import '../../chat/providers/chat_unread_provider.dart';
 
 // Normalizes whatever `consultation_type` holds ("Audio Call", "audio_call",
 // "Video Call", "Chat", ...) into a fixed action key, the same mapping used
@@ -111,6 +112,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         if (mounted) _cardsCtrl.forward();
       });
       context.read<NotificationProvider>().loadNotifications();
+      context.read<ChatUnreadProvider>().load();
       _loadUpcomingBookings();
     });
   }
@@ -163,6 +165,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final auth = context.watch<AuthProvider>();
     final dash = context.watch<DashboardProvider>();
     final notif = context.watch<NotificationProvider>();
+    final chatUnread = context.watch<ChatUnreadProvider>();
     final stats = dash.stats;
     final hasPhoto = auth.user?.profilePhoto.isNotEmpty == true;
 
@@ -223,7 +226,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         Row(children: [
                           _IconBtnDark(Icons.chat_bubble_outline_rounded,
                               () => context.push('/chat'),
-                              badge: notif.unreadCount),
+                              badge: chatUnread.unreadCount),
                           const SizedBox(width: 8),
                           _IconBtnDark(Icons.notifications_none_rounded,
                               () => context.push('/notifications'),
