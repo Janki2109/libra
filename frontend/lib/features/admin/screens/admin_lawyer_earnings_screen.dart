@@ -62,7 +62,7 @@ class _AdminLawyerEarningsScreenState extends State<AdminLawyerEarningsScreen> {
       title: 'Lawyer Earnings',
       actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
       child: _loading
-          ? const Padding(padding: EdgeInsets.only(top: 100), child: Center(child: CircularProgressIndicator()))
+          ? const AdminLoader()
           : _error != null
               ? AdminEmptyState(message: _error!)
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

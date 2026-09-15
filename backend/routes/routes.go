@@ -60,6 +60,8 @@ func SetupRoutes() *gin.Engine {
 	{
 		auth.POST("/login", loginLimiter.Middleware(), controllers.Login)
 		auth.POST("/register", signupLimiter.Middleware(), controllers.Register)
+		// Terms & Privacy Policy must be readable before signup/login.
+		api.GET("/content/legal/:doc_type/current", controllers.GetCurrentLegalDocument)
 		auth.POST("/client/register", signupLimiter.Middleware(), controllers.ClientRegister)
 		auth.POST("/student/register", signupLimiter.Middleware(), controllers.StudentRegister)
 		auth.POST("/send-otp", otpLimiter.Middleware(), controllers.SendOTP)
@@ -301,6 +303,23 @@ func SetupRoutes() *gin.Engine {
 		protected.GET("/notifications", controllers.GetNotifications)
 		protected.PUT("/notifications/:id/read", controllers.MarkNotificationRead)
 
+		// ── Support / Complaints ────────────────
+		// Scoped to the caller's own tickets, same pattern as notifications —
+		// Client, Lawyer and Student all use these; Super Admin management of
+		// every ticket lives under the /admin/support group below.
+		protected.POST("/support/tickets", controllers.CreateSupportTicket)
+		protected.GET("/support/tickets", controllers.GetMySupportTickets)
+		protected.GET("/support/tickets/:id", controllers.GetMySupportTicketDetail)
+		protected.POST("/support/tickets/:id/messages", controllers.ReplyToMySupportTicket)
+
+		// ── Content (read-only, role-scoped by target audience) ─
+		protected.GET("/content/articles", controllers.GetPublishedArticles)
+		protected.GET("/content/articles/:id", controllers.GetPublishedArticleDetail)
+		protected.GET("/content/faqs", controllers.GetPublishedFAQs)
+		protected.GET("/content/banners", controllers.GetActiveBanners)
+		protected.GET("/content/announcements", controllers.GetActiveAnnouncements)
+		protected.GET("/content/promotions", controllers.GetActivePromotions)
+
 		// ── Chat ───────────────────────────────
 		protected.GET("/chat/rooms", controllers.GetChatRooms)
 		protected.POST("/chat/rooms", controllers.CreateChatRoom)
@@ -344,8 +363,47 @@ func SetupRoutes() *gin.Engine {
 		admin := protected.Group("/admin")
 		admin.Use(middleware.RoleMiddleware("super_admin"))
 		{
-			// ✅ Existing
-			admin.GET("/audit-logs", controllers.GetAuditLogs)
+			// ✅ Audit Logs
+			admin.GET("/audit-logs", controllers.AdminGetAuditLogs)
+			admin.GET("/audit-logs/stats", controllers.AdminGetAuditLogStats)
+			admin.GET("/audit-logs/:id", controllers.AdminGetAuditLogDetail)
+
+			// ✅ Support / Complaints
+			admin.GET("/support/stats", controllers.AdminGetSupportStats)
+			admin.GET("/support/tickets", controllers.AdminGetSupportTickets)
+			admin.GET("/support/tickets/:id", controllers.AdminGetSupportTicketDetail)
+			admin.PUT("/support/tickets/:id/assign", controllers.AdminAssignSupportTicket)
+			admin.PUT("/support/tickets/:id/priority", controllers.AdminUpdateSupportPriority)
+			admin.PUT("/support/tickets/:id/status", controllers.AdminUpdateSupportStatus)
+			admin.POST("/support/tickets/:id/messages", controllers.AdminReplySupportTicket)
+			admin.PUT("/support/tickets/:id/resolve", controllers.AdminResolveSupportTicket)
+			admin.PUT("/support/tickets/:id/close", controllers.AdminCloseSupportTicket)
+			admin.PUT("/support/tickets/:id/reopen", controllers.AdminReopenSupportTicket)
+
+			// ✅ Content Management
+			admin.GET("/content/stats", controllers.AdminGetContentStats)
+			admin.GET("/content/items", controllers.AdminGetContentItems)
+			admin.GET("/content/items/:id", controllers.AdminGetContentItemDetail)
+			admin.POST("/content/items", controllers.AdminCreateContentItem)
+			admin.PUT("/content/items/:id", controllers.AdminUpdateContentItem)
+			admin.PUT("/content/items/:id/publish", controllers.AdminPublishContentItem)
+			admin.PUT("/content/items/:id/schedule", controllers.AdminScheduleContentItem)
+			admin.PUT("/content/items/:id/unpublish", controllers.AdminUnpublishContentItem)
+			admin.PUT("/content/items/:id/archive", controllers.AdminArchiveContentItem)
+			admin.DELETE("/content/items/:id", controllers.AdminDeleteContentItem)
+			admin.GET("/content/legal/version/:id", controllers.AdminGetLegalDocumentVersion)
+			admin.PUT("/content/legal/version/:id/publish", controllers.AdminPublishLegalDocument)
+			admin.GET("/content/legal/:doc_type", controllers.AdminGetLegalDocuments)
+			admin.POST("/content/legal/:doc_type", controllers.AdminCreateLegalDocumentDraft)
+
+			// ✅ Notifications Center
+			admin.GET("/notifications-center/stats", controllers.AdminGetNotificationCenterStats)
+			admin.GET("/notifications-center/estimate", controllers.AdminEstimateNotificationRecipients)
+			admin.GET("/notifications-center/batches", controllers.AdminGetNotificationBatches)
+			admin.GET("/notifications-center/batches/:id", controllers.AdminGetNotificationBatchDetail)
+			admin.POST("/notifications-center/batches", controllers.AdminCreateNotification)
+			admin.PUT("/notifications-center/batches/:id", controllers.AdminUpdateScheduledNotification)
+			admin.PUT("/notifications-center/batches/:id/cancel", controllers.AdminCancelScheduledNotification)
 
 			// ✅ User Management (Suspend / Activate / Delete)
 			// /users/:id must be registered after every other literal
@@ -364,6 +422,19 @@ func SetupRoutes() *gin.Engine {
 			admin.GET("/lawyers/:id/document", controllers.AdminGetLawyerDocument)
 			admin.PUT("/lawyers/:id/verify", controllers.AdminVerifyLawyer)
 
+			// ✅ Advanced Lawyer Management
+			admin.GET("/lawyers/stats", controllers.AdminGetLawyerStats)
+			admin.GET("/lawyers/:id/profile", controllers.AdminGetLawyerProfile)
+			admin.GET("/lawyers/:id/documents", controllers.AdminGetLawyerDocumentsList)
+			admin.PUT("/lawyers/documents/:doc_id/approve", controllers.AdminApproveLawyerDocument)
+			admin.PUT("/lawyers/documents/:doc_id/reject", controllers.AdminRejectLawyerDocument)
+			admin.PUT("/lawyers/:id/suspend", controllers.AdminSuspendLawyer)
+			admin.PUT("/lawyers/:id/reactivate", controllers.AdminReactivateLawyer)
+			admin.GET("/lawyers/:id/bookings", controllers.AdminGetLawyerBookings)
+			admin.GET("/lawyers/:id/cases", controllers.AdminGetLawyerCases)
+			admin.GET("/lawyers/:id/reviews", controllers.AdminGetLawyerReviews)
+			admin.GET("/lawyers/:id/activity", controllers.AdminGetLawyerActivity)
+
 			// ✅ Students & Clients
 			admin.GET("/students", controllers.AdminGetStudents)
 			admin.GET("/clients", controllers.AdminGetClients)
@@ -377,8 +448,32 @@ func SetupRoutes() *gin.Engine {
 
 			// ✅ Subscriptions & Revenue / Billing
 			admin.GET("/subscriptions", controllers.AdminGetSubscriptions)
+			admin.GET("/subscriptions/stats", controllers.AdminGetSubscriptionStats)
+			admin.GET("/subscriptions/plans", controllers.AdminGetSubscriptionPlans)
+			admin.GET("/subscriptions/revenue", controllers.AdminGetSubscriptionRevenue)
+			admin.GET("/subscriptions/payments", controllers.AdminGetSubscriptionPayments)
+			admin.GET("/subscriptions/:id", controllers.AdminGetSubscriptionByID)
+
+			admin.GET("/analytics/users", controllers.AdminGetUserAnalytics)
+			admin.GET("/analytics/bookings", controllers.AdminGetBookingAnalytics)
+			admin.GET("/analytics/trends", controllers.AdminGetAnalyticsTrends)
+			admin.GET("/analytics/transactions", controllers.AdminGetAnalyticsTransactions)
 			admin.GET("/revenue", controllers.AdminGetRevenue)
 			admin.GET("/invoices", controllers.AdminGetInvoices)
+
+			// ✅ Payouts & Settlements
+			admin.GET("/payouts/stats", controllers.AdminGetPayoutStats)
+			admin.GET("/payouts/lawyers", controllers.AdminGetLawyerPayoutList)
+			admin.GET("/payouts/lawyers/:id", controllers.AdminGetLawyerPayoutDetail)
+			admin.GET("/payouts/pending", controllers.AdminGetPendingPayouts)
+			admin.GET("/payouts/paid", controllers.AdminGetPaidPayouts)
+			admin.GET("/payouts/settlements", controllers.AdminGetSettlements)
+			admin.POST("/payouts/settlements", controllers.AdminCreateSettlement)
+			admin.GET("/payouts/settlements/:id", controllers.AdminGetSettlementDetail)
+			admin.GET("/payouts/commission", controllers.AdminGetPayoutCommission)
+			admin.GET("/payouts/gst", controllers.AdminGetPayoutGST)
+			admin.GET("/payouts/trends", controllers.AdminGetPayoutTrends)
+			admin.GET("/payouts/transactions", controllers.AdminGetPayoutTransactions)
 
 			// ✅ Documents, Cases, Hearings (platform-wide)
 			admin.GET("/documents", controllers.AdminGetDocuments)

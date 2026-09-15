@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/auto_refresh_service.dart';
 
 class BillingProvider extends ChangeNotifier {
   List<dynamic> _invoices = [];
@@ -12,6 +13,19 @@ class BillingProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
+  BillingProvider() {
+    AutoRefreshService.instance.register('billing_invoices',
+        () => loadInvoices(silent: true));
+    AutoRefreshService.instance.register('billing_payments', loadPayments);
+  }
+
+  @override
+  void dispose() {
+    AutoRefreshService.instance.unregister('billing_invoices');
+    AutoRefreshService.instance.unregister('billing_payments');
+    super.dispose();
+  }
+
   int get unpaidCount =>
       _invoices.where((i) => i['status'] == 'unpaid' || i['status'] == 'partial').length;
 
@@ -19,14 +33,19 @@ class BillingProvider extends ChangeNotifier {
       .where((i) => i['status'] == 'unpaid' || i['status'] == 'partial')
       .fold(0.0, (sum, i) => sum + ((i['total_amount'] ?? 0) - (i['paid_amount'] ?? 0)));
 
-  Future<void> loadInvoices() async {
-    _loading = true;
-    notifyListeners();
+  // [silent]: see ClientProvider.loadClients — used by the global 3-second
+  // auto-refresh so a background poll never re-shows the loading spinner.
+  Future<void> loadInvoices({bool silent = false}) async {
+    if (!silent) {
+      _loading = true;
+      notifyListeners();
+    }
     try {
       final res = await DioClient.instance.get('/invoices');
       _invoices = res.data['data'] ?? [];
+      _error = null;
     } catch (e) {
-      _error = e.toString();
+      if (!silent) _error = e.toString();
     }
     _loading = false;
     notifyListeners();

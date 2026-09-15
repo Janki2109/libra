@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../auth/providers/auth_provider.dart';
 
 // Same allow-list/format helpers used by the dedicated My Documents screen
@@ -115,25 +116,33 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
     // this screen already loads on open, the instant one of those arrives,
     // instead of only on the next manual pull-to-refresh.
     RealtimeEvents.instance.addListener(_onRealtimeEvent);
+    // Global 3-second auto-refresh baseline, on top of the push-driven
+    // refresh above — this is the client's whole home hub (cases, hearings,
+    // invoices, chat rooms, documents, consultations), so it's the highest-
+    // value place to guarantee the "no manual refresh" requirement holds
+    // even if a push is ever missed.
+    AutoRefreshService.instance
+        .register('portal_dashboard', () => _loadData(silent: true));
   }
 
   void _onRealtimeEvent() {
     if (RealtimeEvents.instance.matches([
       'booking_', 'incoming_call_', 'chat_session_started', 'call_response_',
     ])) {
-      _loadData();
+      _loadData(silent: true);
     }
   }
 
   @override
   void dispose() {
     RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    AutoRefreshService.instance.unregister('portal_dashboard');
     _fadeCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _loading = true);
+  Future<void> _loadData({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     try {
       final results = await Future.wait([
         DioClient.instance.get('/portal/my-cases'),
@@ -143,6 +152,7 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
         DioClient.instance.get('/portal/my-documents'),
         DioClient.instance.get('/portal/my-consultations'),
       ]);
+      if (!mounted) return;
       setState(() {
         _cases = results[0].data['data'] ?? [];
         _hearings = results[1].data['data'] ?? [];
@@ -153,7 +163,7 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
         _loading = false;
       });
     } catch (e) {
-      setState(() => _loading = false);
+      if (!silent && mounted) setState(() => _loading = false);
     }
   }
 

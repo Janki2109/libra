@@ -41,6 +41,13 @@ func TestAllMigrationsAreEmbedded(t *testing.T) {
 		"023_consultation_session_status.sql",
 		"024_consultation_slot_lock.sql",
 		"025_consultation_session_timestamps.sql",
+		"026_remove_admin_role.sql",
+		"027_lawyer_payouts.sql",
+		"028_audit_logs_extended.sql",
+		"029_support_tickets.sql",
+		"030_content_management.sql",
+		"031_notifications_center.sql",
+		"032_lawyer_management.sql",
 	}
 
 	if len(names) != len(want) {

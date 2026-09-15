@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
+import '../../../core/services/auto_refresh_service.dart';
 
 const _bg = Color(0xFFF6F5FB);
 const _bgCard = Color(0xFFFFFFFF);
@@ -30,28 +31,34 @@ class _ChatListScreenState extends State<ChatListScreen> {
     // the room list's last-message preview/ordering current without a
     // manual reload.
     RealtimeEvents.instance.addListener(_onRealtimeEvent);
+    AutoRefreshService.instance
+        .register('chat_list', () => _load(silent: true));
   }
 
   void _onRealtimeEvent() {
-    if (RealtimeEvents.instance.lastType == 'chat_message') _load();
+    if (RealtimeEvents.instance.lastType == 'chat_message') {
+      _load(silent: true);
+    }
   }
 
   @override
   void dispose() {
     RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    AutoRefreshService.instance.unregister('chat_list');
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     try {
       final res = await DioClient.instance.get('/chat/rooms');
+      if (!mounted) return;
       setState(() {
         _rooms = res.data['data'] ?? [];
         _loading = false;
       });
     } catch (e) {
-      setState(() => _loading = false);
+      if (!silent && mounted) setState(() => _loading = false);
     }
   }
 

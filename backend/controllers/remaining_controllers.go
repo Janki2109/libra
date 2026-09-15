@@ -712,7 +712,7 @@ func GetNotifications(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	rows, err := config.DB.Query(`
 		SELECT id, title, COALESCE(message,''), COALESCE(type,'general'),
-		is_read, created_at, COALESCE(reference_id,''), COALESCE(reference_type,'')
+		is_read, created_at, COALESCE(reference_id::text,''), COALESCE(reference_type,'')
 		FROM notifications WHERE user_id=$1::uuid
 		ORDER BY created_at DESC LIMIT 50
 	`, userID)
@@ -907,14 +907,15 @@ func CreateStaff(c *gin.Context) {
 
 	role := req.Role
 	switch role {
-	case "lawyer", "staff", "clerk", "admin":
+	case "lawyer", "staff", "clerk":
 	case "":
 		role = "staff"
 	default:
-		// Without this, a firm admin could mint a super_admin and take over
-		// the whole platform.
+		// Without this, a firm lawyer could mint a super_admin and take over
+		// the whole platform. There is no separate "admin" role to grant
+		// either — every firm's own management role is "lawyer".
 		utils.Error(c, http.StatusBadRequest, "Invalid role",
-			"expected one of: lawyer, staff, clerk, admin")
+			"expected one of: lawyer, staff, clerk")
 		return
 	}
 
@@ -1286,7 +1287,7 @@ func GetAllLawyers(c *gin.Context) {
 		FROM users u
 		LEFT JOIN firms f ON u.firm_id = f.id
 		LEFT JOIN roles r ON u.role_id = r.id
-		WHERE r.name IN ('admin','lawyer') AND u.is_active = true
+		WHERE r.name = 'lawyer' AND u.is_active = true
 		ORDER BY u.created_at DESC
 		LIMIT 200
 	`)
@@ -1610,6 +1611,16 @@ func RefundPayment(c *gin.Context) {
 			fmt.Sprintf("₹%.2f has been paid back to you.", p.Amount), "payment_reminder")
 	}
 
+	utils.LogAudit(c, utils.AuditEntry{
+		Action:      "REFUND_PROCESSED",
+		Module:      "payments",
+		TargetType:  "payment",
+		TargetID:    paymentID,
+		Description: "Payment refunded",
+		Before:      map[string]interface{}{"refund_status": "none"},
+		After:       map[string]interface{}{"refund_status": "refunded", "amount": p.Amount, "reference": reference},
+	})
+
 	utils.Success(c, http.StatusOK, "Payment refunded", gin.H{
 		"amount":           p.Amount,
 		"refund_reference": reference,
@@ -1643,7 +1654,7 @@ func GetLawyerProfile(c *gin.Context) {
 		LEFT JOIN firms f ON u.firm_id = f.id
 		LEFT JOIN roles r ON u.role_id = r.id
 		WHERE u.id = $1::uuid AND u.is_active = true
-		  AND r.name IN ('admin','lawyer')
+		  AND r.name = 'lawyer'
 	`, lawyerID).Scan(&id, &name, &designation,
 		&firmName, &city, &state, &barCouncil, &avatarURL,
 		&totalCases, &wonCases, &expYears)

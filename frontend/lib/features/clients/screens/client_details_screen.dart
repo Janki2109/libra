@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../documents/widgets/document_upload_sheet.dart';
 
 const _bg = Color(0xFFF6F5FB);
@@ -40,6 +41,11 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
     // completed/expired) push through the existing FCM-backed event bus —
     // refresh this client's booking history without a manual pull.
     RealtimeEvents.instance.addListener(_onRealtimeEvent);
+    // Global 3-second auto-refresh baseline, on top of the push-driven
+    // refresh above — keyed by clientId so two of these screens (unlikely,
+    // but possible via back-stack) never collide on the same registration.
+    AutoRefreshService.instance.register(
+        'client_details_${widget.clientId}', () => _loadClient(silent: true));
   }
 
   void _onRealtimeEvent() {
@@ -52,6 +58,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
   @override
   void dispose() {
     RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    AutoRefreshService.instance.unregister('client_details_${widget.clientId}');
     _tabController.dispose();
     super.dispose();
   }
@@ -70,19 +77,23 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
     }
   }
 
-  Future<void> _loadClient() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _loadClient({bool silent = false}) async {
+    if (!mounted) return;
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final res = await DioClient.instance.get('/clients/${widget.clientId}');
+      if (!mounted) return;
       if (res.data['success'] == true) {
         setState(() {
           _client = res.data['data'];
           _loading = false;
         });
-      } else {
+      } else if (!silent) {
         setState(() {
           _error = res.data['message'] ?? 'Failed to load';
           _loading = false;
@@ -94,36 +105,36 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
       try {
         final casesRes = await DioClient.instance
             .get('/cases', queryParameters: {'client_id': widget.clientId});
-        setState(() {
-          _cases = casesRes.data['data'] as List;
-        });
+        if (mounted) setState(() => _cases = casesRes.data['data'] as List);
       } catch (e) {
         debugPrint('Cases error: $e');
       }
       try {
         final docsRes = await DioClient.instance.get('/documents',
             queryParameters: {'client_id': widget.clientId});
-        setState(() {
-          _documents = docsRes.data['data'] as List;
-        });
+        if (mounted) {
+          setState(() => _documents = docsRes.data['data'] as List);
+        }
       } catch (e) {
         debugPrint('Documents error: $e');
       }
       try {
         final hearingsRes = await DioClient.instance.get('/hearings',
             queryParameters: {'client_id': widget.clientId});
-        setState(() {
-          _hearings = hearingsRes.data['data'] as List;
-        });
+        if (mounted) {
+          setState(() => _hearings = hearingsRes.data['data'] as List);
+        }
       } catch (e) {
         debugPrint('Hearings error: $e');
       }
       await _loadBookings();
     } catch (e) {
-      setState(() {
-        _error = 'Failed to load client details';
-        _loading = false;
-      });
+      if (!silent && mounted) {
+        setState(() {
+          _error = 'Failed to load client details';
+          _loading = false;
+        });
+      }
     }
   }
 

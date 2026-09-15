@@ -15,12 +15,15 @@ import (
 // is a privilege breach, so this stays pinned by a test.
 func TestRequireFirmStaff(t *testing.T) {
 	cases := map[string]int{
-		"admin":       http.StatusOK,
 		"lawyer":      http.StatusOK,
 		"staff":       http.StatusOK,
 		"clerk":       http.StatusOK,
 		"super_admin": http.StatusOK,
 
+		// The legacy "admin" role no longer exists in the system — every
+		// firm founder is "lawyer" now (see RegisterFirm) — so it must be
+		// rejected the same as any other unknown role.
+		"admin":       http.StatusForbidden,
 		"client":      http.StatusForbidden,
 		"law_student": http.StatusForbidden,
 		"":            http.StatusForbidden,

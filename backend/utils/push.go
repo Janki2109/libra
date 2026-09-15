@@ -161,3 +161,87 @@ func SendPushToUser(userID, title, body, notifType, referenceID, referenceType s
 		}
 	}
 }
+
+// PushResult is what SendPushToUserTracked actually observed for one user —
+// used by the Notifications Center to report real Sent/Failed/No-token
+// counts instead of assuming every attempt succeeded.
+type PushResult struct {
+	Status string // "sent", "no_token", or "failed"
+	Error  string // FCM's error text when Status == "failed"; never a secret
+}
+
+// SendPushToUserTracked is SendPushToUser plus a real per-user outcome,
+// for callers (the Notifications Center) that need to persist what actually
+// happened rather than fire-and-forget. Behavior is otherwise identical,
+// including the same invalid-token cleanup — this does not change how
+// existing Notify()/NotifyWithRef() callers send push.
+func SendPushToUserTracked(userID, title, body, notifType, referenceID, referenceType string) PushResult {
+	if fcmClient == nil {
+		return PushResult{Status: "no_token"} // push not configured; treated the same as "nothing to send to"
+	}
+	rows, err := config.DB.Query(`SELECT token FROM device_tokens WHERE user_id = $1::uuid`, userID)
+	if err != nil {
+		log.Printf("[fcm] failed to load device tokens for user %s: %v", userID, err)
+		return PushResult{Status: "failed", Error: "could not load device tokens"}
+	}
+	var tokens []string
+	for rows.Next() {
+		var t string
+		if rows.Scan(&t) == nil {
+			tokens = append(tokens, t)
+		}
+	}
+	rows.Close()
+	if len(tokens) == 0 {
+		return PushResult{Status: "no_token"}
+	}
+
+	ctx := context.Background()
+	sentAny := false
+	var lastErr string
+	for _, token := range tokens {
+		_, err := fcmClient.Send(ctx, &messaging.Message{
+			Token: token,
+			Notification: &messaging.Notification{
+				Title: title,
+				Body:  body,
+			},
+			Data: map[string]string{
+				"title":          title,
+				"body":           body,
+				"type":           notifType,
+				"reference_id":   referenceID,
+				"reference_type": referenceType,
+			},
+			Android: &messaging.AndroidConfig{
+				Priority:     "high",
+				Notification: &messaging.AndroidNotification{ChannelID: "default_channel"},
+			},
+			APNS: &messaging.APNSConfig{
+				Payload: &messaging.APNSPayload{Aps: &messaging.Aps{Sound: "default"}},
+				Headers: map[string]string{"apns-priority": "10"},
+			},
+		})
+		if err != nil {
+			msg := err.Error()
+			if strings.Contains(msg, "registration-token-not-registered") ||
+				strings.Contains(msg, "invalid-argument") ||
+				strings.Contains(msg, "NotFound") {
+				config.DB.Exec(`DELETE FROM device_tokens WHERE token = $1`, token)
+			} else {
+				lastErr = msg
+			}
+			continue
+		}
+		sentAny = true
+	}
+	if sentAny {
+		return PushResult{Status: "sent"}
+	}
+	if lastErr != "" {
+		return PushResult{Status: "failed", Error: lastErr}
+	}
+	// Every token was invalid and got cleaned up above — same real-world
+	// outcome as never having had one.
+	return PushResult{Status: "no_token"}
+}

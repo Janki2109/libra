@@ -325,6 +325,18 @@ func UpdateCase(c *gin.Context) {
 		return
 	}
 
+	if req.Status != "" && req.Status != currentStatus {
+		utils.LogAudit(c, utils.AuditEntry{
+			Action:      "CASE_STATUS_CHANGED",
+			Module:      "cases",
+			TargetType:  "case",
+			TargetID:    id,
+			Description: "Case status changed",
+			Before:      map[string]string{"status": currentStatus},
+			After:       map[string]string{"status": req.Status},
+		})
+	}
+
 	// ✅ Send notification to client when status changes
 	if req.Status != "" {
 		var clientID, firmID string

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../billing/screens/subscription_checkout_screen.dart' show CheckoutOutcome;
 import '../repositories/consultation_repository.dart';
@@ -67,10 +68,20 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
   void initState() {
     super.initState();
     _loadLawyerPhoto();
+    // Slot availability has no push event of its own (another client booking
+    // the same slot doesn't notify this device) — this is the one place the
+    // global 3-second poll is the ONLY way to keep the picker from offering
+    // a slot someone else just took, short of the server-side unique-slot
+    // check at payment time.
+    AutoRefreshService.instance.register('booked_slots', () {
+      final date = _selectedDate;
+      if (date == null) return Future.value();
+      return _loadBookedSlots(date, silent: true);
+    });
   }
 
-  Future<void> _loadBookedSlots(DateTime date) async {
-    setState(() => _loadingSlots = true);
+  Future<void> _loadBookedSlots(DateTime date, {bool silent = false}) async {
+    if (!silent) setState(() => _loadingSlots = true);
     try {
       final iso = date.toIso8601String().substring(0, 10);
       final res = await DioClient.instance
@@ -90,7 +101,7 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
       // Best-effort — the real enforcement is server-side at payment time
       // regardless, so a failed fetch here just means the picker doesn't
       // pre-emptively grey anything out.
-      if (mounted) setState(() => _loadingSlots = false);
+      if (!silent && mounted) setState(() => _loadingSlots = false);
     }
   }
 
@@ -159,6 +170,7 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
 
   @override
   void dispose() {
+    AutoRefreshService.instance.unregister('booked_slots');
     _notesCtrl.dispose();
     super.dispose();
   }

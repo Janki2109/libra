@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/fcm_service.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/trial_service.dart';
 import '../models/auth_model.dart';
@@ -191,7 +192,10 @@ class AuthProvider extends ChangeNotifier {
           name: name,
           email: email,
           phone: phone,
-          roleName: 'admin',
+          // Matches the backend: a firm's founding user is role='lawyer',
+          // same as anyone added afterwards — there is no separate "admin"
+          // role in the system.
+          roleName: 'lawyer',
           firmId: data['firm_id']?.toString() ?? '',
           // The register response itself never echoes designation back —
           // it's stored server-side correctly, but this model is built
@@ -407,6 +411,11 @@ class AuthProvider extends ChangeNotifier {
 
   // ─── LOGOUT ──────────────────────────────
   Future<void> logout() async {
+    // Stop the global 3-second auto-refresh immediately — required even
+    // though _AutoRefreshGate also reacts to isAuthenticated, since that only
+    // runs on the next rebuild; this guarantees no in-flight/queued refresh
+    // call fires against a session that's already being torn down below.
+    AutoRefreshService.instance.stop();
     await FcmService.instance.clearToken();
     await StorageService.clearAll();
     await TrialService.clear();
@@ -424,6 +433,7 @@ class AuthProvider extends ChangeNotifier {
   /// provider swallowed the error, and nothing told the user to sign in again.
   void onSessionExpired() {
     if (_status == AuthStatus.unauthenticated) return;
+    AutoRefreshService.instance.stop();
     _user = null;
     _token = null;
     _status = AuthStatus.unauthenticated;

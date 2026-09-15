@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/auto_refresh_service.dart';
 
 class DashboardStats {
   final int totalClients;
@@ -43,6 +44,17 @@ class DashboardProvider extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
+  DashboardProvider() {
+    AutoRefreshService.instance
+        .register('dashboard', () => loadDashboard(silent: true));
+  }
+
+  @override
+  void dispose() {
+    AutoRefreshService.instance.unregister('dashboard');
+    super.dispose();
+  }
+
   /// Loads the dashboard from the API's own `/dashboard` endpoint.
   ///
   /// This used to fan out into six parallel requests — /reports/cases,
@@ -58,10 +70,12 @@ class DashboardProvider extends ChangeNotifier {
   ///     payload that grows without limit as a firm takes on clients.
   ///  3. The backend already exposes `/dashboard`, which returns exactly this
   ///     shape in a single round trip.
-  Future<void> loadDashboard() async {
-    _loading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> loadDashboard({bool silent = false}) async {
+    if (!silent) {
+      _loading = true;
+      _error = null;
+      notifyListeners();
+    }
 
     try {
       final response = await DioClient.instance.get('/dashboard');

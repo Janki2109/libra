@@ -31,6 +31,7 @@ dependencies:
   path_provider: ^2.1.4
   web: ^1.1.1
   open_filex: ^4.7.0
+  pdf: ^3.11.1
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
+import '../../../core/services/auto_refresh_service.dart';
 
 /// Real unread-message count for the Home screen's chat badge, backed by
 /// the existing GET /chat/unread endpoint (chat_messages.is_read, already
@@ -17,6 +18,8 @@ class ChatUnreadProvider extends ChangeNotifier {
     // stale — refresh on the same realtime event bus the rest of the app
     // already uses instead of a timer or manual refresh.
     RealtimeEvents.instance.addListener(_onRealtimeEvent);
+    // Baseline guarantee alongside the push above — see NotificationProvider.
+    AutoRefreshService.instance.register('chat_unread', load);
   }
 
   void _onRealtimeEvent() {
@@ -26,6 +29,7 @@ class ChatUnreadProvider extends ChangeNotifier {
   @override
   void dispose() {
     RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    AutoRefreshService.instance.unregister('chat_unread');
     super.dispose();
   }
 

@@ -37,6 +37,8 @@ import '../../features/staff/screens/staff_list_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/settings_screen.dart';
 import '../../features/admin/screens/admin_dashboard_screen.dart';
+import '../../features/admin/screens/admin_analytics_screen.dart';
+import '../../features/admin/screens/admin_payouts_screen.dart';
 import '../../features/client_portal/screens/portal_dashboard_screen.dart';
 import '../../features/client_portal/screens/portal_case_screen.dart';
 import '../../features/client_portal/screens/portal_invoices_screen.dart';
@@ -63,6 +65,9 @@ import '../../features/auth/screens/otp_screen.dart';
 import '../../features/profile/screens/change_password_screen.dart';
 import '../../features/admin/screens/admin_users_screen.dart';
 import '../../features/admin/screens/admin_audit_screen.dart';
+import '../../features/admin/screens/admin_support_screen.dart';
+import '../../features/admin/screens/admin_content_screen.dart';
+import '../../features/admin/screens/admin_notifications_center_screen.dart';
 import '../../features/admin/screens/admin_verify_lawyers_screen.dart';
 import '../../features/admin/screens/admin_subscriptions_screen.dart';
 import '../../features/admin/screens/admin_revenue_screen.dart';
@@ -466,8 +471,8 @@ class AppRouter {
             builder: (_, __) => const ResearchHistoryScreen()),
         GoRoute(
             path: '/lawyer/ai-research/history/:id',
-            builder: (_, state) => ResearchHistoryDetailScreen(
-                id: state.pathParameters['id']!)),
+            builder: (_, state) =>
+                ResearchHistoryDetailScreen(id: state.pathParameters['id']!)),
         GoRoute(
             path: '/lawyer/ai-drafting',
             builder: (_, __) => const AIDraftingScreen()),
@@ -483,22 +488,37 @@ class AppRouter {
             builder: (_, __) => const LawyerEarningsScreen()),
         GoRoute(
             path: '/lawyer/earnings/:id',
-            builder: (_, state) => BillDetailsScreen(
-                consultationId: state.pathParameters['id']!)),
+            builder: (_, state) =>
+                BillDetailsScreen(consultationId: state.pathParameters['id']!)),
 
         // ─── ADMIN ───────────────────────────
         GoRoute(
             path: '/admin', builder: (_, __) => const AdminDashboardScreen()),
         GoRoute(
+            path: '/admin/analytics',
+            builder: (_, __) => const AdminAnalyticsScreen()),
+        GoRoute(
             path: '/admin/users', builder: (_, __) => const AdminUsersScreen()),
         GoRoute(
             path: '/admin/audit', builder: (_, __) => const AdminAuditScreen()),
+        GoRoute(
+            path: '/admin/support',
+            builder: (_, __) => const AdminSupportScreen()),
+        GoRoute(
+            path: '/admin/content',
+            builder: (_, __) => const AdminContentScreen()),
+        GoRoute(
+            path: '/admin/notifications-center',
+            builder: (_, __) => const AdminNotificationsCenterScreen()),
         GoRoute(
             path: '/admin/verify-lawyers',
             builder: (_, __) => const AdminVerifyLawyersScreen()),
         GoRoute(
             path: '/admin/subscriptions',
             builder: (_, __) => const AdminSubscriptionsScreen()),
+        GoRoute(
+            path: '/admin/payouts',
+            builder: (_, __) => const AdminPayoutsScreen()),
         GoRoute(
             path: '/admin/revenue',
             builder: (_, __) => const AdminRevenueScreen()),

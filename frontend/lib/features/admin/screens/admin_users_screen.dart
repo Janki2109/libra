@@ -110,7 +110,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           ]),
           const SizedBox(height: 18),
           if (_loading)
-            const Padding(padding: EdgeInsets.symmetric(vertical: 60), child: Center(child: CircularProgressIndicator()))
+            const AdminTableSkeleton()
           else if (_error != null)
             AdminEmptyState(message: _error!)
           else if (_rows.isEmpty)

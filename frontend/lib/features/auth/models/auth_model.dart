@@ -36,9 +36,12 @@ class UserModel {
     return name.isNotEmpty ? name[0].toUpperCase() : 'U';
   }
 
-  bool get isAdmin => roleName == 'admin' || roleName == 'super_admin';
+  // The system has exactly 4 roles — super_admin, lawyer, client,
+  // law_student. There is no separate "admin" role: a firm's founding
+  // lawyer is role='lawyer', same as anyone added to the firm afterwards.
+  bool get isAdmin => roleName == 'super_admin';
   bool get isClient => roleName == 'client';
-  bool get isLawyer => roleName == 'lawyer' || roleName == 'admin';
+  bool get isLawyer => roleName == 'lawyer';
   bool get isSuperAdmin => roleName == 'super_admin';
   bool get isLawStudent => roleName == 'law_student';
   bool get hasPhoto => profilePhoto.isNotEmpty;

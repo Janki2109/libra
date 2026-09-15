@@ -49,9 +49,14 @@ func RequireFirm(c *gin.Context) (string, bool) {
 }
 
 // IsAdmin reports whether the caller may act across an entire firm.
+//
+// There is no separate "admin"/firm-owner role — every self-registered firm
+// founder is role='lawyer', same as anyone added to the firm afterwards (see
+// RegisterFirm in auth_controller.go) — so "lawyer" is the firm-management
+// role here, not just "super_admin".
 func IsAdmin(c *gin.Context) bool {
 	switch Role(c) {
-	case "admin", "super_admin":
+	case "lawyer", "super_admin":
 		return true
 	}
 	return false

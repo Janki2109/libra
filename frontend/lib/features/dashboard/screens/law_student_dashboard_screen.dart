@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../student/screens/news_webview_screen.dart';
 
@@ -42,28 +43,35 @@ class _LawStudentDashboardScreenState extends State<LawStudentDashboardScreen>
       ..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadData();
+    // Global 3-second auto-refresh for the Student role, same mechanism used
+    // for Client/Lawyer — keeps progress/leaderboard-relevant data current
+    // without a manual pull.
+    AutoRefreshService.instance
+        .register('student_dashboard', () => _loadData(silent: true));
   }
 
   @override
   void dispose() {
+    AutoRefreshService.instance.unregister('student_dashboard');
     _fadeCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _loading = true);
+  Future<void> _loadData({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     try {
       final results = await Future.wait([
         DioClient.instance.get('/student/progress'),
         DioClient.instance.get('/student/lawyers'),
       ]);
+      if (!mounted) return;
       setState(() {
         _progress = results[0].data['data']?['progress'] ?? {};
         _lawyers = results[1].data['data'] ?? [];
         _loading = false;
       });
     } catch (e) {
-      setState(() => _loading = false);
+      if (!silent && mounted) setState(() => _loading = false);
     }
   }
 

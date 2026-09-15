@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"libra/config"
+	"libra/controllers"
 	"libra/migrations"
 	"libra/routes"
 	"libra/services"
@@ -54,6 +55,12 @@ func main() {
 	// A lawyer has 30 minutes past a confirmed slot's scheduled time to
 	// start the session before it's automatically marked expired.
 	services.NewConsultationSweeper(config.DB, 30*time.Minute).Start(sweeperCtx)
+	// Moves scheduled content live at its publish_at time and auto-archives
+	// published banners/announcements/promotions past their expire_at —
+	// real server-side scheduling, not dependent on the admin app being open.
+	services.NewContentSweeper(config.DB).Start(sweeperCtx)
+	// Fires scheduled Super Admin notifications at their scheduled_at time.
+	services.NewNotificationSweeper(config.DB, controllers.ProcessNotificationBatch).Start(sweeperCtx)
 
 	r := routes.SetupRoutes()
 

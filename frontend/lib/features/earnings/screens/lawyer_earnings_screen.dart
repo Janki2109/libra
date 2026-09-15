@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../repositories/earnings_repository.dart';
 import '../../../core/services/realtime_events.dart';
+import '../../../core/services/auto_refresh_service.dart';
 
 // Same palette as the rest of the Lawyer Panel (dashboard_screen.dart,
 // consultation_management_screen.dart, profile_screen.dart) — kept identical
@@ -52,26 +53,33 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
     // pushes through the existing FCM-backed event bus — refresh this ledger
     // without a manual pull.
     RealtimeEvents.instance.addListener(_onRealtimeEvent);
+    // Global 3-second auto-refresh baseline, on top of the push-driven
+    // refresh above.
+    AutoRefreshService.instance
+        .register('lawyer_earnings', () => _load(silent: true));
   }
 
   void _onRealtimeEvent() {
     if (RealtimeEvents.instance
         .matches(['booking_', 'incoming_call_', 'call_response_'])) {
-      _load();
+      _load(silent: true);
     }
   }
 
   @override
   void dispose() {
     RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    AutoRefreshService.instance.unregister('lawyer_earnings');
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final result = await _repo.fetch(
         status: _statusFilter,
@@ -86,10 +94,12 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
       });
     } on EarningsException catch (e) {
       if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.message;
-      });
+      if (!silent) {
+        setState(() {
+          _loading = false;
+          _error = e.message;
+        });
+      }
     }
   }
 

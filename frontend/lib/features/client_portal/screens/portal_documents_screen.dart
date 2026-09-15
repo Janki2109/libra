@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../lawyer/utils/android_download.dart';
+import '../../../core/services/auto_refresh_service.dart';
 
 // The complete set of extensions this screen accepts, grouped by the file
 // type chip that filters the native picker to them. "Other" stays broad but
@@ -100,24 +101,31 @@ class _PortalDocumentsScreenState extends State<PortalDocumentsScreen>
         .animate(CurvedAnimation(parent: _fabCtrl, curve: Curves.elasticOut));
     _fabCtrl.forward();
     _loadDocuments();
+    // Global 3-second auto-refresh: a lawyer uploading a new document for
+    // this client shows up here without the client needing to pull-to-refresh
+    // or reopen the screen.
+    AutoRefreshService.instance
+        .register('portal_documents', () => _loadDocuments(silent: true));
   }
 
   @override
   void dispose() {
+    AutoRefreshService.instance.unregister('portal_documents');
     _fabCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadDocuments() async {
-    setState(() => _loading = true);
+  Future<void> _loadDocuments({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     try {
       final res = await DioClient.instance.get('/portal/my-documents');
+      if (!mounted) return;
       setState(() {
         _documents = res.data['data'] ?? [];
         _loading = false;
       });
     } catch (e) {
-      setState(() => _loading = false);
+      if (!silent && mounted) setState(() => _loading = false);
     }
   }
 

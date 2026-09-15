@@ -421,12 +421,13 @@ func activateFromOrder(orderID, paymentID, expectFirmID string) (gin.H, error) {
 	return currentSubscription(firmID), nil
 }
 
-// notifyFirmAdmins posts an in-app notification (+ push) to every admin of a firm.
+// notifyFirmAdmins posts an in-app notification (+ push) to every lawyer at
+// the firm — there is no separate "admin"/owner role to target specifically.
 func notifyFirmAdmins(firmID, title, message string) {
 	rows, err := config.DB.Query(`
 		SELECT u.id FROM users u
 		JOIN roles r ON u.role_id = r.id
-		WHERE u.firm_id = $1::uuid AND u.is_active = true AND r.name = 'admin'
+		WHERE u.firm_id = $1::uuid AND u.is_active = true AND r.name = 'lawyer'
 	`, firmID)
 	if err != nil {
 		return
@@ -488,6 +489,15 @@ func CancelSubscription(c *gin.Context) {
 		utils.Error(c, http.StatusNotFound, "No active subscription to cancel", "")
 		return
 	}
+
+	utils.LogAudit(c, utils.AuditEntry{
+		Action:      "SUBSCRIPTION_UPDATED",
+		Module:      "subscriptions",
+		TargetType:  "firm",
+		TargetID:    firmID,
+		Description: "Subscription cancelled",
+		After:       map[string]string{"status": "cancelled"},
+	})
 
 	utils.Success(c, http.StatusOK,
 		"Subscription cancelled. Access continues until the end of the paid period.",

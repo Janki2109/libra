@@ -134,7 +134,7 @@ func CreateChatRoom(c *gin.Context) {
 		var one int
 		if config.DB.QueryRow(`
 			SELECT 1 FROM users u JOIN roles r ON u.role_id = r.id
-			WHERE u.id=$1::uuid AND u.is_active=true AND r.name IN ('admin','lawyer')
+			WHERE u.id=$1::uuid AND u.is_active=true AND r.name = 'lawyer'
 		`, lawyerID).Scan(&one) != nil {
 			utils.Error(c, http.StatusBadRequest, "Unknown lawyer", "no such active lawyer")
 			return
@@ -189,7 +189,7 @@ func CreateChatRoom(c *gin.Context) {
 		var lawyerName, lawyerFirmID string
 		if err := config.DB.QueryRow(`
 			SELECT u.name, u.firm_id::text FROM users u JOIN roles r ON u.role_id = r.id
-			WHERE u.id=$1::uuid AND u.is_active=true AND r.name IN ('admin','lawyer')
+			WHERE u.id=$1::uuid AND u.is_active=true AND r.name = 'lawyer'
 		`, lawyerID).Scan(&lawyerName, &lawyerFirmID); err != nil || lawyerFirmID == "" {
 			utils.Error(c, http.StatusBadRequest, "Unknown lawyer", "no such active lawyer")
 			return

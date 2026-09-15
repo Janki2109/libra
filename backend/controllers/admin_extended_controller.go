@@ -408,9 +408,7 @@ func AdminGetDocuments(c *gin.Context) {
 		args = append(args, category)
 		query += fmt.Sprintf(` AND d.category = $%d`, len(args))
 	}
-	if ownerRole == "lawyer" {
-		query += ` AND r.name IN ('lawyer','admin')`
-	} else if ownerRole != "" {
+	if ownerRole != "" {
 		args = append(args, ownerRole)
 		query += fmt.Sprintf(` AND r.name = $%d`, len(args))
 	}
@@ -610,7 +608,7 @@ func AdminGetNotifications(c *gin.Context) {
 // machinery.
 func AdminSendNotification(c *gin.Context) {
 	var req struct {
-		Target  string `json:"target" binding:"required,oneof=user lawyers students clients"`
+		Target  string `json:"target" binding:"required,oneof=user lawyers students clients all"`
 		UserID  string `json:"user_id"`
 		Title   string `json:"title" binding:"required"`
 		Message string `json:"message" binding:"required"`
@@ -632,11 +630,13 @@ func AdminSendNotification(c *gin.Context) {
 		return
 	}
 
-	// "lawyers" also reaches role='admin' — see AdminGetLawyers' comment on
-	// why self-registered lawyers carry that role.
-	roleFilter := "r.name IN ('lawyer','admin')"
+	roleFilter := "r.name = 'lawyer'"
 	args := []interface{}{}
-	if req.Target != "lawyers" {
+	if req.Target == "all" {
+		// Every non-Super-Admin role — "all" never includes super_admin, the
+		// same rule the 4-role system applies everywhere else.
+		roleFilter = "r.name IN ('lawyer', 'client', 'law_student')"
+	} else if req.Target != "lawyers" {
 		roleFilter = "r.name = $1"
 		args = append(args, map[string]string{"students": "law_student", "clients": "client"}[req.Target])
 	}

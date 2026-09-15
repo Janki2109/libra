@@ -43,8 +43,6 @@ class _StaffListScreenState extends State<StaffListScreen> {
 
   Color _roleColor(String role) {
     switch (role) {
-      case 'admin':
-        return AppColors.gold;
       case 'lawyer':
         return AppColors.info;
       case 'staff':
@@ -58,8 +56,6 @@ class _StaffListScreenState extends State<StaffListScreen> {
 
   IconData _roleIcon(String role) {
     switch (role) {
-      case 'admin':
-        return Icons.admin_panel_settings_rounded;
       case 'lawyer':
         return Icons.gavel_rounded;
       case 'staff':
@@ -307,7 +303,7 @@ class _StaffListScreenState extends State<StaffListScreen> {
                     icon: const Icon(Icons.keyboard_arrow_down_rounded,
                         color: AppColors.gold),
                     isExpanded: true,
-                    items: ['lawyer', 'staff', 'clerk', 'admin']
+                    items: ['lawyer', 'staff', 'clerk']
                         .map((r) => DropdownMenuItem(
                               value: r,
                               child: Text(r.toUpperCase()),

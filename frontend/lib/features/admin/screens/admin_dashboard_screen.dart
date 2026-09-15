@@ -67,8 +67,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load, tooltip: 'Refresh'),
       ],
       child: _loading
-          ? const Padding(
-              padding: EdgeInsets.only(top: 100), child: Center(child: CircularProgressIndicator()))
+          ? const AdminStatGridSkeleton()
           : _error != null
               ? AdminEmptyState(message: _error!)
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -88,27 +87,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _statsGrid() {
+    // Route is null where the number doesn't correspond to one specific
+    // filtered list (e.g. "Platform Revenue" is a derived figure, not a
+    // table) — those cards render without the tap affordance.
     final cards = [
-      ('Total Users', '${_n('total_users')}', Icons.people_alt_rounded, kAdminAccent, null),
-      ('Total Lawyers', '${_n('total_lawyers')}', Icons.gavel_rounded, kAdminGold, '${_n('active_lawyers')} active'),
-      ('Total Students', '${_n('total_students')}', Icons.school_rounded, kAdminGreen, '${_n('active_students')} active'),
-      ('Total Clients', '${_n('total_clients')}', Icons.person_rounded, const Color(0xFF7C3AED), '${_n('active_clients')} active'),
-      ('Pending Verification', '${_n('pending_verification')}', Icons.pending_actions_rounded, kAdminAmber, null),
-      ('Total Consultations', '${_n('total_consultations')}', Icons.event_note_rounded, kAdminAccent, null),
-      ('Pending Consultations', '${_n('pending_consultations')}', Icons.hourglass_top_rounded, kAdminAmber, null),
-      ('Completed Consultations', '${_n('completed_consultations')}', Icons.check_circle_rounded, kAdminGreen, null),
-      ('Cancelled Consultations', '${_n('cancelled_consultations')}', Icons.cancel_rounded, kAdminRed, null),
-      ('Total Payments', '${_n('total_payments')}', Icons.payments_rounded, kAdminAccent, null),
-      ('Successful Payments', '${_n('successful_payments')}', Icons.check_circle_rounded, kAdminGreen, null),
-      ('Failed Payments', '${_n('failed_payments')}', Icons.error_rounded, kAdminRed, null),
-      ('Pending Payments', '${_n('pending_payments')}', Icons.schedule_rounded, kAdminAmber, null),
-      ('Total Revenue', fmtRupees(_n('total_revenue')), Icons.account_balance_wallet_rounded, kAdminGreen, 'This month: ${fmtRupees(_n('monthly_revenue'))}'),
-      ('Lawyer Earnings', fmtRupees(_n('lawyer_earnings')), Icons.savings_rounded, kAdminGold, null),
-      ('Platform Revenue', fmtRupees(_n('platform_revenue')), Icons.business_center_rounded, kAdminAccent, 'Subscriptions'),
-      ('Refund Amount', fmtRupees(_n('refund_amount')), Icons.replay_rounded, kAdminRed, null),
-      ('Total Cases', '${_n('total_cases')}', Icons.cases_rounded, const Color(0xFF7C3AED), null),
-      ('Total Documents', '${_n('total_documents')}', Icons.folder_shared_rounded, kAdminAccent, null),
-      ('Total Hearings', '${_n('total_hearings')}', Icons.account_balance_rounded, kAdminAmber, null),
+      ('Total Users', '${_n('total_users')}', Icons.people_alt_rounded, kAdminAccent, null, '/admin/users'),
+      ('Total Lawyers', '${_n('total_lawyers')}', Icons.gavel_rounded, kAdminGold, '${_n('active_lawyers')} active', '/admin/lawyers'),
+      ('Total Students', '${_n('total_students')}', Icons.school_rounded, kAdminGreen, '${_n('active_students')} active', '/admin/students'),
+      ('Total Clients', '${_n('total_clients')}', Icons.person_rounded, const Color(0xFF7C3AED), '${_n('active_clients')} active', '/admin/clients'),
+      ('Pending Verification', '${_n('pending_verification')}', Icons.pending_actions_rounded, kAdminAmber, null, '/admin/verify-lawyers'),
+      ('Total Consultations', '${_n('total_consultations')}', Icons.event_note_rounded, kAdminAccent, null, '/admin/consultations'),
+      ('Pending Consultations', '${_n('pending_consultations')}', Icons.hourglass_top_rounded, kAdminAmber, null, '/admin/consultations'),
+      ('Completed Consultations', '${_n('completed_consultations')}', Icons.check_circle_rounded, kAdminGreen, null, '/admin/consultations'),
+      ('Cancelled Consultations', '${_n('cancelled_consultations')}', Icons.cancel_rounded, kAdminRed, null, '/admin/consultations'),
+      ('Total Payments', '${_n('total_payments')}', Icons.payments_rounded, kAdminAccent, null, '/admin/payments'),
+      ('Successful Payments', '${_n('successful_payments')}', Icons.check_circle_rounded, kAdminGreen, null, '/admin/payments'),
+      ('Failed Payments', '${_n('failed_payments')}', Icons.error_rounded, kAdminRed, null, '/admin/payments'),
+      ('Pending Payments', '${_n('pending_payments')}', Icons.schedule_rounded, kAdminAmber, null, '/admin/payments'),
+      ('Total Revenue', fmtRupees(_n('total_revenue')), Icons.account_balance_wallet_rounded, kAdminGreen, 'This month: ${fmtRupees(_n('monthly_revenue'))}', '/admin/revenue'),
+      ('Lawyer Earnings', fmtRupees(_n('lawyer_earnings')), Icons.savings_rounded, kAdminGold, null, '/admin/lawyer-earnings'),
+      ('Platform Revenue', fmtRupees(_n('platform_revenue')), Icons.business_center_rounded, kAdminAccent, 'Subscriptions', '/admin/revenue'),
+      ('Refund Amount', fmtRupees(_n('refund_amount')), Icons.replay_rounded, kAdminRed, null, '/admin/revenue'),
+      ('Total Cases', '${_n('total_cases')}', Icons.cases_rounded, const Color(0xFF7C3AED), null, '/admin/cases'),
+      ('Total Documents', '${_n('total_documents')}', Icons.folder_shared_rounded, kAdminAccent, null, '/admin/documents'),
+      ('Total Hearings', '${_n('total_hearings')}', Icons.account_balance_rounded, kAdminAmber, null, '/admin/hearings'),
     ];
     return LayoutBuilder(builder: (context, constraints) {
       final cols = constraints.maxWidth > 1200 ? 5 : (constraints.maxWidth > 800 ? 3 : 2);
@@ -119,9 +121,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
         childAspectRatio: 1.5,
-        children: cards
-            .map((c) => AdminStatCard(label: c.$1, value: c.$2, icon: c.$3, color: c.$4, subtitle: c.$5))
-            .toList(),
+        children: cards.asMap().entries.map((e) {
+          final i = e.key;
+          final c = e.value;
+          return TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: Duration(milliseconds: 220 + (i * 25).clamp(0, 400)),
+            curve: Curves.easeOut,
+            builder: (_, v, child) => Opacity(
+                opacity: v, child: Transform.translate(offset: Offset(0, 12 * (1 - v)), child: child)),
+            child: AdminStatCard(
+              label: c.$1,
+              value: c.$2,
+              icon: c.$3,
+              color: c.$4,
+              subtitle: c.$5,
+              onTap: () => context.go(c.$6),
+            ),
+          );
+        }).toList(),
       );
     });
   }

@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/chat_unread_provider.dart';
@@ -67,7 +68,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   List<dynamic> _messages = [];
   bool _loading = true;
   bool _sending = false;
-  Timer? _pollingTimer;
   late AnimationController _sendCtrl;
   late Animation<double> _sendScale;
 
@@ -89,15 +89,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _sendScale = Tween<double>(begin: 1.0, end: 0.9).animate(_sendCtrl);
     _loadMessages();
     _loadPresence();
-    // The 3s poll below is a safety net only now — a new message already
-    // pushes a real notification the instant it's sent (see
+    // The poll below is a safety net only now — a new message already pushes
+    // a real notification the instant it's sent (see
     // notifyOtherChatParticipants on the backend), so this listener is what
     // makes the thread actually update immediately instead of waiting for
     // the next poll tick.
     RealtimeEvents.instance.addListener(_onRealtimeEvent);
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _loadMessages(silent: true);
-      _loadPresence();
+    // Registered on the single app-wide AutoRefreshService ticker instead of
+    // its own Timer.periodic — one 3-second timer for the whole app, not one
+    // per open chat screen.
+    AutoRefreshService.instance.register('chat_room_${widget.roomId}', () async {
+      await _loadMessages(silent: true);
+      await _loadPresence();
     });
   }
 
@@ -110,7 +113,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     RealtimeEvents.instance.removeListener(_onRealtimeEvent);
-    _pollingTimer?.cancel();
+    AutoRefreshService.instance.unregister('chat_room_${widget.roomId}');
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     _sendCtrl.dispose();

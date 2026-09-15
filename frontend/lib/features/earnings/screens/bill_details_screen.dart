@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
+import '../../../core/services/auto_refresh_service.dart';
 
 // Same palette as lawyer_earnings_screen.dart / dashboard_screen.dart — this
 // is a detail view of the same Billing ledger, not a new screen design.
@@ -46,6 +47,8 @@ class _BillDetailsScreenState extends State<BillDetailsScreen> {
     // records session duration) pushes through the existing FCM-backed event
     // bus — refresh this bill without a manual pull.
     RealtimeEvents.instance.addListener(_onRealtimeEvent);
+    AutoRefreshService.instance.register(
+        'bill_details_${widget.consultationId}', () => _load(silent: true));
   }
 
   void _onRealtimeEvent() {
@@ -58,6 +61,7 @@ class _BillDetailsScreenState extends State<BillDetailsScreen> {
   @override
   void dispose() {
     RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    AutoRefreshService.instance.unregister('bill_details_${widget.consultationId}');
     super.dispose();
   }
 

@@ -10,17 +10,23 @@ class DocumentProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
-  Future<void> loadDocuments({String? caseId, String? clientId}) async {
-    _loading = true;
-    notifyListeners();
+  // [silent]: see ClientProvider.loadClients — used by the global 3-second
+  // auto-refresh so a background poll never re-shows the loading spinner.
+  Future<void> loadDocuments(
+      {String? caseId, String? clientId, bool silent = false}) async {
+    if (!silent) {
+      _loading = true;
+      notifyListeners();
+    }
     try {
       String path = '/documents';
       if (caseId != null) path += '?case_id=$caseId';
       else if (clientId != null) path += '?client_id=$clientId';
       final res = await DioClient.instance.get(path);
       _documents = res.data['data'] ?? [];
+      _error = null;
     } catch (e) {
-      _error = e.toString();
+      if (!silent) _error = e.toString();
     }
     _loading = false;
     notifyListeners();

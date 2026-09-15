@@ -177,8 +177,11 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// The firm's founding user is a lawyer, same as anyone added to the firm
+	// afterwards — there is no separate "admin" role in the system. Only the
+	// platform's own super_admin account has admin-panel access.
 	var roleID sql.NullString
-	tx.QueryRow("SELECT id FROM roles WHERE name = 'admin' LIMIT 1").Scan(&roleID)
+	tx.QueryRow("SELECT id FROM roles WHERE name = 'lawyer' LIMIT 1").Scan(&roleID)
 	if !roleID.Valid {
 		utils.Error(c, http.StatusInternalServerError, "Signup unavailable",
 			"roles table is not seeded — run database/seeds/seed_roles.sql")
@@ -200,7 +203,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	token, err := utils.GenerateToken(userID, email, "admin", firmID)
+	token, err := utils.GenerateToken(userID, email, "lawyer", firmID)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Token generation failed", err.Error())
 		return

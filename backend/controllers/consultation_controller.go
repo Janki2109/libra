@@ -68,7 +68,7 @@ func BookConsultation(c *gin.Context) {
 	var lawyerName string
 	if err := config.DB.QueryRow(`
 		SELECT u.name FROM users u JOIN roles r ON u.role_id = r.id
-		WHERE u.id=$1::uuid AND u.is_active=true AND r.name IN ('admin','lawyer')
+		WHERE u.id=$1::uuid AND u.is_active=true AND r.name = 'lawyer'
 	`, req.LawyerID).Scan(&lawyerName); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Unknown lawyer", "no such active lawyer")
 		return
@@ -226,7 +226,7 @@ func CreateConsultationCheckout(c *gin.Context) {
 		}
 		if err := config.DB.QueryRow(`
 			SELECT u.name FROM users u JOIN roles r ON u.role_id = r.id
-			WHERE u.id=$1::uuid AND u.is_active=true AND r.name IN ('admin','lawyer')
+			WHERE u.id=$1::uuid AND u.is_active=true AND r.name = 'lawyer'
 		`, req.LawyerID).Scan(&lawyerName); err != nil {
 			utils.Error(c, http.StatusBadRequest, "Unknown lawyer", "no such active lawyer")
 			return

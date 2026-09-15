@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/auto_refresh_service.dart';
 
 class PortalProvider extends ChangeNotifier {
   List<dynamic> _cases = [];
@@ -9,6 +10,17 @@ class PortalProvider extends ChangeNotifier {
   List<dynamic> _notifications = [];
   bool _loading = false;
   String? _error;
+
+  PortalProvider() {
+    AutoRefreshService.instance
+        .register('portal_all', () => loadAll(silent: true));
+  }
+
+  @override
+  void dispose() {
+    AutoRefreshService.instance.unregister('portal_all');
+    super.dispose();
+  }
 
   List<dynamic> get cases => _cases;
   List<dynamic> get hearings => _hearings;
@@ -24,9 +36,11 @@ class PortalProvider extends ChangeNotifier {
   int get pendingInvoicesCount =>
       _invoices.where((i) => i['status'] == 'unpaid' || i['status'] == 'partial').length;
 
-  Future<void> loadAll() async {
-    _loading = true;
-    notifyListeners();
+  Future<void> loadAll({bool silent = false}) async {
+    if (!silent) {
+      _loading = true;
+      notifyListeners();
+    }
     try {
       await Future.wait([
         _loadCases(),
@@ -34,8 +48,9 @@ class PortalProvider extends ChangeNotifier {
         _loadInvoices(),
         _loadDocuments(),
       ]);
+      if (!silent) _error = null;
     } catch (e) {
-      _error = e.toString();
+      if (!silent) _error = e.toString();
     }
     _loading = false;
     notifyListeners();

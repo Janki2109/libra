@@ -80,7 +80,7 @@ func requireFirmResource(c *gin.Context, table, id string) (string, bool) {
 // themselves".
 func firmStaffRole(role string) bool {
 	switch role {
-	case "super_admin", "admin", "lawyer", "staff", "clerk":
+	case "super_admin", "lawyer", "staff", "clerk":
 		return true
 	}
 	return false

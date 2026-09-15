@@ -122,7 +122,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
           title: 'Recent Notifications',
           child: Column(children: [
             if (_loading)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
+              const AdminTableSkeleton(rows: 3)
             else if (_error != null)
               AdminEmptyState(message: _error!)
             else if (_rows.isEmpty)

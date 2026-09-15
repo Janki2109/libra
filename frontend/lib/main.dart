@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'core/router/app_router.dart';
 import 'core/services/dio_client.dart';
 import 'core/services/fcm_service.dart';
+import 'core/services/auto_refresh_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/dashboard/providers/dashboard_provider.dart';
@@ -61,7 +62,9 @@ class LibraApp extends StatelessWidget {
           // on a silently empty dashboard.
           DioClient.onUnauthorized = auth.onSessionExpired;
 
-          return MaterialApp.router(
+          return _AutoRefreshGate(
+            isAuthenticated: auth.isAuthenticated,
+            child: MaterialApp.router(
             title: 'Libra Law Practice',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
@@ -97,9 +100,65 @@ class LibraApp extends StatelessWidget {
               },
               child: child!,
             ),
+            ),
           );
         },
       ),
     );
   }
+}
+
+/// Starts/stops the single global [AutoRefreshService] timer in response to
+/// auth state and app lifecycle — the two conditions the spec calls out:
+/// "every 3 seconds while the app is active/in foreground" and "stop all
+/// timers immediately on logout".
+class _AutoRefreshGate extends StatefulWidget {
+  final bool isAuthenticated;
+  final Widget child;
+  const _AutoRefreshGate({required this.isAuthenticated, required this.child});
+
+  @override
+  State<_AutoRefreshGate> createState() => _AutoRefreshGateState();
+}
+
+class _AutoRefreshGateState extends State<_AutoRefreshGate>
+    with WidgetsBindingObserver {
+  bool _foreground = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_AutoRefreshGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isAuthenticated != widget.isAuthenticated) _sync();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.isAuthenticated && _foreground) {
+      AutoRefreshService.instance.start();
+    } else {
+      AutoRefreshService.instance.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    AutoRefreshService.instance.stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

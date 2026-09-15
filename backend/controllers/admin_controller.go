@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"database/sql"
 	"fmt"
 	"libra/config"
 	"libra/utils"
@@ -13,7 +14,7 @@ import (
 
 // ─── GET ALL USERS ────────────────────────────────
 //
-// ?role=lawyer|law_student|client|admin  ?status=active|suspended
+// ?role=lawyer|law_student|client  ?status=active|suspended
 // ?search=name/email/phone substring     ?from=&to= (registration date range)
 // plus the same page/limit pagination every other admin list uses.
 //
@@ -44,12 +45,8 @@ func AdminGetUsers(c *gin.Context) {
 		WHERE r.name != 'super_admin'`
 	args := []interface{}{}
 	if role != "" {
-		if role == "lawyer" {
-			query += ` AND r.name IN ('lawyer','admin')`
-		} else {
-			args = append(args, role)
-			query += fmt.Sprintf(` AND r.name = $%d`, len(args))
-		}
+		args = append(args, role)
+		query += fmt.Sprintf(` AND r.name = $%d`, len(args))
 	}
 	if status == "active" {
 		query += ` AND u.is_active = true`
@@ -134,7 +131,7 @@ func AdminGetUserDetail(c *gin.Context) {
 		RejectionReason    string  `json:"rejection_reason"`
 		CreatedAt          string  `json:"created_at"`
 		LastLoginAt        string  `json:"last_login_at"`
-		EarningsPaid    float64 `json:"earnings_paid"`
+		EarningsPaid       float64 `json:"earnings_paid"`
 		// EarningsPending is the value of this lawyer's own booked
 		// consultations still sitting at payment_status='pending' — not a
 		// payout queue (no payout/settlement feature exists in this
@@ -199,12 +196,124 @@ func AdminGetUserDetail(c *gin.Context) {
 		}
 	}
 
+	// Refunds are never a separate record for consultation payments — the
+	// same consultations row just carries payment_status='refunded' (see
+	// migration 020's doc comment). Derived here from the two lists already
+	// fetched above rather than a third query.
+	refunds := []gin.H{}
+	for _, row := range append(append([]gin.H{}, asClient...), asLawyer...) {
+		if row["payment_status"] == "refunded" {
+			refunds = append(refunds, row)
+		}
+	}
+
+	// Cases: as the client (users↔clients only ever link by email — there is
+	// no client_id column on users) and as the assigned lawyer.
+	cases := []gin.H{}
+	caseRows, _ := config.DB.Query(`
+		SELECT c.id, COALESCE(c.case_number,''), c.case_title, COALESCE(lawyer.name,''),
+		       COALESCE(c.court_name,''), COALESCE(c.case_type,''), c.status, c.filing_date::text, c.updated_at::text
+		FROM cases c
+		JOIN clients cl ON c.client_id = cl.id
+		LEFT JOIN users lawyer ON c.assigned_lawyer_id = lawyer.id
+		WHERE lower(cl.email) = lower($1)
+		ORDER BY c.updated_at DESC LIMIT 20
+	`, u.Email)
+	if caseRows != nil {
+		for caseRows.Next() {
+			var id, number, title, lawyerName, court, caseType, status, filingDate, updatedAt string
+			if caseRows.Scan(&id, &number, &title, &lawyerName, &court, &caseType, &status, &filingDate, &updatedAt) == nil {
+				cases = append(cases, gin.H{
+					"id": id, "case_number": number, "case_title": title, "lawyer_name": lawyerName,
+					"court_name": court, "case_type": caseType, "status": status,
+					"filing_date": filingDate, "updated_at": updatedAt, "as_role": "client",
+				})
+			}
+		}
+		caseRows.Close()
+	}
+	lawyerCaseRows, _ := config.DB.Query(`
+		SELECT c.id, COALESCE(c.case_number,''), c.case_title, COALESCE(client.name,''),
+		       COALESCE(c.court_name,''), COALESCE(c.case_type,''), c.status, c.filing_date::text, c.updated_at::text
+		FROM cases c
+		LEFT JOIN clients cl2 ON c.client_id = cl2.id
+		LEFT JOIN users client ON lower(client.email) = lower(cl2.email)
+		WHERE c.assigned_lawyer_id = $1::uuid
+		ORDER BY c.updated_at DESC LIMIT 20
+	`, id)
+	if lawyerCaseRows != nil {
+		for lawyerCaseRows.Next() {
+			var cid, number, title, clientName, court, caseType, status, filingDate, updatedAt string
+			if lawyerCaseRows.Scan(&cid, &number, &title, &clientName, &court, &caseType, &status, &filingDate, &updatedAt) == nil {
+				cases = append(cases, gin.H{
+					"id": cid, "case_number": number, "case_title": title, "client_name": clientName,
+					"court_name": court, "case_type": caseType, "status": status,
+					"filing_date": filingDate, "updated_at": updatedAt, "as_role": "lawyer",
+				})
+			}
+		}
+		lawyerCaseRows.Close()
+	}
+
+	// Subscription: firm-level, so this is only ever populated for a lawyer
+	// (or another member) of a firm that has one — a portal Client/Student
+	// with no firm_id genuinely has none, shown as such rather than guessed.
+	var subscription *gin.H
+	if u.FirmID != "" {
+		var planName, status, billingCycle string
+		var startedAt, currentPeriodEnd, trialEndsAt, cancelledAt sql.NullString
+		var lastPaymentAmount sql.NullFloat64
+		if config.DB.QueryRow(`
+			SELECT COALESCE(p.display_name,''), s.status, COALESCE(s.billing_cycle,''),
+			       s.started_at::text, s.current_period_end::text, s.trial_ends_at::text, s.cancelled_at::text,
+			       (SELECT amount FROM subscription_payments WHERE subscription_id = s.id ORDER BY created_at DESC LIMIT 1)
+			FROM subscriptions s LEFT JOIN plans p ON s.plan_id = p.id
+			WHERE s.firm_id = $1::uuid
+		`, u.FirmID).Scan(&planName, &status, &billingCycle, &startedAt, &currentPeriodEnd, &trialEndsAt, &cancelledAt, &lastPaymentAmount) == nil {
+			subscription = &gin.H{
+				"plan_name": planName, "status": status, "billing_cycle": billingCycle,
+				"started_at": startedAt.String, "current_period_end": currentPeriodEnd.String,
+				"trial_ends_at": trialEndsAt.String, "cancelled_at": cancelledAt.String,
+				"last_payment_amount": lastPaymentAmount.Float64,
+			}
+		}
+	}
+
+	// Activity: real audit_logs entries about this user (as the target of a
+	// Super Admin action), same shape as the Lawyer Management activity tab.
+	activity := []gin.H{}
+	activityRows, _ := config.DB.Query(`
+		SELECT al.action, COALESCE(al.description,''), COALESCE(actor.name,''),
+		       COALESCE(al.actor_role, actorRole.name, ''), al.created_at::text
+		FROM audit_logs al
+		LEFT JOIN users actor ON al.user_id = actor.id
+		LEFT JOIN roles actorRole ON actor.role_id = actorRole.id
+		WHERE al.reference_id = $1::uuid
+		ORDER BY al.created_at DESC LIMIT 30
+	`, id)
+	if activityRows != nil {
+		for activityRows.Next() {
+			var action, description, actorName, actorRole, createdAt string
+			if activityRows.Scan(&action, &description, &actorName, &actorRole, &createdAt) == nil {
+				activity = append(activity, gin.H{
+					"action": action, "description": description, "actor_name": actorName,
+					"actor_role": supportRoleLabel(actorRole), "created_at": createdAt,
+				})
+			}
+		}
+		activityRows.Close()
+	}
+
 	utils.Success(c, http.StatusOK, "User detail fetched", gin.H{
 		"profile":              u,
 		"consultations_client": asClient,
 		"consultations_lawyer": asLawyer,
 		"documents":            docs,
 		"student_progress":     progress,
+		"refunds":              refunds,
+		"cases":                cases,
+		"subscription":         subscription,
+		"activity":             activity,
 	})
 }
 
@@ -216,7 +325,8 @@ func adminConsultationRows(whereClause, arg string, limit int) []gin.H {
 	rows, err := config.DB.Query(fmt.Sprintf(`
 		SELECT co.id, co.consultation_type, co.consultation_date::text, co.consultation_time,
 		       co.status, co.payment_status, COALESCE(co.amount_paise,0),
-		       COALESCE(cl.name,''), COALESCE(law.name,''), co.created_at::text
+		       COALESCE(cl.name,''), COALESCE(law.name,''), co.created_at::text,
+		       COALESCE(co.razorpay_payment_id,''), COALESCE(co.payment_method,''), co.call_duration_seconds
 		FROM consultations co
 		LEFT JOIN users cl  ON co.client_id = cl.id
 		LEFT JOIN users law ON co.lawyer_id = law.id
@@ -230,13 +340,16 @@ func adminConsultationRows(whereClause, arg string, limit int) []gin.H {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, ctype, cdate, ctime, status, payStatus, clientName, lawyerName, createdAt string
+		var id, ctype, cdate, ctime, status, payStatus, clientName, lawyerName, createdAt, paymentRef, paymentMethod string
 		var amountPaise int64
-		if rows.Scan(&id, &ctype, &cdate, &ctime, &status, &payStatus, &amountPaise, &clientName, &lawyerName, &createdAt) == nil {
+		var durationSeconds int
+		if rows.Scan(&id, &ctype, &cdate, &ctime, &status, &payStatus, &amountPaise, &clientName, &lawyerName, &createdAt,
+			&paymentRef, &paymentMethod, &durationSeconds) == nil {
 			out = append(out, gin.H{
 				"id": id, "consultation_type": ctype, "consultation_date": cdate, "consultation_time": ctime,
 				"status": status, "payment_status": payStatus, "amount_rupees": float64(amountPaise) / 100,
 				"client_name": clientName, "lawyer_name": lawyerName, "created_at": createdAt,
+				"payment_reference": paymentRef, "payment_method": paymentMethod, "duration_seconds": durationSeconds,
 			})
 		}
 	}
@@ -278,9 +391,20 @@ func AdminUpdateUser(c *gin.Context) {
 		return
 	}
 	action := "suspended"
+	auditAction := "USER_SUSPENDED"
 	if req.IsActive {
 		action = "activated"
+		auditAction = "USER_ACTIVATED"
 	}
+	utils.LogAudit(c, utils.AuditEntry{
+		Action:      auditAction,
+		Module:      "users",
+		TargetType:  "user",
+		TargetID:    userID,
+		Description: "User account " + action + " by Super Admin",
+		Before:      map[string]bool{"is_active": !req.IsActive},
+		After:       map[string]bool{"is_active": req.IsActive},
+	})
 	utils.Success(c, http.StatusOK, "User "+action, nil)
 }
 
@@ -322,10 +446,9 @@ func AdminDeleteUser(c *gin.Context) {
 // consultations, payment_orders, invoices, cases, documents, hearings —
 // there is no separate "admin stats" table to keep in sync.
 //
-// "lawyer" here always means role IN ('lawyer','admin'): registering "as a
-// lawyer" (RegisterScreen) creates a role='admin' user (the firm owner) —
-// see AdminGetLawyers' own comment on the same fact. Counting only
-// role='lawyer' would make every self-registered lawyer invisible.
+// There is no separate "admin" role: registering "as a lawyer"
+// (RegisterScreen) creates a plain role='lawyer' user, same as anyone added
+// to the firm afterwards — see AdminGetLawyers' own comment on the same fact.
 func AdminGetStats(c *gin.Context) {
 	var stats struct {
 		TotalUsers    int `json:"total_users"`
@@ -375,15 +498,15 @@ func AdminGetStats(c *gin.Context) {
 	}
 
 	config.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE role_id NOT IN (SELECT id FROM roles WHERE name='super_admin')`).Scan(&stats.TotalUsers)
-	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name IN ('lawyer','admin')`).Scan(&stats.TotalLawyers)
+	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name='lawyer'`).Scan(&stats.TotalLawyers)
 	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name='client'`).Scan(&stats.TotalClients)
 	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name='law_student'`).Scan(&stats.TotalStudents)
 
-	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name IN ('lawyer','admin') AND u.is_active`).Scan(&stats.ActiveLawyers)
+	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name='lawyer' AND u.is_active`).Scan(&stats.ActiveLawyers)
 	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name='client' AND u.is_active`).Scan(&stats.ActiveClients)
 	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name='law_student' AND u.is_active`).Scan(&stats.ActiveStudents)
 
-	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name IN ('lawyer','admin') AND COALESCE(u.verification_status,'verified')='pending'`).Scan(&stats.PendingVerification)
+	config.DB.QueryRow(`SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id=r.id WHERE r.name='lawyer' AND COALESCE(u.verification_status,'verified')='pending'`).Scan(&stats.PendingVerification)
 
 	config.DB.QueryRow(`SELECT COUNT(*) FROM consultations`).Scan(&stats.TotalConsultations)
 	config.DB.QueryRow(`SELECT COUNT(*) FROM consultations WHERE status='pending'`).Scan(&stats.PendingConsultations)
@@ -473,10 +596,26 @@ func AdminGetStats(c *gin.Context) {
 // trend chart on the dashboard and the revenue screen, instead of one
 // hand-rolled query per chart.
 func dailySeries(baseQuery string, days int) []gin.H {
+	return dailySeriesEnding(baseQuery, days, "")
+}
+
+// dailySeriesEnding is dailySeries with the window's last day pinned to
+// [end] (an ISO "YYYY-MM-DD") instead of always today. Without this, a
+// chart for a wholly past range like "Yesterday" or "Last Month" still
+// showed the trailing N days ending TODAY — the wrong days entirely for the
+// range actually selected. Empty [end] keeps the original "ends today"
+// behavior every existing caller (AdminGetStats/AdminGetRevenue) relies on.
+func dailySeriesEnding(baseQuery string, days int, end string) []gin.H {
+	endExpr := "CURRENT_DATE"
+	args := []interface{}{}
+	if end != "" {
+		args = append(args, end)
+		endExpr = "$1::date"
+	}
 	out := []gin.H{}
 	rows, err := config.DB.Query(fmt.Sprintf(`
 		WITH days AS (
-			SELECT generate_series(CURRENT_DATE - INTERVAL '%d days', CURRENT_DATE, INTERVAL '1 day')::date AS d
+			SELECT generate_series(%s - INTERVAL '%d days', %s, INTERVAL '1 day')::date AS d
 		), agg AS (
 			%s GROUP BY 1
 		)
@@ -484,7 +623,7 @@ func dailySeries(baseQuery string, days int) []gin.H {
 		FROM days
 		LEFT JOIN agg AS a(date_col, value) ON a.date_col = days.d
 		ORDER BY days.d
-	`, days-1, baseQuery))
+	`, endExpr, days-1, endExpr, baseQuery), args...)
 	if err != nil {
 		return out
 	}
@@ -501,39 +640,74 @@ func dailySeries(baseQuery string, days int) []gin.H {
 
 // ─── GET ALL LAWYERS ──────────────────────────────
 //
-// Registering "as a lawyer" (RegisterScreen / auth_controller.Register)
-// actually creates a role='admin' user — the firm owner — so both 'lawyer'
-// and 'admin' role users are included here; otherwise no self-registered
-// lawyer would ever appear in this verification list.
 // ?status=pending|verified|rejected filters by verification_status — the
 // Verification nav section reuses this endpoint with ?status=pending rather
 // than needing its own listing query.
+// AdminGetLawyers - GET /admin/lawyers
+// Enhanced in place for Advanced Lawyer Management: ?status= (unchanged,
+// verification filter) plus ?search=&activity=&specialization=&from=&to=
+// &page=&limit= — every existing caller that only ever sent ?status= still
+// gets exactly the same rows, just now paginated (25 per page by default)
+// instead of the whole table at once.
 func AdminGetLawyers(c *gin.Context) {
 	verifyStatus := c.Query("status")
+	search := c.Query("search")
+	activity := c.Query("activity") // "active" | "inactive" (suspended)
+	specialization := c.Query("specialization")
+	from, to := c.Query("from"), c.Query("to")
+	page := ParsePagination(c)
 
+	// Specialization has no dedicated column anywhere in this schema — the
+	// public lawyer directory (GetAllLawyers) already treats the case_type
+	// values on a lawyer's own cases as the closest real equivalent; reused
+	// identically here rather than inventing a second definition of it.
 	query := `
 		SELECT u.id, u.name, u.email, COALESCE(u.phone,''),
 		       u.is_active, COALESCE(u.created_at::text,''),
 		       COALESCE(u.bar_council_number,''), COALESCE(u.verification_status,'verified'),
-		       COALESCE(u.rejection_reason,''),
+		       COALESCE(u.rejection_reason,''), COALESCE(u.designation,''),
 		       COALESCE((SELECT d.id::text FROM documents d
 		                 WHERE d.uploaded_by = u.id AND d.category = 'lawyer_verification'
 		                 ORDER BY d.created_at DESC LIMIT 1), ''),
+		       COALESCE((
+		           SELECT string_agg(DISTINCT c.case_type, ', ')
+		           FROM cases c WHERE c.assigned_lawyer_id = u.id AND c.case_type != ''
+		       ), ''),
 		       (SELECT COUNT(*) FROM consultations co WHERE co.lawyer_id=u.id),
 		       (SELECT COUNT(*) FROM consultations co WHERE co.lawyer_id=u.id AND co.status='completed'),
 		       (SELECT COUNT(*) FROM consultations co WHERE co.lawyer_id=u.id AND co.status='cancelled'),
+		       (SELECT COUNT(*) FROM cases c WHERE c.assigned_lawyer_id=u.id),
 		       (SELECT COUNT(DISTINCT co.client_id) FROM consultations co WHERE co.lawyer_id=u.id),
 		       (SELECT COALESCE(SUM(co.amount_paise),0)/100.0 FROM consultations co WHERE co.lawyer_id=u.id AND co.payment_status='paid'),
 		       (SELECT COALESCE(SUM(co.amount_paise),0)/100.0 FROM consultations co WHERE co.lawyer_id=u.id AND co.payment_status='pending')
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
-		WHERE r.name IN ('lawyer', 'admin')`
+		WHERE r.name = 'lawyer'`
 	args := []interface{}{}
 	if verifyStatus != "" {
 		args = append(args, verifyStatus)
 		query += fmt.Sprintf(` AND COALESCE(u.verification_status,'verified') = $%d`, len(args))
 	}
+	if activity == "active" {
+		query += ` AND u.is_active = true`
+	} else if activity == "inactive" {
+		query += ` AND u.is_active = false`
+	}
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		n := len(args)
+		query += fmt.Sprintf(` AND (u.name ILIKE $%d OR u.email ILIKE $%d OR u.phone ILIKE $%d
+			OR u.id::text ILIKE $%d OR COALESCE(u.designation,'') ILIKE $%d OR COALESCE(u.bar_council_number,'') ILIKE $%d)`,
+			n, n, n, n, n, n)
+	}
+	if specialization != "" {
+		args = append(args, "%"+specialization+"%")
+		query += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM cases c WHERE c.assigned_lawyer_id = u.id AND c.case_type ILIKE $%d)`, len(args))
+	}
+	query += contentDateFilter("u.created_at", from, to, &args)
 	query += ` ORDER BY u.created_at DESC`
+	args = append(args, page.Limit, page.Offset)
+	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
 
 	rows, err := config.DB.Query(query, args...)
 	if err != nil {
@@ -552,10 +726,13 @@ func AdminGetLawyers(c *gin.Context) {
 		BarCouncilNumber       string  `json:"bar_council_number"`
 		VerificationStatus     string  `json:"verification_status"`
 		RejectionReason        string  `json:"rejection_reason"`
+		Designation            string  `json:"designation"`
 		DocumentID             string  `json:"document_id"`
+		Specialization         string  `json:"specialization"`
 		TotalConsultations     int     `json:"total_consultations"`
 		CompletedConsultations int     `json:"completed_consultations"`
 		CancelledConsultations int     `json:"cancelled_consultations"`
+		TotalCases             int     `json:"total_cases"`
 		TotalClients           int     `json:"total_clients"`
 		EarningsPaid           float64 `json:"earnings_paid"`
 		EarningsPending        float64 `json:"earnings_pending"`
@@ -565,12 +742,12 @@ func AdminGetLawyers(c *gin.Context) {
 	for rows.Next() {
 		var l Lawyer
 		rows.Scan(&l.ID, &l.Name, &l.Email, &l.Phone, &l.IsActive, &l.CreatedAt,
-			&l.BarCouncilNumber, &l.VerificationStatus, &l.RejectionReason, &l.DocumentID,
-			&l.TotalConsultations, &l.CompletedConsultations, &l.CancelledConsultations,
-			&l.TotalClients, &l.EarningsPaid, &l.EarningsPending)
+			&l.BarCouncilNumber, &l.VerificationStatus, &l.RejectionReason, &l.Designation, &l.DocumentID,
+			&l.Specialization, &l.TotalConsultations, &l.CompletedConsultations, &l.CancelledConsultations,
+			&l.TotalCases, &l.TotalClients, &l.EarningsPaid, &l.EarningsPending)
 		lawyers = append(lawyers, l)
 	}
-	utils.Success(c, http.StatusOK, "Lawyers fetched", lawyers)
+	utils.SuccessWithMeta(c, http.StatusOK, "Lawyers fetched", lawyers, page.Meta(len(lawyers)))
 }
 
 // ─── GET LAWYER VERIFICATION DOCUMENT ─────────────
@@ -628,7 +805,9 @@ func AdminVerifyLawyer(c *gin.Context) {
 	}
 
 	adminID := utils.UserID(c)
-	var firmID string
+	var firmID, previousStatus, lawyerName string
+	config.DB.QueryRow(`SELECT COALESCE(verification_status,''), COALESCE(name,'') FROM users WHERE id = $1::uuid`, userID).
+		Scan(&previousStatus, &lawyerName)
 	res, err := config.DB.Exec(`
 		UPDATE users
 		SET verification_status = $1, rejection_reason = $2,
@@ -656,14 +835,24 @@ func AdminVerifyLawyer(c *gin.Context) {
 	}
 	utils.Notify(userID, firmID, title, message, "verification")
 
+	auditAction := "LAWYER_VERIFIED"
+	if req.Status == "rejected" {
+		auditAction = "LAWYER_REJECTED"
+	}
+	utils.LogAudit(c, utils.AuditEntry{
+		Action:      auditAction,
+		Module:      "lawyers",
+		TargetType:  "user",
+		TargetID:    userID,
+		Description: "Lawyer " + lawyerName + " verification status changed",
+		Before:      map[string]string{"verification_status": previousStatus},
+		After:       map[string]string{"verification_status": req.Status, "rejection_reason": req.RejectionReason},
+	})
+
 	utils.Success(c, http.StatusOK, "Verification updated", nil)
 }
 
 // ─── GET SUBSCRIPTIONS ────────────────────────────
-func AdminGetSubscriptions(c *gin.Context) {
-	utils.Success(c, http.StatusOK, "Subscriptions fetched", []interface{}{})
-}
-
 // ─── GET REVENUE / BILLING ────────────────────────
 //
 // Three genuinely different kinds of money move through this app, and this
@@ -763,8 +952,8 @@ func AdminGetRevenue(c *gin.Context) {
 	}
 
 	utils.Success(c, http.StatusOK, "Revenue fetched", gin.H{
-		"summary":                              revenue,
+		"summary":                             revenue,
 		"consultation_revenue_period_buckets": buckets,
-		"revenue_30d": dailySeries(`SELECT paid_at::date, COALESCE(SUM(amount_paise),0)/100.0 FROM consultations WHERE payment_status='paid' AND paid_at IS NOT NULL`, 30),
+		"revenue_30d":                         dailySeries(`SELECT paid_at::date, COALESCE(SUM(amount_paise),0)/100.0 FROM consultations WHERE payment_status='paid' AND paid_at IS NOT NULL`, 30),
 	})
 }

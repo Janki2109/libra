@@ -11,7 +11,6 @@ import (
 // workspace. Clients and law students are deliberately absent.
 var firmStaffRoles = map[string]bool{
 	"super_admin": true,
-	"admin":       true,
 	"lawyer":      true,
 	"staff":       true,
 	"clerk":       true,

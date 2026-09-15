@@ -103,7 +103,7 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
         IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
       ],
       child: _loading
-          ? const Padding(padding: EdgeInsets.only(top: 100), child: Center(child: CircularProgressIndicator()))
+          ? const AdminLoader()
           : _error != null
               ? AdminEmptyState(message: _error!)
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -185,6 +185,46 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
     );
   }
 
+  void _showInvoiceDetail(dynamic inv) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 480,
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                  child: Text('Invoice ${inv['invoice_number'] ?? ''}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+            ]),
+            AdminBadge(inv['status'] ?? '', AdminBadge.colorFor(inv['status'] ?? '')),
+            const Divider(height: 24),
+            _detailRow('Lawyer', (inv['lawyer_name'] ?? '').toString().isEmpty ? '—' : inv['lawyer_name']),
+            _detailRow('Client', (inv['client_name'] ?? '').toString().isEmpty ? '—' : inv['client_name']),
+            _detailRow('Base Amount', fmtRupees(inv['subtotal'] as num?)),
+            _detailRow('GST (${(inv['gst_rate'] as num? ?? 0).toStringAsFixed(0)}%)', fmtRupees(inv['gst_amount'] as num?)),
+            _detailRow('Platform Fee', fmtRupees(inv['platform_fee'] as num?)),
+            _detailRow('Total Amount', fmtRupees(inv['total_amount'] as num?)),
+            _detailRow('Amount Paid', fmtRupees(inv['paid_amount'] as num?)),
+            _detailRow('Created', fmtDate(inv['created_at'])),
+            _detailRow('Due Date', fmtDate(inv['due_date'])),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(children: [
+          SizedBox(width: 140, child: Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 12))),
+          Expanded(child: SelectableText(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+        ]),
+      );
+
   Widget _bucketTile(String label, dynamic value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(fmtRupees(value as num?), style: const TextStyle(color: kAdminTextPri, fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 2),
@@ -216,7 +256,7 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
           ]),
           const SizedBox(height: 14),
           if (_invoicesLoading)
-            const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
+            const AdminTableSkeleton(rows: 3)
           else if (_invoices.isEmpty)
             const AdminEmptyState()
           else
@@ -237,7 +277,9 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
                   DataColumn(label: Text('Date')),
                 ],
                 rows: _invoices.map((inv) {
-                  return DataRow(cells: [
+                  return DataRow(
+                    onSelectChanged: (_) => _showInvoiceDetail(inv),
+                    cells: [
                     DataCell(Text(inv['invoice_number'] ?? '')),
                     DataCell(Text((inv['lawyer_name'] ?? '').toString().isEmpty ? '—' : inv['lawyer_name'])),
                     DataCell(Text((inv['client_name'] ?? '').toString().isEmpty ? '—' : inv['client_name'])),

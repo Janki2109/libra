@@ -114,7 +114,7 @@ func (s *SubscriptionSweeper) notifyExpiringTrials(ctx context.Context) {
 		       to_char(s.trial_ends_at, 'DD Mon YYYY')
 		FROM subscriptions s
 		JOIN users u ON u.firm_id = s.firm_id AND u.is_active = true
-		JOIN roles r ON u.role_id = r.id AND r.name = 'admin'
+		JOIN roles r ON u.role_id = r.id AND r.name = 'lawyer'
 		WHERE s.status = 'trial'
 		  AND s.trial_ends_at BETWEEN NOW() AND NOW() + INTERVAL '3 days'
 		  AND NOT EXISTS (
