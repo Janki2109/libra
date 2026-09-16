@@ -608,7 +608,7 @@ func ForgotPassword(c *gin.Context) {
 
 	// Never returned in the response, and never logged in production — only
 	// the user's own inbox ever sees the actual code.
-	if err := mailerClient().SendOTP(email, otp, otpValidMinutes); err != nil {
+	if err := mailerClient().SendPasswordResetOTP(email, otp, otpValidMinutes); err != nil {
 		if errors.Is(err, services.ErrMailNotConfigured) && !utils.IsProduction() {
 			log.Printf("[dev] password reset code for %s is %s", email, otp)
 			utils.Success(c, http.StatusOK, genericMsg, nil)

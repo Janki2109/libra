@@ -29,12 +29,17 @@ type Mailer struct {
 }
 
 func NewMailer() *Mailer {
+	// Some hosts (e.g. Render) default their SMTP integration to
+	// SMTP_USERNAME/SMTP_PASSWORD rather than this codebase's original
+	// SMTP_USER/SMTP_PASS — accept either so deployment env vars don't have
+	// to be renamed to match the code.
+	user := config.GetEnvAny("", "SMTP_USER", "SMTP_USERNAME")
 	return &Mailer{
 		host:     config.GetEnv("SMTP_HOST", ""),
 		port:     config.GetEnv("SMTP_PORT", "587"),
-		user:     config.GetEnv("SMTP_USER", ""),
-		pass:     config.GetEnv("SMTP_PASS", ""),
-		from:     config.GetEnv("SMTP_FROM", config.GetEnv("SMTP_USER", "")),
+		user:     user,
+		pass:     config.GetEnvAny("", "SMTP_PASS", "SMTP_PASSWORD"),
+		from:     config.GetEnvAny(user, "SMTP_FROM"),
 		fromName: config.GetEnv("SMTP_FROM_NAME", "Libra Law"),
 	}
 }
@@ -86,4 +91,19 @@ func (m *Mailer) SendOTP(to, code string, validMinutes int) error {
 		code, validMinutes,
 	)
 	return m.Send(to, "Your Libra Law verification code", body)
+}
+
+// SendPasswordResetOTP delivers a forgot-password reset code. Kept separate
+// from SendOTP so the subject line and copy are specific to a password reset
+// rather than a login code, even though both share the same OTP mechanism.
+func (m *Mailer) SendPasswordResetOTP(to, code string, validMinutes int) error {
+	body := fmt.Sprintf(
+		"We received a request to reset your Libra password.\n\n"+
+			"Your one-time password (OTP) is:\n\n    %s\n\n"+
+			"This OTP expires in %d minutes and can only be used once. "+
+			"If you did not request a password reset, you can safely ignore this email — "+
+			"your password will not be changed.\n",
+		code, validMinutes,
+	)
+	return m.Send(to, "Libra Password Reset OTP", body)
 }

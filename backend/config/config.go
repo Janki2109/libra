@@ -25,6 +25,19 @@ func GetEnv(key, defaultValue string) string {
 	return value
 }
 
+// GetEnvAny returns the first non-empty value among the given env var names,
+// falling back to defaultValue if none are set. Used where a variable is
+// known by more than one accepted name (e.g. hosting providers that default
+// to SMTP_USERNAME/SMTP_PASSWORD rather than this codebase's SMTP_USER/SMTP_PASS).
+func GetEnvAny(defaultValue string, keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return defaultValue
+}
+
 // IsProduction reports whether production hardening is on.
 func IsProduction() bool {
 	env := strings.ToLower(GetEnv("APP_ENV", GetEnv("ENV", "development")))
@@ -114,11 +127,11 @@ func Validate() error {
 				"subscriptions would not activate when a user closes the app mid-checkout")
 	}
 
-	smtpUser := GetEnv("SMTP_USER", "")
+	smtpUser := GetEnvAny("", "SMTP_USER", "SMTP_USERNAME")
 	if smtpUser == "" || strings.Contains(smtpUser, "your_email") {
 		problems = append(problems,
-			"SMTP_USER/SMTP_PASS are unset or still placeholders — verification codes and "+
-				"portal invitations cannot be delivered")
+			"SMTP_USER/SMTP_USERNAME and SMTP_PASS/SMTP_PASSWORD are unset or still placeholders — "+
+				"verification codes and portal invitations cannot be delivered")
 	}
 
 	if len(problems) == 0 {
