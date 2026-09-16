@@ -14,8 +14,10 @@ WORKDIR /src
 
 # The API base URL is baked in at build time via --dart-define rather than
 # hardcoded in app_constants.dart, so the same source produces staging and
-# production builds.
-ARG API_BASE_URL=http://localhost:8080/api/v1
+# production builds. Defaults to the deployed Render backend (same default
+# as AppConstants.baseUrl) so a build run without --build-arg still points
+# somewhere reachable instead of silently baking in localhost.
+ARG API_BASE_URL=https://libra-caox.onrender.com/api/v1
 
 COPY frontend/pubspec.yaml frontend/pubspec.lock ./
 RUN flutter pub get
