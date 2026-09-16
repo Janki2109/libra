@@ -1109,12 +1109,14 @@ void showAdminLawyerDocumentPreview(
                           (d['mime_type'] ?? '')
                               .toString()
                               .startsWith('image/'))
-                        Expanded(
+                        SizedBox(
+                            height: 480,
                             child: Image.memory(
                                 Uri.parse(content).data!.contentAsBytes(),
                                 fit: BoxFit.contain))
                       else
-                        const Expanded(
+                        const SizedBox(
+                            height: 200,
                             child: Center(
                                 child: Text(
                                     'Preview not available for this file type.',

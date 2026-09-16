@@ -33,7 +33,8 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
       _error = null;
     });
     try {
-      final res = await _repo.students(status: _status, search: _search, page: _page);
+      final res =
+          await _repo.students(status: _status, search: _search, page: _page);
       setState(() {
         _rows = (res['data'] as List?) ?? [];
         _hasMore = (res['meta']?['has_more'] as bool?) ?? false;
@@ -52,7 +53,9 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
       await _repo.setUserActive(id, active);
       _load();
     } on AdminException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
@@ -61,7 +64,9 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
     return AdminShell(
       activeRoute: '/admin/students',
       title: 'Students',
-      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
+      actions: [
+        IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)
+      ],
       child: AdminSectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 10, runSpacing: 10, children: [
@@ -72,7 +77,11 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
                   _page = 1;
                   _load();
                 }),
-            for (final s in const [('', 'Any status'), ('active', 'Active'), ('suspended', 'Suspended')])
+            for (final s in const [
+              ('', 'Any status'),
+              ('active', 'Active'),
+              ('suspended', 'Suspended')
+            ])
               AdminFilterChip(
                   label: s.$2,
                   selected: _status == s.$1,
@@ -111,28 +120,40 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
                 rows: _rows.map((s) {
                   final active = s['is_active'] == true;
                   return DataRow(cells: [
-                    DataCell(Text(s['name'] ?? ''), onTap: () => showAdminUserDetail(context, s['id'])),
-                    DataCell(Text(s['email'] ?? '', style: const TextStyle(color: kAdminTextMuted))),
-                    DataCell(AdminBadge(active ? 'Active' : 'Suspended', AdminBadge.colorFor(active ? 'active' : 'suspended'))),
+                    DataCell(Text(s['name'] ?? ''),
+                        onTap: () => showAdminUserDetail(context, s['id'])),
+                    DataCell(Text(s['email'] ?? '',
+                        style: const TextStyle(color: kAdminTextMuted))),
+                    DataCell(AdminBadge(active ? 'Active' : 'Suspended',
+                        AdminBadge.colorFor(active ? 'active' : 'suspended'))),
                     DataCell(Text('${s['total_score'] ?? 0}')),
-                    DataCell(Text('${s['completed_challenges'] ?? 0}/${s['total_challenges'] ?? 0}')),
+                    DataCell(Text(
+                        '${s['completed_challenges'] ?? 0}/${s['total_challenges'] ?? 0}')),
                     DataCell(Text('${s['streak_days'] ?? 0} days')),
                     DataCell(Text('${s['total_consultations'] ?? 0}')),
                     DataCell(Text(fmtRupees(s['total_amount_spent'] as num?))),
                     DataCell(Text(fmtDate(s['created_at']))),
                     DataCell(IconButton(
-                      icon: Icon(active ? Icons.block_rounded : Icons.check_circle_rounded,
-                          size: 18, color: active ? kAdminRed : kAdminGreen),
+                      icon: Icon(
+                          active
+                              ? Icons.block_rounded
+                              : Icons.check_circle_rounded,
+                          size: 18,
+                          color: active ? kAdminRed : kAdminGreen),
                       onPressed: () => _toggleActive(s['id'], !active),
                     )),
                   ]);
                 }).toList(),
               ),
             ),
-          AdminPager(page: _page, hasMore: _hasMore, loading: _loading, onPageChange: (p) {
-            setState(() => _page = p);
-            _load();
-          }),
+          AdminPager(
+              page: _page,
+              hasMore: _hasMore,
+              loading: _loading,
+              onPageChange: (p) {
+                setState(() => _page = p);
+                _load();
+              }),
         ]),
       ),
     );

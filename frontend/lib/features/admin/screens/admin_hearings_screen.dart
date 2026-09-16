@@ -50,7 +50,9 @@ class _AdminHearingsScreenState extends State<AdminHearingsScreen> {
     return AdminShell(
       activeRoute: '/admin/hearings',
       title: 'Courts / Hearings',
-      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
+      actions: [
+        IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)
+      ],
       child: AdminSectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 10, children: [
@@ -95,21 +97,36 @@ class _AdminHearingsScreenState extends State<AdminHearingsScreen> {
                 ],
                 rows: _rows.map((h) {
                   return DataRow(cells: [
-                    DataCell(Text((h['case_title'] ?? '').toString().isEmpty ? '—' : h['case_title'])),
-                    DataCell(Text((h['court_name'] ?? '').toString().isEmpty ? '—' : h['court_name'])),
-                    DataCell(Text((h['lawyer_name'] ?? '').toString().isEmpty ? '—' : h['lawyer_name'])),
-                    DataCell(Text((h['client_name'] ?? '').toString().isEmpty ? '—' : h['client_name'])),
+                    DataCell(Text((h['case_title'] ?? '').toString().isEmpty
+                        ? '—'
+                        : h['case_title'])),
+                    DataCell(Text((h['court_name'] ?? '').toString().isEmpty
+                        ? '—'
+                        : h['court_name'])),
+                    DataCell(Text((h['lawyer_name'] ?? '').toString().isEmpty
+                        ? '—'
+                        : h['lawyer_name'])),
+                    DataCell(Text((h['client_name'] ?? '').toString().isEmpty
+                        ? '—'
+                        : h['client_name'])),
                     DataCell(Text(fmtDate(h['hearing_date']))),
-                    DataCell(Text((h['hearing_time'] ?? '').toString().isEmpty ? '—' : h['hearing_time'])),
-                    DataCell(AdminBadge(h['status'] ?? '', AdminBadge.colorFor(h['status'] ?? ''))),
+                    DataCell(Text((h['hearing_time'] ?? '').toString().isEmpty
+                        ? '—'
+                        : h['hearing_time'])),
+                    DataCell(AdminBadge(h['status'] ?? '',
+                        AdminBadge.colorFor(h['status'] ?? ''))),
                   ]);
                 }).toList(),
               ),
             ),
-          AdminPager(page: _page, hasMore: _hasMore, loading: _loading, onPageChange: (p) {
-            setState(() => _page = p);
-            _load();
-          }),
+          AdminPager(
+              page: _page,
+              hasMore: _hasMore,
+              loading: _loading,
+              onPageChange: (p) {
+                setState(() => _page = p);
+                _load();
+              }),
         ]),
       ),
     );

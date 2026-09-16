@@ -9,19 +9,23 @@ class AdminShimmerBox extends StatefulWidget {
   final double width;
   final double height;
   final BorderRadius? radius;
-  const AdminShimmerBox({super.key, required this.width, required this.height, this.radius});
+  const AdminShimmerBox(
+      {super.key, required this.width, required this.height, this.radius});
 
   @override
   State<AdminShimmerBox> createState() => _AdminShimmerBoxState();
 }
 
-class _AdminShimmerBoxState extends State<AdminShimmerBox> with SingleTickerProviderStateMixin {
+class _AdminShimmerBoxState extends State<AdminShimmerBox>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat();
   }
 
   @override
@@ -67,7 +71,8 @@ class AdminTableSkeleton extends StatelessWidget {
                   (i) => Expanded(
                       child: Padding(
                           padding: const EdgeInsets.only(right: 16, bottom: 14),
-                          child: AdminShimmerBox(width: double.infinity, height: 11)))) ),
+                          child: AdminShimmerBox(
+                              width: double.infinity, height: 11))))),
           for (var r = 0; r < rows; r++)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -77,7 +82,8 @@ class AdminTableSkeleton extends StatelessWidget {
                     (i) => Expanded(
                         child: Padding(
                             padding: const EdgeInsets.only(right: 16),
-                            child: AdminShimmerBox(width: double.infinity, height: 13)))),
+                            child: AdminShimmerBox(
+                                width: double.infinity, height: 13)))),
               ),
             ),
         ]),
@@ -109,10 +115,12 @@ int adminStatGridColumns(double maxWidth) {
 class AdminStatGrid extends StatelessWidget {
   final List<Widget> cards;
   final double mainAxisExtent;
-  const AdminStatGrid({super.key, required this.cards, this.mainAxisExtent = 148});
+  const AdminStatGrid(
+      {super.key, required this.cards, this.mainAxisExtent = 148});
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, constraints) {
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -142,14 +150,21 @@ class AdminStatGridSkeleton extends StatelessWidget {
             (i) => Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                      color: kAdminCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kAdminBorder)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    AdminShimmerBox(width: 34, height: 34, radius: BorderRadius.circular(9)),
-                    const SizedBox(height: 14),
-                    const AdminShimmerBox(width: 60, height: 18),
-                    const SizedBox(height: 8),
-                    const AdminShimmerBox(width: 90, height: 10),
-                  ]),
+                      color: kAdminCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: kAdminBorder)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AdminShimmerBox(
+                            width: 34,
+                            height: 34,
+                            radius: BorderRadius.circular(9)),
+                        const SizedBox(height: 14),
+                        const AdminShimmerBox(width: 60, height: 18),
+                        const SizedBox(height: 8),
+                        const AdminShimmerBox(width: 90, height: 10),
+                      ]),
                 )),
       );
 }
@@ -172,7 +187,8 @@ class AdminLoader extends StatelessWidget {
             child: SizedBox(
               width: 30,
               height: 30,
-              child: CircularProgressIndicator(strokeWidth: 2.6, color: kAdminAccent),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.6, color: kAdminAccent),
             ),
           ),
         ),
@@ -218,9 +234,17 @@ class _AdminStatCardState extends State<AdminStatCard> {
       decoration: BoxDecoration(
         color: kAdminCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _hovering && widget.onTap != null ? widget.color.withValues(alpha: 0.4) : kAdminBorder),
+        border: Border.all(
+            color: _hovering && widget.onTap != null
+                ? widget.color.withValues(alpha: 0.4)
+                : kAdminBorder),
         boxShadow: _hovering && widget.onTap != null
-            ? [BoxShadow(color: widget.color.withValues(alpha: 0.15), blurRadius: 16, offset: const Offset(0, 6))]
+            ? [
+                BoxShadow(
+                    color: widget.color.withValues(alpha: 0.15),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6))
+              ]
             : const [],
       ),
       transform: _hovering && widget.onTap != null
@@ -232,11 +256,13 @@ class _AdminStatCardState extends State<AdminStatCard> {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                  color: widget.color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(9)),
+                  color: widget.color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9)),
               child: Icon(widget.icon, color: widget.color, size: 17)),
           if (widget.onTap != null) ...[
             const Spacer(),
-            Icon(Icons.arrow_outward_rounded, size: 14, color: kAdminTextMuted.withValues(alpha: 0.5)),
+            Icon(Icons.arrow_outward_rounded,
+                size: 14, color: kAdminTextMuted.withValues(alpha: 0.5)),
           ],
         ]),
         const SizedBox(height: 12),
@@ -248,18 +274,31 @@ class _AdminStatCardState extends State<AdminStatCard> {
                 builder: (_, v, __) => Text('${v.round()}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: kAdminTextPri, fontSize: 21, fontWeight: FontWeight.w800)),
+                    style: const TextStyle(
+                        color: kAdminTextPri,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800)),
               )
             : Text(widget.value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: kAdminTextPri, fontSize: 21, fontWeight: FontWeight.w800)),
+                style: const TextStyle(
+                    color: kAdminTextPri,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800)),
         const SizedBox(height: 2),
         Text(widget.label,
-            style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+            style: const TextStyle(
+                color: kAdminTextMuted,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600)),
         if (widget.subtitle != null) ...[
           const SizedBox(height: 2),
-          Text(widget.subtitle!, style: TextStyle(color: widget.color, fontSize: 10.5, fontWeight: FontWeight.w700)),
+          Text(widget.subtitle!,
+              style: TextStyle(
+                  color: widget.color,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700)),
         ],
       ]),
     );
@@ -280,7 +319,11 @@ class AdminSectionCard extends StatelessWidget {
   final String? title;
   final Widget child;
   final EdgeInsetsGeometry padding;
-  const AdminSectionCard({super.key, this.title, required this.child, this.padding = const EdgeInsets.all(18)});
+  const AdminSectionCard(
+      {super.key,
+      this.title,
+      required this.child,
+      this.padding = const EdgeInsets.all(18)});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -290,17 +333,30 @@ class AdminSectionCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: kAdminBorder),
           boxShadow: [
-            BoxShadow(color: kAdminTextPri.withValues(alpha: 0.04), blurRadius: 14, offset: const Offset(0, 4)),
+            BoxShadow(
+                color: kAdminTextPri.withValues(alpha: 0.04),
+                blurRadius: 14,
+                offset: const Offset(0, 4)),
           ],
         ),
         child: Padding(
           padding: padding,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (title != null) ...[
               Row(children: [
-                Container(width: 4, height: 16, decoration: BoxDecoration(color: kAdminAccent, borderRadius: BorderRadius.circular(2))),
+                Container(
+                    width: 4,
+                    height: 16,
+                    decoration: BoxDecoration(
+                        color: kAdminAccent,
+                        borderRadius: BorderRadius.circular(2))),
                 const SizedBox(width: 8),
-                Text(title!, style: const TextStyle(color: kAdminTextPri, fontSize: 15, fontWeight: FontWeight.w800)),
+                Text(title!,
+                    style: const TextStyle(
+                        color: kAdminTextPri,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800)),
               ]),
               const SizedBox(height: 14),
             ],
@@ -317,7 +373,11 @@ class AdminFilterChip extends StatefulWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const AdminFilterChip({super.key, required this.label, required this.selected, required this.onTap});
+  const AdminFilterChip(
+      {super.key,
+      required this.label,
+      required this.selected,
+      required this.onTap});
 
   @override
   State<AdminFilterChip> createState() => _AdminFilterChipState();
@@ -338,17 +398,26 @@ class _AdminFilterChipState extends State<AdminFilterChip> {
             curve: Curves.easeOut,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: widget.selected ? kAdminAccent : (_hovering ? kAdminAccent.withValues(alpha: 0.06) : kAdminBg),
+              color: widget.selected
+                  ? kAdminAccent
+                  : (_hovering
+                      ? kAdminAccent.withValues(alpha: 0.06)
+                      : kAdminBg),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                  color: widget.selected ? kAdminAccent : (_hovering ? kAdminAccent.withValues(alpha: 0.4) : kAdminBorder)),
+                  color: widget.selected
+                      ? kAdminAccent
+                      : (_hovering
+                          ? kAdminAccent.withValues(alpha: 0.4)
+                          : kAdminBorder)),
             ),
             child: AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 150),
               style: TextStyle(
                   color: widget.selected ? Colors.white : kAdminTextPri,
                   fontSize: 12.5,
-                  fontWeight: widget.selected ? FontWeight.w700 : FontWeight.w500),
+                  fontWeight:
+                      widget.selected ? FontWeight.w700 : FontWeight.w500),
               child: Text(widget.label),
             ),
           ),
@@ -374,10 +443,17 @@ class AdminBadge extends StatelessWidget {
           border: Border.all(color: color.withValues(alpha: 0.28)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 5, height: 5, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 5),
           Text(text.toUpperCase(),
-              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+              style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.3)),
         ]),
       );
 
@@ -417,7 +493,8 @@ class AdminBadge extends StatelessWidget {
 class AdminSearchField extends StatefulWidget {
   final String hint;
   final ValueChanged<String> onChanged;
-  const AdminSearchField({super.key, required this.hint, required this.onChanged});
+  const AdminSearchField(
+      {super.key, required this.hint, required this.onChanged});
 
   @override
   State<AdminSearchField> createState() => _AdminSearchFieldState();
@@ -430,7 +507,8 @@ class _AdminSearchFieldState extends State<AdminSearchField> {
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(() => setState(() => _focused = _focusNode.hasFocus));
+    _focusNode
+        .addListener(() => setState(() => _focused = _focusNode.hasFocus));
   }
 
   @override
@@ -446,7 +524,8 @@ class _AdminSearchFieldState extends State<AdminSearchField> {
         height: 38,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _focused ? kAdminAccent : Colors.transparent, width: 1.4),
+          border: Border.all(
+              color: _focused ? kAdminAccent : Colors.transparent, width: 1.4),
         ),
         child: TextField(
           focusNode: _focusNode,
@@ -455,11 +534,14 @@ class _AdminSearchFieldState extends State<AdminSearchField> {
           decoration: InputDecoration(
             hintText: widget.hint,
             hintStyle: const TextStyle(fontSize: 12, color: kAdminTextMuted),
-            prefixIcon: Icon(Icons.search_rounded, size: 18, color: _focused ? kAdminAccent : kAdminTextMuted),
+            prefixIcon: Icon(Icons.search_rounded,
+                size: 18, color: _focused ? kAdminAccent : kAdminTextMuted),
             filled: true,
             fillColor: kAdminBg,
             contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none),
           ),
         ),
       );
@@ -472,22 +554,32 @@ class AdminPager extends StatelessWidget {
   final bool loading;
   final ValueChanged<int> onPageChange;
   const AdminPager(
-      {super.key, required this.page, required this.hasMore, required this.loading, required this.onPageChange});
+      {super.key,
+      required this.page,
+      required this.hasMore,
+      required this.loading,
+      required this.onPageChange});
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(top: 14),
         child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          Text('Page $page', style: const TextStyle(color: kAdminTextPri, fontSize: 12, fontWeight: FontWeight.w600)),
+          Text('Page $page',
+              style: const TextStyle(
+                  color: kAdminTextPri,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(width: 12),
           OutlinedButton.icon(
-            onPressed: page > 1 && !loading ? () => onPageChange(page - 1) : null,
+            onPressed:
+                page > 1 && !loading ? () => onPageChange(page - 1) : null,
             icon: const Icon(Icons.chevron_left_rounded, size: 17),
             label: const Text('Previous'),
           ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
-            onPressed: hasMore && !loading ? () => onPageChange(page + 1) : null,
+            onPressed:
+                hasMore && !loading ? () => onPageChange(page + 1) : null,
             icon: const Icon(Icons.chevron_right_rounded, size: 17),
             label: const Text('Next'),
           ),
@@ -507,9 +599,11 @@ class AdminEmptyState extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 60),
         child: Center(
           child: Column(children: [
-            Icon(Icons.inbox_rounded, color: kAdminTextMuted.withValues(alpha: 0.4), size: 40),
+            Icon(Icons.inbox_rounded,
+                color: kAdminTextMuted.withValues(alpha: 0.4), size: 40),
             const SizedBox(height: 10),
-            Text(message, style: const TextStyle(color: kAdminTextMuted, fontSize: 13)),
+            Text(message,
+                style: const TextStyle(color: kAdminTextMuted, fontSize: 13)),
           ]),
         ),
       );

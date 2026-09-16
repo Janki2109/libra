@@ -50,7 +50,9 @@ class _AdminDocumentsScreenState extends State<AdminDocumentsScreen> {
     return AdminShell(
       activeRoute: '/admin/documents',
       title: 'Documents',
-      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
+      actions: [
+        IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)
+      ],
       child: AdminSectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 10, children: [
@@ -96,20 +98,32 @@ class _AdminDocumentsScreenState extends State<AdminDocumentsScreen> {
                   final v = (d['verification_status'] ?? '').toString();
                   return DataRow(cells: [
                     DataCell(Text(d['file_name'] ?? '')),
-                    DataCell(Text(d['file_type'] ?? '—', style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5))),
-                    DataCell(Text((d['category'] ?? '').toString().replaceAll('_', ' '))),
+                    DataCell(Text(d['file_type'] ?? '—',
+                        style: const TextStyle(
+                            color: kAdminTextMuted, fontSize: 11.5))),
+                    DataCell(Text(
+                        (d['category'] ?? '').toString().replaceAll('_', ' '))),
                     DataCell(Text(d['owner_name'] ?? '')),
-                    DataCell(AdminBadge((d['owner_role'] ?? '').toString().replaceAll('_', ' '), kAdminAccent)),
-                    DataCell(v.isEmpty ? const Text('—', style: TextStyle(color: kAdminTextMuted)) : AdminBadge(v, AdminBadge.colorFor(v))),
+                    DataCell(AdminBadge(
+                        (d['owner_role'] ?? '').toString().replaceAll('_', ' '),
+                        kAdminAccent)),
+                    DataCell(v.isEmpty
+                        ? const Text('—',
+                            style: TextStyle(color: kAdminTextMuted))
+                        : AdminBadge(v, AdminBadge.colorFor(v))),
                     DataCell(Text(fmtDate(d['created_at']))),
                   ]);
                 }).toList(),
               ),
             ),
-          AdminPager(page: _page, hasMore: _hasMore, loading: _loading, onPageChange: (p) {
-            setState(() => _page = p);
-            _load();
-          }),
+          AdminPager(
+              page: _page,
+              hasMore: _hasMore,
+              loading: _loading,
+              onPageChange: (p) {
+                setState(() => _page = p);
+                _load();
+              }),
         ]),
       ),
     );

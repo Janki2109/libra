@@ -64,7 +64,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       activeRoute: '/admin',
       title: 'Dashboard',
       actions: [
-        IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load, tooltip: 'Refresh'),
+        IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _load,
+            tooltip: 'Refresh'),
       ],
       child: _loading
           ? const AdminStatGridSkeleton()
@@ -81,7 +84,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   const SizedBox(height: 20),
                   _revenueBreakdown(),
                   const SizedBox(height: 20),
-                  if (_n('pending_verification') > 0) _pendingVerificationBanner(),
+                  if (_n('pending_verification') > 0)
+                    _pendingVerificationBanner(),
                 ]),
     );
   }
@@ -91,67 +95,210 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // filtered list (e.g. "Platform Revenue" is a derived figure, not a
     // table) — those cards render without the tap affordance.
     final cards = [
-      ('Total Users', '${_n('total_users')}', Icons.people_alt_rounded, kAdminAccent, null, '/admin/users'),
-      ('Total Lawyers', '${_n('total_lawyers')}', Icons.gavel_rounded, kAdminGold, '${_n('active_lawyers')} active', '/admin/lawyers'),
-      ('Total Students', '${_n('total_students')}', Icons.school_rounded, kAdminGreen, '${_n('active_students')} active', '/admin/students'),
-      ('Total Clients', '${_n('total_clients')}', Icons.person_rounded, const Color(0xFF7C3AED), '${_n('active_clients')} active', '/admin/clients'),
-      ('Pending Verification', '${_n('pending_verification')}', Icons.pending_actions_rounded, kAdminAmber, null, '/admin/verify-lawyers'),
-      ('Total Consultations', '${_n('total_consultations')}', Icons.event_note_rounded, kAdminAccent, null, '/admin/consultations'),
-      ('Pending Consultations', '${_n('pending_consultations')}', Icons.hourglass_top_rounded, kAdminAmber, null, '/admin/consultations'),
-      ('Completed Consultations', '${_n('completed_consultations')}', Icons.check_circle_rounded, kAdminGreen, null, '/admin/consultations'),
-      ('Cancelled Consultations', '${_n('cancelled_consultations')}', Icons.cancel_rounded, kAdminRed, null, '/admin/consultations'),
-      ('Total Payments', '${_n('total_payments')}', Icons.payments_rounded, kAdminAccent, null, '/admin/payments'),
-      ('Successful Payments', '${_n('successful_payments')}', Icons.check_circle_rounded, kAdminGreen, null, '/admin/payments'),
-      ('Failed Payments', '${_n('failed_payments')}', Icons.error_rounded, kAdminRed, null, '/admin/payments'),
-      ('Pending Payments', '${_n('pending_payments')}', Icons.schedule_rounded, kAdminAmber, null, '/admin/payments'),
-      ('Total Revenue', fmtRupees(_n('total_revenue')), Icons.account_balance_wallet_rounded, kAdminGreen, 'This month: ${fmtRupees(_n('monthly_revenue'))}', '/admin/revenue'),
-      ('Lawyer Earnings', fmtRupees(_n('lawyer_earnings')), Icons.savings_rounded, kAdminGold, null, '/admin/lawyer-earnings'),
-      ('Platform Revenue', fmtRupees(_n('platform_revenue')), Icons.business_center_rounded, kAdminAccent, 'Subscriptions', '/admin/revenue'),
-      ('Refund Amount', fmtRupees(_n('refund_amount')), Icons.replay_rounded, kAdminRed, null, '/admin/revenue'),
-      ('Total Cases', '${_n('total_cases')}', Icons.cases_rounded, const Color(0xFF7C3AED), null, '/admin/cases'),
-      ('Total Documents', '${_n('total_documents')}', Icons.folder_shared_rounded, kAdminAccent, null, '/admin/documents'),
-      ('Total Hearings', '${_n('total_hearings')}', Icons.account_balance_rounded, kAdminAmber, null, '/admin/hearings'),
+      (
+        'Total Users',
+        '${_n('total_users')}',
+        Icons.people_alt_rounded,
+        kAdminAccent,
+        null,
+        '/admin/users'
+      ),
+      (
+        'Total Lawyers',
+        '${_n('total_lawyers')}',
+        Icons.gavel_rounded,
+        kAdminGold,
+        '${_n('active_lawyers')} active',
+        '/admin/lawyers'
+      ),
+      (
+        'Total Students',
+        '${_n('total_students')}',
+        Icons.school_rounded,
+        kAdminGreen,
+        '${_n('active_students')} active',
+        '/admin/students'
+      ),
+      (
+        'Total Clients',
+        '${_n('total_clients')}',
+        Icons.person_rounded,
+        const Color(0xFF7C3AED),
+        '${_n('active_clients')} active',
+        '/admin/clients'
+      ),
+      (
+        'Pending Verification',
+        '${_n('pending_verification')}',
+        Icons.pending_actions_rounded,
+        kAdminAmber,
+        null,
+        '/admin/verify-lawyers'
+      ),
+      (
+        'Total Consultations',
+        '${_n('total_consultations')}',
+        Icons.event_note_rounded,
+        kAdminAccent,
+        null,
+        '/admin/consultations'
+      ),
+      (
+        'Pending Consultations',
+        '${_n('pending_consultations')}',
+        Icons.hourglass_top_rounded,
+        kAdminAmber,
+        null,
+        '/admin/consultations'
+      ),
+      (
+        'Completed Consultations',
+        '${_n('completed_consultations')}',
+        Icons.check_circle_rounded,
+        kAdminGreen,
+        null,
+        '/admin/consultations'
+      ),
+      (
+        'Cancelled Consultations',
+        '${_n('cancelled_consultations')}',
+        Icons.cancel_rounded,
+        kAdminRed,
+        null,
+        '/admin/consultations'
+      ),
+      (
+        'Total Payments',
+        '${_n('total_payments')}',
+        Icons.payments_rounded,
+        kAdminAccent,
+        null,
+        '/admin/payments'
+      ),
+      (
+        'Successful Payments',
+        '${_n('successful_payments')}',
+        Icons.check_circle_rounded,
+        kAdminGreen,
+        null,
+        '/admin/payments'
+      ),
+      (
+        'Failed Payments',
+        '${_n('failed_payments')}',
+        Icons.error_rounded,
+        kAdminRed,
+        null,
+        '/admin/payments'
+      ),
+      (
+        'Pending Payments',
+        '${_n('pending_payments')}',
+        Icons.schedule_rounded,
+        kAdminAmber,
+        null,
+        '/admin/payments'
+      ),
+      (
+        'Total Revenue',
+        fmtRupees(_n('total_revenue')),
+        Icons.account_balance_wallet_rounded,
+        kAdminGreen,
+        'This month: ${fmtRupees(_n('monthly_revenue'))}',
+        '/admin/revenue'
+      ),
+      (
+        'Lawyer Earnings',
+        fmtRupees(_n('lawyer_earnings')),
+        Icons.savings_rounded,
+        kAdminGold,
+        null,
+        '/admin/lawyer-earnings'
+      ),
+      (
+        'Platform Revenue',
+        fmtRupees(_n('platform_revenue')),
+        Icons.business_center_rounded,
+        kAdminAccent,
+        'Subscriptions',
+        '/admin/revenue'
+      ),
+      (
+        'Refund Amount',
+        fmtRupees(_n('refund_amount')),
+        Icons.replay_rounded,
+        kAdminRed,
+        null,
+        '/admin/revenue'
+      ),
+      (
+        'Total Cases',
+        '${_n('total_cases')}',
+        Icons.cases_rounded,
+        const Color(0xFF7C3AED),
+        null,
+        '/admin/cases'
+      ),
+      (
+        'Total Documents',
+        '${_n('total_documents')}',
+        Icons.folder_shared_rounded,
+        kAdminAccent,
+        null,
+        '/admin/documents'
+      ),
+      (
+        'Total Hearings',
+        '${_n('total_hearings')}',
+        Icons.account_balance_rounded,
+        kAdminAmber,
+        null,
+        '/admin/hearings'
+      ),
     ];
-    return LayoutBuilder(builder: (context, constraints) {
-      final cols = constraints.maxWidth > 1200 ? 5 : (constraints.maxWidth > 800 ? 3 : 2);
-      return GridView.count(
-        crossAxisCount: cols,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.5,
-        children: cards.asMap().entries.map((e) {
-          final i = e.key;
-          final c = e.value;
-          return TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
-            duration: Duration(milliseconds: 220 + (i * 25).clamp(0, 400)),
-            curve: Curves.easeOut,
-            builder: (_, v, child) => Opacity(
-                opacity: v, child: Transform.translate(offset: Offset(0, 12 * (1 - v)), child: child)),
-            child: AdminStatCard(
-              label: c.$1,
-              value: c.$2,
-              icon: c.$3,
-              color: c.$4,
-              subtitle: c.$5,
-              onTap: () => context.go(c.$6),
-            ),
-          );
-        }).toList(),
-      );
-    });
+    return AdminStatGrid(
+      mainAxisExtent: 168,
+      cards: cards.asMap().entries.map((e) {
+        final i = e.key;
+        final c = e.value;
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: Duration(milliseconds: 220 + (i * 25).clamp(0, 400)),
+          curve: Curves.easeOut,
+          builder: (_, v, child) => Opacity(
+              opacity: v,
+              child: Transform.translate(
+                  offset: Offset(0, 12 * (1 - v)), child: child)),
+          child: AdminStatCard(
+            label: c.$1,
+            value: c.$2,
+            icon: c.$3,
+            color: c.$4,
+            subtitle: c.$5,
+            onTap: () => context.go(c.$6),
+          ),
+        );
+      }).toList(),
+    );
   }
 
   Widget _trendsCard() => AdminSectionCard(
         title: 'Trends (last 14 days)',
         child: Column(children: [
-          _MiniBarChart(label: 'New Registrations', data: _registrations, color: kAdminAccent),
+          _MiniBarChart(
+              label: 'New Registrations',
+              data: _registrations,
+              color: kAdminAccent),
           const SizedBox(height: 18),
-          _MiniBarChart(label: 'Consultations Booked', data: _consultationsTrend, color: kAdminGold),
+          _MiniBarChart(
+              label: 'Consultations Booked',
+              data: _consultationsTrend,
+              color: kAdminGold),
           const SizedBox(height: 18),
-          _MiniBarChart(label: 'Consultation Revenue (₹)', data: _revenueTrend, color: kAdminGreen),
+          _MiniBarChart(
+              label: 'Consultation Revenue (₹)',
+              data: _revenueTrend,
+              color: kAdminGreen),
         ]),
       );
 
@@ -176,15 +323,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final frac = value / total;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        Text(label, style: const TextStyle(color: kAdminTextPri, fontSize: 12.5, fontWeight: FontWeight.w600)),
+        Text(label,
+            style: const TextStyle(
+                color: kAdminTextPri,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600)),
         const Spacer(),
-        Text('${value.toInt()}', style: TextStyle(color: color, fontSize: 12.5, fontWeight: FontWeight.w800)),
+        Text('${value.toInt()}',
+            style: TextStyle(
+                color: color, fontSize: 12.5, fontWeight: FontWeight.w800)),
       ]),
       const SizedBox(height: 6),
       ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: LinearProgressIndicator(
-            value: frac.toDouble(), minHeight: 8, backgroundColor: kAdminBg, color: color),
+            value: frac.toDouble(),
+            minHeight: 8,
+            backgroundColor: kAdminBg,
+            color: color),
       ),
     ]);
   }
@@ -192,18 +348,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget _revenueBreakdown() => AdminSectionCard(
         title: 'Revenue Breakdown',
         child: Row(children: [
-          Expanded(child: _revenueTile('Lawyer Earnings (consultations)', _n('lawyer_earnings'), kAdminGold)),
-          Expanded(child: _revenueTile('Platform Revenue (subs + invoice fees)', _n('platform_revenue'), kAdminAccent)),
-          Expanded(child: _revenueTile('Firm Invoice Revenue (base only)', _n('firm_invoice_total'), kAdminGreen)),
-          Expanded(child: _revenueTile('GST Collected (pass-through)', _n('gst_collected'), kAdminAmber)),
-          Expanded(child: _revenueTile('Refunds', _n('refund_amount'), kAdminRed)),
+          Expanded(
+              child: _revenueTile('Lawyer Earnings (consultations)',
+                  _n('lawyer_earnings'), kAdminGold)),
+          Expanded(
+              child: _revenueTile('Platform Revenue (subs + invoice fees)',
+                  _n('platform_revenue'), kAdminAccent)),
+          Expanded(
+              child: _revenueTile('Firm Invoice Revenue (base only)',
+                  _n('firm_invoice_total'), kAdminGreen)),
+          Expanded(
+              child: _revenueTile('GST Collected (pass-through)',
+                  _n('gst_collected'), kAdminAmber)),
+          Expanded(
+              child: _revenueTile('Refunds', _n('refund_amount'), kAdminRed)),
         ]),
       );
 
-  Widget _revenueTile(String label, num value, Color color) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(fmtRupees(value), style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w800)),
+  Widget _revenueTile(String label, num value, Color color) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(fmtRupees(value),
+            style: TextStyle(
+                color: color, fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5)),
+        Text(label,
+            style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5)),
       ]);
 
   Widget _pendingVerificationBanner() => GestureDetector(
@@ -218,10 +387,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const Icon(Icons.warning_amber_rounded, color: kAdminAmber),
             const SizedBox(width: 12),
             Expanded(
-              child: Text('${_n('pending_verification').toInt()} lawyer(s) awaiting document verification',
-                  style: const TextStyle(color: kAdminTextPri, fontWeight: FontWeight.w600, fontSize: 13)),
+              child: Text(
+                  '${_n('pending_verification').toInt()} lawyer(s) awaiting document verification',
+                  style: const TextStyle(
+                      color: kAdminTextPri,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13)),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: kAdminAmber),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: kAdminAmber),
           ]),
         ),
       );
@@ -233,14 +407,22 @@ class _MiniBarChart extends StatelessWidget {
   final String label;
   final List<dynamic> data;
   final Color color;
-  const _MiniBarChart({required this.label, required this.data, required this.color});
+  const _MiniBarChart(
+      {required this.label, required this.data, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    final values = data.map((d) => ((d['value'] as num?) ?? 0).toDouble()).toList();
-    final maxV = values.isEmpty ? 1.0 : values.reduce((a, b) => a > b ? a : b).clamp(1, double.infinity);
+    final values =
+        data.map((d) => ((d['value'] as num?) ?? 0).toDouble()).toList();
+    final maxV = values.isEmpty
+        ? 1.0
+        : values.reduce((a, b) => a > b ? a : b).clamp(1, double.infinity);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+      Text(label,
+          style: const TextStyle(
+              color: kAdminTextMuted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       SizedBox(
         height: 56,
@@ -253,7 +435,8 @@ class _MiniBarChart extends StatelessWidget {
                   final h = maxV == 0 ? 2.0 : (v / maxV) * 50 + 2;
                   return Expanded(
                     child: Tooltip(
-                      message: '${d['date']}: ${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1)}',
+                      message:
+                          '${d['date']}: ${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1)}',
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 1.5),
                         child: Container(

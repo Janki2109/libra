@@ -50,7 +50,9 @@ class _AdminCasesScreenState extends State<AdminCasesScreen> {
     return AdminShell(
       activeRoute: '/admin/cases',
       title: 'Cases',
-      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
+      actions: [
+        IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)
+      ],
       child: AdminSectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           AdminSearchField(
@@ -84,22 +86,37 @@ class _AdminCasesScreenState extends State<AdminCasesScreen> {
                 ],
                 rows: _rows.map((c) {
                   return DataRow(cells: [
-                    DataCell(Text((c['case_number'] ?? '').toString().isEmpty ? '—' : c['case_number'])),
+                    DataCell(Text((c['case_number'] ?? '').toString().isEmpty
+                        ? '—'
+                        : c['case_number'])),
                     DataCell(Text(c['case_title'] ?? '')),
-                    DataCell(Text((c['client_name'] ?? '').toString().isEmpty ? '—' : c['client_name'])),
-                    DataCell(Text((c['lawyer_name'] ?? '').toString().isEmpty ? '—' : c['lawyer_name'])),
-                    DataCell(Text((c['court_name'] ?? '').toString().isEmpty ? '—' : c['court_name'])),
-                    DataCell(AdminBadge(c['status'] ?? '', AdminBadge.colorFor(c['status'] ?? ''))),
-                    DataCell(Text(c['next_hearing'] == null ? '—' : fmtDate(c['next_hearing']))),
+                    DataCell(Text((c['client_name'] ?? '').toString().isEmpty
+                        ? '—'
+                        : c['client_name'])),
+                    DataCell(Text((c['lawyer_name'] ?? '').toString().isEmpty
+                        ? '—'
+                        : c['lawyer_name'])),
+                    DataCell(Text((c['court_name'] ?? '').toString().isEmpty
+                        ? '—'
+                        : c['court_name'])),
+                    DataCell(AdminBadge(c['status'] ?? '',
+                        AdminBadge.colorFor(c['status'] ?? ''))),
+                    DataCell(Text(c['next_hearing'] == null
+                        ? '—'
+                        : fmtDate(c['next_hearing']))),
                     DataCell(Text(fmtDate(c['created_at']))),
                   ]);
                 }).toList(),
               ),
             ),
-          AdminPager(page: _page, hasMore: _hasMore, loading: _loading, onPageChange: (p) {
-            setState(() => _page = p);
-            _load();
-          }),
+          AdminPager(
+              page: _page,
+              hasMore: _hasMore,
+              loading: _loading,
+              onPageChange: (p) {
+                setState(() => _page = p);
+                _load();
+              }),
         ]),
       ),
     );

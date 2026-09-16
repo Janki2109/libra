@@ -51,13 +51,19 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
     });
     try {
       final res = await _repo.revenue(
-        from: _range != null ? DateFormat('yyyy-MM-dd').format(_range!.start) : null,
-        to: _range != null ? DateFormat('yyyy-MM-dd').format(_range!.end) : null,
+        from: _range != null
+            ? DateFormat('yyyy-MM-dd').format(_range!.start)
+            : null,
+        to: _range != null
+            ? DateFormat('yyyy-MM-dd').format(_range!.end)
+            : null,
       );
       final data = res['data'] as Map<String, dynamic>? ?? {};
       setState(() {
         _summary = (data['summary'] as Map<String, dynamic>?) ?? {};
-        _buckets = (data['consultation_revenue_period_buckets'] as Map<String, dynamic>?) ?? {};
+        _buckets = (data['consultation_revenue_period_buckets']
+                as Map<String, dynamic>?) ??
+            {};
         _trend = (data['revenue_30d'] as List?) ?? [];
         _loading = false;
       });
@@ -74,7 +80,10 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
   Future<void> _pickRange() async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
-        context: context, firstDate: DateTime(now.year - 2), lastDate: DateTime(now.year + 1), initialDateRange: _range);
+        context: context,
+        firstDate: DateTime(now.year - 2),
+        lastDate: DateTime(now.year + 1),
+        initialDateRange: _range);
     if (picked != null) {
       setState(() => _range = picked);
       _load();
@@ -110,24 +119,55 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
                   AdminSectionCard(
                     title: 'Revenue Summary',
                     child: Column(children: [
-                      Row(children: [
-                        Expanded(child: AdminStatCard(label: 'Gross Revenue', value: fmtRupees(_n('gross_revenue')), icon: Icons.trending_up_rounded, color: kAdminGreen)),
-                        const SizedBox(width: 12),
-                        Expanded(child: AdminStatCard(label: 'Net Revenue', value: fmtRupees(_n('net_revenue')), icon: Icons.account_balance_wallet_rounded, color: kAdminAccent)),
-                        const SizedBox(width: 12),
-                        Expanded(child: AdminStatCard(label: 'Refunds', value: fmtRupees(_n('refund_amount')), icon: Icons.replay_rounded, color: kAdminRed)),
-                        const SizedBox(width: 12),
-                        Expanded(child: AdminStatCard(label: 'Successful Payments', value: '${_n('successful_consultation_payments') + _n('successful_subscription_payments')}', icon: Icons.check_circle_rounded, color: kAdminGreen)),
+                      AdminStatGrid(cards: [
+                        AdminStatCard(
+                            label: 'Gross Revenue',
+                            value: fmtRupees(_n('gross_revenue')),
+                            icon: Icons.trending_up_rounded,
+                            color: kAdminGreen),
+                        AdminStatCard(
+                            label: 'Net Revenue',
+                            value: fmtRupees(_n('net_revenue')),
+                            icon: Icons.account_balance_wallet_rounded,
+                            color: kAdminAccent),
+                        AdminStatCard(
+                            label: 'Refunds',
+                            value: fmtRupees(_n('refund_amount')),
+                            icon: Icons.replay_rounded,
+                            color: kAdminRed),
+                        AdminStatCard(
+                            label: 'Successful Payments',
+                            value:
+                                '${_n('successful_consultation_payments') + _n('successful_subscription_payments')}',
+                            icon: Icons.check_circle_rounded,
+                            color: kAdminGreen),
                       ]),
                       const SizedBox(height: 12),
-                      Row(children: [
-                        Expanded(child: AdminStatCard(label: 'Lawyer Earnings (gross)', value: fmtRupees(_n('lawyer_earnings_gross')), icon: Icons.gavel_rounded, color: kAdminGold, subtitle: '100% — no commission split exists')),
-                        const SizedBox(width: 12),
-                        Expanded(child: AdminStatCard(label: 'Platform Revenue', value: fmtRupees(_n('platform_revenue')), icon: Icons.business_center_rounded, color: kAdminAccent, subtitle: 'Subscriptions + invoice platform fees')),
-                        const SizedBox(width: 12),
-                        Expanded(child: AdminStatCard(label: 'Firm Invoice Revenue', value: fmtRupees(_n('firm_invoice_revenue')), icon: Icons.receipt_long_rounded, color: kAdminGreen, subtitle: 'Service amount only, excl. GST/fee')),
-                        const SizedBox(width: 12),
-                        Expanded(child: AdminStatCard(label: 'GST Collected', value: fmtRupees(_n('gst_collected')), icon: Icons.receipt_rounded, color: kAdminAmber, subtitle: 'Pass-through — not platform revenue')),
+                      AdminStatGrid(mainAxisExtent: 168, cards: [
+                        AdminStatCard(
+                            label: 'Lawyer Earnings (gross)',
+                            value: fmtRupees(_n('lawyer_earnings_gross')),
+                            icon: Icons.gavel_rounded,
+                            color: kAdminGold,
+                            subtitle: '100% — no commission split exists'),
+                        AdminStatCard(
+                            label: 'Platform Revenue',
+                            value: fmtRupees(_n('platform_revenue')),
+                            icon: Icons.business_center_rounded,
+                            color: kAdminAccent,
+                            subtitle: 'Subscriptions + invoice platform fees'),
+                        AdminStatCard(
+                            label: 'Firm Invoice Revenue',
+                            value: fmtRupees(_n('firm_invoice_revenue')),
+                            icon: Icons.receipt_long_rounded,
+                            color: kAdminGreen,
+                            subtitle: 'Service amount only, excl. GST/fee'),
+                        AdminStatCard(
+                            label: 'GST Collected',
+                            value: fmtRupees(_n('gst_collected')),
+                            icon: Icons.receipt_rounded,
+                            color: kAdminAmber,
+                            subtitle: 'Pass-through — not platform revenue'),
                       ]),
                     ]),
                   ),
@@ -138,9 +178,12 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
                     title: 'Consultation Revenue by Period',
                     child: Row(children: [
                       Expanded(child: _bucketTile('Today', _buckets['today'])),
-                      Expanded(child: _bucketTile('This Week', _buckets['week'])),
-                      Expanded(child: _bucketTile('This Month', _buckets['month'])),
-                      Expanded(child: _bucketTile('This Year', _buckets['year'])),
+                      Expanded(
+                          child: _bucketTile('This Week', _buckets['week'])),
+                      Expanded(
+                          child: _bucketTile('This Month', _buckets['month'])),
+                      Expanded(
+                          child: _bucketTile('This Year', _buckets['year'])),
                     ]),
                   ),
                   const SizedBox(height: 20),
@@ -153,9 +196,11 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
                           : Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: _trend.map((d) {
-                                final v = ((d['value'] as num?) ?? 0).toDouble();
+                                final v =
+                                    ((d['value'] as num?) ?? 0).toDouble();
                                 final maxV = _trend
-                                    .map((e) => ((e['value'] as num?) ?? 0).toDouble())
+                                    .map((e) =>
+                                        ((e['value'] as num?) ?? 0).toDouble())
                                     .reduce((a, b) => a > b ? a : b)
                                     .clamp(1, double.infinity);
                                 final h = (v / maxV) * 80 + 2;
@@ -163,12 +208,16 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
                                   child: Tooltip(
                                     message: '${d['date']}: ${fmtRupees(v)}',
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 1),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 1),
                                       child: Container(
                                           height: h,
                                           decoration: BoxDecoration(
-                                              color: v > 0 ? kAdminGreen : kAdminBorder,
-                                              borderRadius: BorderRadius.circular(2))),
+                                              color: v > 0
+                                                  ? kAdminGreen
+                                                  : kAdminBorder,
+                                              borderRadius:
+                                                  BorderRadius.circular(2))),
                                     ),
                                   ),
                                 );
@@ -179,7 +228,10 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
                   const SizedBox(height: 12),
                   Text(
                     'No refund-issuing feature exists yet — refund figures reflect the schema being ready, not an active flow.',
-                    style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5, fontStyle: FontStyle.italic),
+                    style: const TextStyle(
+                        color: kAdminTextMuted,
+                        fontSize: 11.5,
+                        fontStyle: FontStyle.italic),
                   ),
                 ]),
     );
@@ -193,25 +245,45 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
         child: Container(
           width: 480,
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(
-                  child: Text('Invoice ${inv['invoice_number'] ?? ''}',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
-            ]),
-            AdminBadge(inv['status'] ?? '', AdminBadge.colorFor(inv['status'] ?? '')),
-            const Divider(height: 24),
-            _detailRow('Lawyer', (inv['lawyer_name'] ?? '').toString().isEmpty ? '—' : inv['lawyer_name']),
-            _detailRow('Client', (inv['client_name'] ?? '').toString().isEmpty ? '—' : inv['client_name']),
-            _detailRow('Base Amount', fmtRupees(inv['subtotal'] as num?)),
-            _detailRow('GST (${(inv['gst_rate'] as num? ?? 0).toStringAsFixed(0)}%)', fmtRupees(inv['gst_amount'] as num?)),
-            _detailRow('Platform Fee', fmtRupees(inv['platform_fee'] as num?)),
-            _detailRow('Total Amount', fmtRupees(inv['total_amount'] as num?)),
-            _detailRow('Amount Paid', fmtRupees(inv['paid_amount'] as num?)),
-            _detailRow('Created', fmtDate(inv['created_at'])),
-            _detailRow('Due Date', fmtDate(inv['due_date'])),
-          ]),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(
+                      child: Text('Invoice ${inv['invoice_number'] ?? ''}',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w800))),
+                  IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded)),
+                ]),
+                AdminBadge(inv['status'] ?? '',
+                    AdminBadge.colorFor(inv['status'] ?? '')),
+                const Divider(height: 24),
+                _detailRow(
+                    'Lawyer',
+                    (inv['lawyer_name'] ?? '').toString().isEmpty
+                        ? '—'
+                        : inv['lawyer_name']),
+                _detailRow(
+                    'Client',
+                    (inv['client_name'] ?? '').toString().isEmpty
+                        ? '—'
+                        : inv['client_name']),
+                _detailRow('Base Amount', fmtRupees(inv['subtotal'] as num?)),
+                _detailRow(
+                    'GST (${(inv['gst_rate'] as num? ?? 0).toStringAsFixed(0)}%)',
+                    fmtRupees(inv['gst_amount'] as num?)),
+                _detailRow(
+                    'Platform Fee', fmtRupees(inv['platform_fee'] as num?)),
+                _detailRow(
+                    'Total Amount', fmtRupees(inv['total_amount'] as num?)),
+                _detailRow(
+                    'Amount Paid', fmtRupees(inv['paid_amount'] as num?)),
+                _detailRow('Created', fmtDate(inv['created_at'])),
+                _detailRow('Due Date', fmtDate(inv['due_date'])),
+              ]),
         ),
       ),
     );
@@ -220,15 +292,28 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
   Widget _detailRow(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(children: [
-          SizedBox(width: 140, child: Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 12))),
-          Expanded(child: SelectableText(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+          SizedBox(
+              width: 140,
+              child: Text(label,
+                  style:
+                      const TextStyle(color: kAdminTextMuted, fontSize: 12))),
+          Expanded(
+              child: SelectableText(value,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600))),
         ]),
       );
 
-  Widget _bucketTile(String label, dynamic value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(fmtRupees(value as num?), style: const TextStyle(color: kAdminTextPri, fontSize: 18, fontWeight: FontWeight.w800)),
+  Widget _bucketTile(String label, dynamic value) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(fmtRupees(value as num?),
+            style: const TextStyle(
+                color: kAdminTextPri,
+                fontSize: 18,
+                fontWeight: FontWeight.w800)),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5)),
+        Text(label,
+            style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5)),
       ]);
 
   /// Bills (invoices) with their full mandatory GST/platform-fee breakdown —
@@ -278,21 +363,32 @@ class _AdminRevenueScreenState extends State<AdminRevenueScreen> {
                 ],
                 rows: _invoices.map((inv) {
                   return DataRow(
-                    onSelectChanged: (_) => _showInvoiceDetail(inv),
-                    cells: [
-                    DataCell(Text(inv['invoice_number'] ?? '')),
-                    DataCell(Text((inv['lawyer_name'] ?? '').toString().isEmpty ? '—' : inv['lawyer_name'])),
-                    DataCell(Text((inv['client_name'] ?? '').toString().isEmpty ? '—' : inv['client_name'])),
-                    DataCell(Text(fmtRupees(inv['subtotal'] as num?))),
-                    DataCell(Text(
-                        '${fmtRupees(inv['gst_amount'] as num?)} (${(inv['gst_rate'] as num? ?? 0).toStringAsFixed(0)}%)',
-                        style: const TextStyle(color: kAdminAmber))),
-                    DataCell(Text(fmtRupees(inv['platform_fee'] as num?), style: const TextStyle(color: kAdminAccent))),
-                    DataCell(Text(fmtRupees(inv['total_amount'] as num?), style: const TextStyle(fontWeight: FontWeight.w700))),
-                    DataCell(Text(fmtRupees(inv['paid_amount'] as num?), style: const TextStyle(color: kAdminGreen))),
-                    DataCell(AdminBadge(inv['status'] ?? '', AdminBadge.colorFor(inv['status'] ?? ''))),
-                    DataCell(Text(fmtDate(inv['created_at']))),
-                  ]);
+                      onSelectChanged: (_) => _showInvoiceDetail(inv),
+                      cells: [
+                        DataCell(Text(inv['invoice_number'] ?? '')),
+                        DataCell(Text(
+                            (inv['lawyer_name'] ?? '').toString().isEmpty
+                                ? '—'
+                                : inv['lawyer_name'])),
+                        DataCell(Text(
+                            (inv['client_name'] ?? '').toString().isEmpty
+                                ? '—'
+                                : inv['client_name'])),
+                        DataCell(Text(fmtRupees(inv['subtotal'] as num?))),
+                        DataCell(Text(
+                            '${fmtRupees(inv['gst_amount'] as num?)} (${(inv['gst_rate'] as num? ?? 0).toStringAsFixed(0)}%)',
+                            style: const TextStyle(color: kAdminAmber))),
+                        DataCell(Text(fmtRupees(inv['platform_fee'] as num?),
+                            style: const TextStyle(color: kAdminAccent))),
+                        DataCell(Text(fmtRupees(inv['total_amount'] as num?),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700))),
+                        DataCell(Text(fmtRupees(inv['paid_amount'] as num?),
+                            style: const TextStyle(color: kAdminGreen))),
+                        DataCell(AdminBadge(inv['status'] ?? '',
+                            AdminBadge.colorFor(inv['status'] ?? ''))),
+                        DataCell(Text(fmtDate(inv['created_at']))),
+                      ]);
                 }).toList(),
               ),
             ),

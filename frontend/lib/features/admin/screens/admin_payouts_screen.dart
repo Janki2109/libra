@@ -461,41 +461,27 @@ class _AdminPayoutsScreenState extends State<AdminPayoutsScreen>
       _KpiSpec('Completed Settlements', '${_n('completed_settlements')}',
           Icons.fact_check_rounded, kAdminAccent, 3),
     ];
-    return LayoutBuilder(builder: (context, constraints) {
-      final cols = constraints.maxWidth > 1300
-          ? 4
-          : constraints.maxWidth > 980
-              ? 3
-              : constraints.maxWidth > 620
-                  ? 2
-                  : 1;
-      return GridView.count(
-        crossAxisCount: cols,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 2.35,
-        children: cards.asMap().entries.map((e) {
-          final i = e.key;
-          final c = e.value;
-          return TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
-            duration: Duration(milliseconds: 180 + i * 25),
-            curve: Curves.easeOut,
-            builder: (_, v, child) => Opacity(
-                opacity: v,
-                child: Transform.translate(
-                    offset: Offset(0, 8 * (1 - v)), child: child)),
-            child: _KpiCard(
-                spec: c,
-                onTap: c.tabIndex == null
-                    ? null
-                    : () => _tabCtrl.animateTo(c.tabIndex!)),
-          );
-        }).toList(),
-      );
-    });
+    return AdminStatGrid(
+      mainAxisExtent: 92,
+      cards: cards.asMap().entries.map((e) {
+        final i = e.key;
+        final c = e.value;
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: Duration(milliseconds: 180 + i * 25),
+          curve: Curves.easeOut,
+          builder: (_, v, child) => Opacity(
+              opacity: v,
+              child: Transform.translate(
+                  offset: Offset(0, 8 * (1 - v)), child: child)),
+          child: _KpiCard(
+              spec: c,
+              onTap: c.tabIndex == null
+                  ? null
+                  : () => _tabCtrl.animateTo(c.tabIndex!)),
+        );
+      }).toList(),
+    );
   }
 
   // ── Earnings Overview chart ──

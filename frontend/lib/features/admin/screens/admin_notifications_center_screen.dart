@@ -222,23 +222,12 @@ class _AdminNotificationsCenterScreenState
       ),
       ('Failed', '${_n('failed')}', Icons.error_outline_rounded, kAdminRed),
     ];
-    return LayoutBuilder(builder: (context, constraints) {
-      final cols = constraints.maxWidth > 1200
-          ? 5
-          : (constraints.maxWidth > 700 ? 3 : 2);
-      return GridView.count(
-        crossAxisCount: cols,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 2.3,
-        children: cards
-            .map((c) => AdminStatCard(
-                label: c.$1, value: c.$2, icon: c.$3, color: c.$4))
-            .toList(),
-      );
-    });
+    return AdminStatGrid(
+      cards: cards
+          .map((c) =>
+              AdminStatCard(label: c.$1, value: c.$2, icon: c.$3, color: c.$4))
+          .toList(),
+    );
   }
 
   Widget _scheduledTab() {
@@ -588,7 +577,8 @@ class _AdminNotificationsCenterScreenState
                                   color: kAdminTextPri)),
                         ]),
                         const Divider(height: 24),
-                        Expanded(
+                        SizedBox(
+                          height: 500,
                           child: SingleChildScrollView(
                             child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -921,7 +911,8 @@ class _NotificationComposerState extends State<_NotificationComposer> {
                   icon: const Icon(Icons.close_rounded, color: kAdminTextPri)),
             ]),
             const Divider(height: 24),
-            Expanded(
+            SizedBox(
+              height: 620,
               child: SingleChildScrollView(
                 child: LayoutBuilder(builder: (context, constraints) {
                   final stacked = constraints.maxWidth < 620;

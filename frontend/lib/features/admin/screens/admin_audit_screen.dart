@@ -298,23 +298,12 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
         const Color(0xFF7C3AED)
       ),
     ];
-    return LayoutBuilder(builder: (context, constraints) {
-      final cols = constraints.maxWidth > 1000
-          ? 4
-          : (constraints.maxWidth > 620 ? 2 : 1);
-      return GridView.count(
-        crossAxisCount: cols,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 2.6,
-        children: cards
-            .map((c) => AdminStatCard(
-                label: c.$1, value: c.$2, icon: c.$3, color: c.$4))
-            .toList(),
-      );
-    });
+    return AdminStatGrid(
+      cards: cards
+          .map((c) =>
+              AdminStatCard(label: c.$1, value: c.$2, icon: c.$3, color: c.$4))
+          .toList(),
+    );
   }
 
   Widget _filtersCard() {

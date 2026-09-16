@@ -22,7 +22,8 @@ import '../widgets/admin_widgets.dart';
 class AdminSubscriptionsScreen extends StatefulWidget {
   const AdminSubscriptionsScreen({super.key});
   @override
-  State<AdminSubscriptionsScreen> createState() => _AdminSubscriptionsScreenState();
+  State<AdminSubscriptionsScreen> createState() =>
+      _AdminSubscriptionsScreenState();
 }
 
 class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
@@ -58,7 +59,15 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
   bool _paymentsHasMore = false;
   String _paymentStatusFilter = '';
 
-  static const _tabs = ['Active', 'Premium', 'Plans', 'Revenue', 'Expired', 'Cancelled', 'Payments'];
+  static const _tabs = [
+    'Active',
+    'Premium',
+    'Plans',
+    'Revenue',
+    'Expired',
+    'Cancelled',
+    'Payments'
+  ];
 
   @override
   void initState() {
@@ -133,8 +142,12 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
     }
   }
 
-  String? get _fromStr => _dateRange != null ? DateFormat('yyyy-MM-dd').format(_dateRange!.start) : null;
-  String? get _toStr => _dateRange != null ? DateFormat('yyyy-MM-dd').format(_dateRange!.end) : null;
+  String? get _fromStr => _dateRange != null
+      ? DateFormat('yyyy-MM-dd').format(_dateRange!.start)
+      : null;
+  String? get _toStr => _dateRange != null
+      ? DateFormat('yyyy-MM-dd').format(_dateRange!.end)
+      : null;
 
   Future<void> _loadForCurrentTab({required bool silent}) async {
     final tab = _tabs[_tabCtrl.index];
@@ -142,7 +155,8 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
       await _loadPayments(silent: silent);
       return;
     }
-    if (tab == 'Plans' || tab == 'Revenue') return; // those have their own loaders
+    if (tab == 'Plans' || tab == 'Revenue')
+      return; // those have their own loaders
     await _loadList(tab, silent: silent);
   }
 
@@ -220,7 +234,10 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
-        context: context, firstDate: DateTime(now.year - 3), lastDate: DateTime(now.year + 1), initialDateRange: _dateRange);
+        context: context,
+        firstDate: DateTime(now.year - 3),
+        lastDate: DateTime(now.year + 1),
+        initialDateRange: _dateRange);
     if (picked != null) {
       setState(() => _dateRange = picked);
       _applyFilters();
@@ -274,7 +291,8 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
             labelColor: kAdminAccent,
             unselectedLabelColor: kAdminTextMuted,
             indicatorColor: kAdminAccent,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            labelStyle:
+                const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
             tabs: _tabs.map((t) => Tab(text: t)).toList(),
           ),
         ),
@@ -301,12 +319,17 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _dateRange != null ? kAdminAccent.withValues(alpha: 0.1) : kAdminCard,
+              color: _dateRange != null
+                  ? kAdminAccent.withValues(alpha: 0.1)
+                  : kAdminCard,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _dateRange != null ? kAdminAccent : kAdminBorder),
+              border: Border.all(
+                  color: _dateRange != null ? kAdminAccent : kAdminBorder),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.date_range_rounded, size: 15, color: _dateRange != null ? kAdminAccent : kAdminTextMuted),
+              Icon(Icons.date_range_rounded,
+                  size: 15,
+                  color: _dateRange != null ? kAdminAccent : kAdminTextMuted),
               const SizedBox(width: 6),
               Text(
                   _dateRange == null
@@ -323,7 +346,8 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                     setState(() => _dateRange = null);
                     _applyFilters();
                   },
-                  child: const Icon(Icons.close_rounded, size: 14, color: kAdminAccent),
+                  child: const Icon(Icons.close_rounded,
+                      size: 14, color: kAdminAccent),
                 ),
               ],
             ]),
@@ -333,94 +357,145 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
 
   Widget _statsGrid() {
     if (_statsLoading) return const AdminStatGridSkeleton(count: 8);
-    final f = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final f =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     // Tapping a card jumps straight to the tab it summarizes — _tabs is
     // ['Active','Premium','Plans','Revenue','Expired','Cancelled','Payments'].
     final cards = [
-      ('Total Subscriptions', '${_n('total_subscriptions')}', Icons.workspace_premium_rounded, kAdminAccent, 0),
-      ('Active Subscriptions', '${_n('active_subscriptions')}', Icons.check_circle_rounded, kAdminGreen, 0),
-      ('Premium Users', '${_n('premium_users')}', Icons.diamond_rounded, kAdminGold, 1),
-      ('Expired Subscriptions', '${_n('expired_subscriptions')}', Icons.event_busy_rounded, kAdminTextMuted, 4),
-      ('Cancelled Subscriptions', '${_n('cancelled_subscriptions')}', Icons.cancel_rounded, kAdminRed, 5),
-      ('Total Subscription Revenue', f.format(_n('total_revenue')), Icons.account_balance_wallet_rounded, kAdminGreen, 3),
-      ('This Month Revenue', f.format(_n('month_revenue')), Icons.calendar_month_rounded, kAdminAccent, 3),
-      ('Active Plans', '${_n('active_plans')}', Icons.list_alt_rounded, const Color(0xFF7C3AED), 2),
+      (
+        'Total Subscriptions',
+        '${_n('total_subscriptions')}',
+        Icons.workspace_premium_rounded,
+        kAdminAccent,
+        0
+      ),
+      (
+        'Active Subscriptions',
+        '${_n('active_subscriptions')}',
+        Icons.check_circle_rounded,
+        kAdminGreen,
+        0
+      ),
+      (
+        'Premium Users',
+        '${_n('premium_users')}',
+        Icons.diamond_rounded,
+        kAdminGold,
+        1
+      ),
+      (
+        'Expired Subscriptions',
+        '${_n('expired_subscriptions')}',
+        Icons.event_busy_rounded,
+        kAdminTextMuted,
+        4
+      ),
+      (
+        'Cancelled Subscriptions',
+        '${_n('cancelled_subscriptions')}',
+        Icons.cancel_rounded,
+        kAdminRed,
+        5
+      ),
+      (
+        'Total Subscription Revenue',
+        f.format(_n('total_revenue')),
+        Icons.account_balance_wallet_rounded,
+        kAdminGreen,
+        3
+      ),
+      (
+        'This Month Revenue',
+        f.format(_n('month_revenue')),
+        Icons.calendar_month_rounded,
+        kAdminAccent,
+        3
+      ),
+      (
+        'Active Plans',
+        '${_n('active_plans')}',
+        Icons.list_alt_rounded,
+        const Color(0xFF7C3AED),
+        2
+      ),
     ];
-    return LayoutBuilder(builder: (context, constraints) {
-      final cols = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 3 : 2);
-      return GridView.count(
-        crossAxisCount: cols,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.6,
-        children: cards.asMap().entries.map((e) {
-          final i = e.key;
-          final c = e.value;
-          return TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
-            duration: Duration(milliseconds: 200 + i * 30),
-            curve: Curves.easeOut,
-            builder: (_, v, child) =>
-                Opacity(opacity: v, child: Transform.translate(offset: Offset(0, 10 * (1 - v)), child: child)),
-            child: AdminStatCard(
-              label: c.$1,
-              value: c.$2,
-              icon: c.$3,
-              color: c.$4,
-              onTap: () => _tabCtrl.animateTo(c.$5),
-            ),
-          );
-        }).toList(),
-      );
-    });
+    return AdminStatGrid(
+      cards: cards.asMap().entries.map((e) {
+        final i = e.key;
+        final c = e.value;
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: Duration(milliseconds: 200 + i * 30),
+          curve: Curves.easeOut,
+          builder: (_, v, child) => Opacity(
+              opacity: v,
+              child: Transform.translate(
+                  offset: Offset(0, 10 * (1 - v)), child: child)),
+          child: AdminStatCard(
+            label: c.$1,
+            value: c.$2,
+            icon: c.$3,
+            color: c.$4,
+            onTap: () => _tabCtrl.animateTo(c.$5),
+          ),
+        );
+      }).toList(),
+    );
   }
 
   // ── Active / Premium / Expired / Cancelled tabs ──
   Widget _listTab(String tab) {
     return AdminSectionCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          AdminSearchField(
-            hint: 'Search firm, owner name or email…',
-            onChanged: (v) {
-              _search = v;
-              _applyFilters();
-            },
-          ),
-          SizedBox(
-            width: 180,
-            child: DropdownButtonFormField<String>(
-              initialValue: _planFilter.isEmpty ? null : _planFilter,
-              hint: const Text('All plans', style: TextStyle(fontSize: 12.5, color: kAdminTextMuted)),
-              isDense: true,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: kAdminBg,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+        Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              AdminSearchField(
+                hint: 'Search firm, owner name or email…',
+                onChanged: (v) {
+                  _search = v;
+                  _applyFilters();
+                },
               ),
-              items: [
-                const DropdownMenuItem(value: '', child: Text('All plans')),
-                ..._plans.map((p) => DropdownMenuItem(
-                    value: p['name'] as String, child: Text(p['display_name'] ?? p['name'] ?? ''))),
-              ],
-              onChanged: (v) {
-                setState(() => _planFilter = v ?? '');
-                _applyFilters();
-              },
-            ),
-          ),
-          OutlinedButton.icon(
-              onPressed: () => _exportCsv(tab, _currentRows),
-              icon: const Icon(Icons.download_rounded, size: 16),
-              label: const Text('CSV')),
-          OutlinedButton.icon(
-              onPressed: () => _exportPdf(tab, _currentRows),
-              icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-              label: const Text('PDF')),
-        ]),
+              SizedBox(
+                width: 180,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _planFilter.isEmpty ? null : _planFilter,
+                  hint: const Text('All plans',
+                      style: TextStyle(fontSize: 12.5, color: kAdminTextMuted)),
+                  isDense: true,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: kAdminBg,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none),
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('All plans')),
+                    ..._plans.map((p) => DropdownMenuItem(
+                        value: p['name'] as String,
+                        child: Text(p['display_name'] ?? p['name'] ?? ''))),
+                  ],
+                  onChanged: (v) {
+                    setState(() => _planFilter = v ?? '');
+                    _applyFilters();
+                  },
+                ),
+              ),
+              OutlinedButton.icon(
+                  onPressed: () => _exportCsv(tab, _currentRows),
+                  icon: const Icon(Icons.download_rounded, size: 16),
+                  label: const Text('CSV')),
+              OutlinedButton.icon(
+                  onPressed: () => _exportPdf(tab, _currentRows),
+                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                  label: const Text('PDF')),
+            ]),
         const SizedBox(height: 16),
         SizedBox(
           height: 540,
@@ -446,30 +521,44 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                             DataColumn(label: Text('Status')),
                           ],
                           rows: _currentRows.map((s) {
-                            final name = (s['owner_name'] ?? '').toString().isNotEmpty
-                                ? s['owner_name']
-                                : s['firm_name'] ?? '';
-                            final email = (s['owner_email'] ?? '').toString().isNotEmpty
-                                ? s['owner_email']
-                                : s['firm_email'] ?? '';
+                            final name =
+                                (s['owner_name'] ?? '').toString().isNotEmpty
+                                    ? s['owner_name']
+                                    : s['firm_name'] ?? '';
+                            final email =
+                                (s['owner_email'] ?? '').toString().isNotEmpty
+                                    ? s['owner_email']
+                                    : s['firm_email'] ?? '';
                             final days = s['days_remaining'];
                             return DataRow(
                               onSelectChanged: (_) => _showDetail(s['id']),
                               cells: [
                                 DataCell(Text(name)),
-                                DataCell(Text(email, style: const TextStyle(color: kAdminTextMuted))),
+                                DataCell(Text(email,
+                                    style: const TextStyle(
+                                        color: kAdminTextMuted))),
                                 DataCell(const Text('LAWYER')),
                                 DataCell(Text(s['plan_display_name'] ?? '-')),
-                                DataCell(Text(fmtRupees(s['plan_price'] as num?))),
+                                DataCell(
+                                    Text(fmtRupees(s['plan_price'] as num?))),
                                 DataCell(Text(fmtDate(s['start_date']))),
-                                DataCell(Text(fmtDate(s['current_period_end']?.toString().isNotEmpty == true
+                                DataCell(Text(fmtDate(s['current_period_end']
+                                            ?.toString()
+                                            .isNotEmpty ==
+                                        true
                                     ? s['current_period_end']
                                     : s['trial_ends_at']))),
                                 DataCell(Text(days == null ? '-' : '$days d',
                                     style: TextStyle(
-                                        color: days != null && (days as int) < 0 ? kAdminRed : kAdminTextPri))),
-                                DataCell(AdminBadge(s['payment_status'] ?? '', AdminBadge.colorFor(s['payment_status'] ?? ''))),
-                                DataCell(AdminBadge(s['status'] ?? '', AdminBadge.colorFor(s['status'] ?? ''))),
+                                        color: days != null && (days as int) < 0
+                                            ? kAdminRed
+                                            : kAdminTextPri))),
+                                DataCell(AdminBadge(
+                                    s['payment_status'] ?? '',
+                                    AdminBadge.colorFor(
+                                        s['payment_status'] ?? ''))),
+                                DataCell(AdminBadge(s['status'] ?? '',
+                                    AdminBadge.colorFor(s['status'] ?? ''))),
                               ],
                             );
                           }).toList(),
@@ -494,7 +583,11 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
   Widget _plansTab() {
     if (_plansLoading) return const AdminTableSkeleton(columns: 7);
     if (_plans.isEmpty) return const AdminEmptyState();
-    final maxSubs = _plans.fold<int>(1, (m, p) => (p['total_subscribers'] as int? ?? 0) > m ? p['total_subscribers'] as int : m);
+    final maxSubs = _plans.fold<int>(
+        1,
+        (m, p) => (p['total_subscribers'] as int? ?? 0) > m
+            ? p['total_subscribers'] as int
+            : m);
     return SingleChildScrollView(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         AdminSectionCard(
@@ -510,7 +603,11 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Text('$total', style: const TextStyle(fontSize: 11, color: kAdminTextPri, fontWeight: FontWeight.w700)),
+                      Text('$total',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: kAdminTextPri,
+                              fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
                       Tooltip(
                         message: '${p['display_name']}: $total subscribers',
@@ -518,7 +615,8 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                           duration: const Duration(milliseconds: 400),
                           height: h,
                           decoration: BoxDecoration(
-                              color: total > 0 ? kAdminAccent : kAdminBorder, borderRadius: BorderRadius.circular(4)),
+                              color: total > 0 ? kAdminAccent : kAdminBorder,
+                              borderRadius: BorderRadius.circular(4)),
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -526,7 +624,10 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 10.5, color: kAdminTextMuted, fontWeight: FontWeight.w600)),
+                          style: const TextStyle(
+                              fontSize: 10.5,
+                              color: kAdminTextMuted,
+                              fontWeight: FontWeight.w600)),
                     ]),
                   ),
                 );
@@ -556,15 +657,19 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                   DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
                     Text(p['display_name'] ?? p['name'] ?? ''),
                     const SizedBox(width: 6),
-                    if (p['is_active'] != true) const AdminBadge('inactive', kAdminTextMuted),
+                    if (p['is_active'] != true)
+                      const AdminBadge('inactive', kAdminTextMuted),
                   ])),
                   DataCell(Text(fmtRupees(p['price_monthly'] as num?))),
                   DataCell(Text(fmtRupees(p['price_yearly'] as num?))),
                   DataCell(Text('${p['total_subscribers'] ?? 0}')),
-                  DataCell(Text('${p['active_subscribers'] ?? 0}', style: const TextStyle(color: kAdminGreen))),
+                  DataCell(Text('${p['active_subscribers'] ?? 0}',
+                      style: const TextStyle(color: kAdminGreen))),
                   DataCell(Text('${p['expired_subscribers'] ?? 0}')),
-                  DataCell(Text('${p['cancelled_subscribers'] ?? 0}', style: const TextStyle(color: kAdminRed))),
-                  DataCell(Text(fmtRupees(p['total_revenue'] as num?), style: const TextStyle(fontWeight: FontWeight.w700))),
+                  DataCell(Text('${p['cancelled_subscribers'] ?? 0}',
+                      style: const TextStyle(color: kAdminRed))),
+                  DataCell(Text(fmtRupees(p['total_revenue'] as num?),
+                      style: const TextStyle(fontWeight: FontWeight.w700))),
                 ]);
               }).toList(),
             ),
@@ -581,7 +686,10 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
     final trend = (_revenue['trend_30d'] as List?) ?? [];
     final maxV = trend.isEmpty
         ? 1.0
-        : trend.map((d) => ((d['value'] as num?) ?? 0).toDouble()).reduce((a, b) => a > b ? a : b).clamp(1, double.infinity);
+        : trend
+            .map((d) => ((d['value'] as num?) ?? 0).toDouble())
+            .reduce((a, b) => a > b ? a : b)
+            .clamp(1, double.infinity);
     return SingleChildScrollView(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         AdminSectionCard(
@@ -593,7 +701,8 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
             _revTile('Last 30 Days', s['last_30_days_revenue'], kAdminAccent),
             _revTile('This Month', s['this_month_revenue'], kAdminGold),
             _revTile('Last Month', s['last_month_revenue'], kAdminTextMuted),
-            _revTile('Year to Date', s['year_to_date_revenue'], const Color(0xFF7C3AED)),
+            _revTile('Year to Date', s['year_to_date_revenue'],
+                const Color(0xFF7C3AED)),
           ]),
         ),
         const SizedBox(height: 16),
@@ -617,7 +726,8 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                               duration: const Duration(milliseconds: 300),
                               height: h,
                               decoration: BoxDecoration(
-                                  color: v > 0 ? kAdminGreen : kAdminBorder, borderRadius: BorderRadius.circular(2)),
+                                  color: v > 0 ? kAdminGreen : kAdminBorder,
+                                  borderRadius: BorderRadius.circular(2)),
                             ),
                           ),
                         ),
@@ -633,9 +743,12 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
   Widget _revTile(String label, dynamic value, Color color) => SizedBox(
         width: 180,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(fmtRupees(value as num?), style: TextStyle(color: color, fontSize: 19, fontWeight: FontWeight.w800)),
+          Text(fmtRupees(value as num?),
+              style: TextStyle(
+                  color: color, fontSize: 19, fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5)),
+          Text(label,
+              style: const TextStyle(color: kAdminTextMuted, fontSize: 11.5)),
         ]),
       );
 
@@ -643,31 +756,40 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
   Widget _paymentsTab() {
     return AdminSectionCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          AdminSearchField(
-            hint: 'Search transaction, firm, owner…',
-            onChanged: (v) {
-              _search = v;
-              _applyFilters();
-            },
-          ),
-          for (final s in const [('', 'All'), ('captured', 'Captured'), ('failed', 'Failed'), ('refunded', 'Refunded')])
-            AdminFilterChip(
-                label: s.$2,
-                selected: _paymentStatusFilter == s.$1,
-                onTap: () {
-                  setState(() => _paymentStatusFilter = s.$1);
+        Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              AdminSearchField(
+                hint: 'Search transaction, firm, owner…',
+                onChanged: (v) {
+                  _search = v;
                   _applyFilters();
-                }),
-          OutlinedButton.icon(
-              onPressed: () => _exportCsv('Payments', _payments),
-              icon: const Icon(Icons.download_rounded, size: 16),
-              label: const Text('CSV')),
-          OutlinedButton.icon(
-              onPressed: () => _exportPdf('Payments', _payments),
-              icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-              label: const Text('PDF')),
-        ]),
+                },
+              ),
+              for (final s in const [
+                ('', 'All'),
+                ('captured', 'Captured'),
+                ('failed', 'Failed'),
+                ('refunded', 'Refunded')
+              ])
+                AdminFilterChip(
+                    label: s.$2,
+                    selected: _paymentStatusFilter == s.$1,
+                    onTap: () {
+                      setState(() => _paymentStatusFilter = s.$1);
+                      _applyFilters();
+                    }),
+              OutlinedButton.icon(
+                  onPressed: () => _exportCsv('Payments', _payments),
+                  icon: const Icon(Icons.download_rounded, size: 16),
+                  label: const Text('CSV')),
+              OutlinedButton.icon(
+                  onPressed: () => _exportPdf('Payments', _payments),
+                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                  label: const Text('PDF')),
+            ]),
         const SizedBox(height: 16),
         SizedBox(
           height: 540,
@@ -694,13 +816,21 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                             return DataRow(
                               onSelectChanged: (_) => _showPaymentDetail(p),
                               cells: [
-                                DataCell(Text(p['transaction_id'] ?? '-', style: const TextStyle(fontSize: 11.5))),
+                                DataCell(Text(p['transaction_id'] ?? '-',
+                                    style: const TextStyle(fontSize: 11.5))),
                                 DataCell(Text(p['user_name'] ?? '-')),
-                                DataCell(Text(p['user_email'] ?? '-', style: const TextStyle(color: kAdminTextMuted))),
+                                DataCell(Text(p['user_email'] ?? '-',
+                                    style: const TextStyle(
+                                        color: kAdminTextMuted))),
                                 DataCell(Text(p['plan_display_name'] ?? '-')),
-                                DataCell(Text(fmtRupees(p['amount'] as num?), style: const TextStyle(fontWeight: FontWeight.w700))),
-                                DataCell(Text((p['payment_gateway'] ?? '-').toString().toUpperCase())),
-                                DataCell(AdminBadge(p['status'] ?? '', AdminBadge.colorFor(p['status'] ?? ''))),
+                                DataCell(Text(fmtRupees(p['amount'] as num?),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700))),
+                                DataCell(Text((p['payment_gateway'] ?? '-')
+                                    .toString()
+                                    .toUpperCase())),
+                                DataCell(AdminBadge(p['status'] ?? '',
+                                    AdminBadge.colorFor(p['status'] ?? ''))),
                                 DataCell(Text(fmtDate(p['payment_date']))),
                               ],
                             );
@@ -731,33 +861,46 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
           width: 480,
           padding: const EdgeInsets.all(24),
           child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                const Expanded(child: Text('Payment Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
-              ]),
-              AdminBadge(p['status'] ?? '', AdminBadge.colorFor(p['status'] ?? '')),
-              const Divider(height: 24),
-              _dr('Transaction ID', p['transaction_id']),
-              _dr('Order ID', p['order_id']),
-              _dr('User', '${p['user_name']} (${p['user_role']})'),
-              _dr('Email', p['user_email']),
-              _dr('Plan', p['plan_display_name']),
-              _dr('Billing Cycle', p['billing_cycle']),
-              _dr('Gross Amount', fmtRupees(p['amount'] as num?)),
-              _dr('GST', _naIfNull(p['gst'])),
-              _dr('Platform Fee', _naIfNull(p['platform_fee'])),
-              _dr('Discount', _naIfNull(p['discount'])),
-              _dr('Final Amount', fmtRupees(p['final_amount'] as num?)),
-              _dr('Payment Method', _naIfNull(p['payment_method'])),
-              _dr('Payment Gateway', (p['payment_gateway'] ?? '').toString().toUpperCase()),
-              _dr('Payment Date', fmtDate(p['payment_date'])),
-              const Divider(height: 24),
-              const Text('Refund', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
-              const SizedBox(height: 8),
-              _dr('Refund Amount', _naIfNull(p['refund_amount'])),
-              _dr('Refund Status', 'Not applicable — subscription payments cannot be refunded'),
-            ]),
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Expanded(
+                        child: Text('Payment Details',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w800))),
+                    IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded)),
+                  ]),
+                  AdminBadge(p['status'] ?? '',
+                      AdminBadge.colorFor(p['status'] ?? '')),
+                  const Divider(height: 24),
+                  _dr('Transaction ID', p['transaction_id']),
+                  _dr('Order ID', p['order_id']),
+                  _dr('User', '${p['user_name']} (${p['user_role']})'),
+                  _dr('Email', p['user_email']),
+                  _dr('Plan', p['plan_display_name']),
+                  _dr('Billing Cycle', p['billing_cycle']),
+                  _dr('Gross Amount', fmtRupees(p['amount'] as num?)),
+                  _dr('GST', _naIfNull(p['gst'])),
+                  _dr('Platform Fee', _naIfNull(p['platform_fee'])),
+                  _dr('Discount', _naIfNull(p['discount'])),
+                  _dr('Final Amount', fmtRupees(p['final_amount'] as num?)),
+                  _dr('Payment Method', _naIfNull(p['payment_method'])),
+                  _dr('Payment Gateway',
+                      (p['payment_gateway'] ?? '').toString().toUpperCase()),
+                  _dr('Payment Date', fmtDate(p['payment_date'])),
+                  const Divider(height: 24),
+                  const Text('Refund',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 12.5)),
+                  const SizedBox(height: 8),
+                  _dr('Refund Amount', _naIfNull(p['refund_amount'])),
+                  _dr('Refund Status',
+                      'Not applicable — subscription payments cannot be refunded'),
+                ]),
           ),
         ),
       ),
@@ -774,65 +917,113 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
           constraints: const BoxConstraints(maxHeight: 640),
           padding: const EdgeInsets.all(24),
           child: FutureBuilder<Map<String, dynamic>>(
-            future: _repo.subscriptionDetail(id).then((r) => (r['data'] as Map<String, dynamic>?) ?? {}),
+            future: _repo
+                .subscriptionDetail(id)
+                .then((r) => (r['data'] as Map<String, dynamic>?) ?? {}),
             builder: (context, snap) {
               if (!snap.hasData) {
-                return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+                return const SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()));
               }
-              final d = (snap.data!['subscription'] as Map<String, dynamic>?) ?? {};
+              final d =
+                  (snap.data!['subscription'] as Map<String, dynamic>?) ?? {};
               final payments = (snap.data!['payments'] as List?) ?? [];
               return SingleChildScrollView(
-                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(
-                        child: Text(d['firm_name'] ?? 'Subscription',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
-                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
-                  ]),
-                  Row(children: [
-                    AdminBadge(d['status'] ?? '', AdminBadge.colorFor(d['status'] ?? '')),
-                  ]),
-                  const Divider(height: 24),
-                  const Text('User Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
-                  const SizedBox(height: 8),
-                  _dr('Name', (d['owner_name'] ?? '').toString().isEmpty ? d['firm_name'] : d['owner_name']),
-                  _dr('Email', (d['owner_email'] ?? '').toString().isEmpty ? d['firm_email'] : d['owner_email']),
-                  _dr('Phone', (d['owner_phone'] ?? '').toString().isEmpty ? d['firm_phone'] : d['owner_phone']),
-                  _dr('Role', 'Lawyer'),
-                  const Divider(height: 24),
-                  const Text('Subscription Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
-                  const SizedBox(height: 8),
-                  _dr('Plan', d['plan_display_name']),
-                  _dr('Price', fmtRupees(d['plan_price'] as num?)),
-                  _dr('Billing Period', d['billing_cycle']),
-                  _dr('Start Date', fmtDate(d['start_date'])),
-                  _dr('Expiry Date',
-                      fmtDate((d['current_period_end'] ?? '').toString().isNotEmpty ? d['current_period_end'] : d['trial_ends_at'])),
-                  _dr('Status', (d['status'] ?? '').toString().toUpperCase()),
-                  if ((d['cancelled_at'] ?? '').toString().isNotEmpty) _dr('Cancelled At', fmtDate(d['cancelled_at'])),
-                  const Divider(height: 24),
-                  const Text('Payment History', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
-                  const SizedBox(height: 8),
-                  if (payments.isEmpty)
-                    const Text('No payments recorded for this subscription.',
-                        style: TextStyle(color: kAdminTextMuted, fontSize: 12.5))
-                  else
-                    ...payments.map((p) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(color: kAdminBg, borderRadius: BorderRadius.circular(8)),
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              _dr('Transaction ID', p['transaction_id']),
-                              _dr('Amount', fmtRupees(p['amount'] as num?)),
-                              _dr('Status', p['status']),
-                              _dr('Date', fmtDate(p['payment_date'])),
-                              _dr('GST / Platform Fee / Discount', 'N/A'),
-                              _dr('Refund', 'Not applicable'),
-                            ]),
-                          ),
-                        )),
-                ]),
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                            child: Text(d['firm_name'] ?? 'Subscription',
+                                style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800))),
+                        IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded)),
+                      ]),
+                      Row(children: [
+                        AdminBadge(d['status'] ?? '',
+                            AdminBadge.colorFor(d['status'] ?? '')),
+                      ]),
+                      const Divider(height: 24),
+                      const Text('User Details',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 12.5)),
+                      const SizedBox(height: 8),
+                      _dr(
+                          'Name',
+                          (d['owner_name'] ?? '').toString().isEmpty
+                              ? d['firm_name']
+                              : d['owner_name']),
+                      _dr(
+                          'Email',
+                          (d['owner_email'] ?? '').toString().isEmpty
+                              ? d['firm_email']
+                              : d['owner_email']),
+                      _dr(
+                          'Phone',
+                          (d['owner_phone'] ?? '').toString().isEmpty
+                              ? d['firm_phone']
+                              : d['owner_phone']),
+                      _dr('Role', 'Lawyer'),
+                      const Divider(height: 24),
+                      const Text('Subscription Details',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 12.5)),
+                      const SizedBox(height: 8),
+                      _dr('Plan', d['plan_display_name']),
+                      _dr('Price', fmtRupees(d['plan_price'] as num?)),
+                      _dr('Billing Period', d['billing_cycle']),
+                      _dr('Start Date', fmtDate(d['start_date'])),
+                      _dr(
+                          'Expiry Date',
+                          fmtDate((d['current_period_end'] ?? '')
+                                  .toString()
+                                  .isNotEmpty
+                              ? d['current_period_end']
+                              : d['trial_ends_at'])),
+                      _dr('Status',
+                          (d['status'] ?? '').toString().toUpperCase()),
+                      if ((d['cancelled_at'] ?? '').toString().isNotEmpty)
+                        _dr('Cancelled At', fmtDate(d['cancelled_at'])),
+                      const Divider(height: 24),
+                      const Text('Payment History',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 12.5)),
+                      const SizedBox(height: 8),
+                      if (payments.isEmpty)
+                        const Text(
+                            'No payments recorded for this subscription.',
+                            style: TextStyle(
+                                color: kAdminTextMuted, fontSize: 12.5))
+                      else
+                        ...payments.map((p) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                    color: kAdminBg,
+                                    borderRadius: BorderRadius.circular(8)),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _dr('Transaction ID',
+                                          p['transaction_id']),
+                                      _dr('Amount',
+                                          fmtRupees(p['amount'] as num?)),
+                                      _dr('Status', p['status']),
+                                      _dr('Date', fmtDate(p['payment_date'])),
+                                      _dr('GST / Platform Fee / Discount',
+                                          'N/A'),
+                                      _dr('Refund', 'Not applicable'),
+                                    ]),
+                              ),
+                            )),
+                    ]),
               );
             },
           ),
@@ -846,10 +1037,17 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
   Widget _dr(String label, dynamic value) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 140, child: Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 12))),
+          SizedBox(
+              width: 140,
+              child: Text(label,
+                  style:
+                      const TextStyle(color: kAdminTextMuted, fontSize: 12))),
           Expanded(
               child: SelectableText('${value ?? '-'}',
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kAdminTextPri))),
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: kAdminTextPri))),
         ]),
       );
 
@@ -857,7 +1055,16 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
   List<List<String>> _rowsToTable(String tab, List<dynamic> rows) {
     if (tab == 'Payments') {
       return [
-        ['Transaction ID', 'User', 'Email', 'Plan', 'Amount', 'Gateway', 'Status', 'Date'],
+        [
+          'Transaction ID',
+          'User',
+          'Email',
+          'Plan',
+          'Amount',
+          'Gateway',
+          'Status',
+          'Date'
+        ],
         ...rows.map((p) => [
               '${p['transaction_id'] ?? ''}',
               '${p['user_name'] ?? ''}',
@@ -871,10 +1078,25 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
       ];
     }
     return [
-      ['Firm/Owner', 'Email', 'Role', 'Plan', 'Price', 'Start Date', 'Expiry Date', 'Days Left', 'Payment Status', 'Status'],
+      [
+        'Firm/Owner',
+        'Email',
+        'Role',
+        'Plan',
+        'Price',
+        'Start Date',
+        'Expiry Date',
+        'Days Left',
+        'Payment Status',
+        'Status'
+      ],
       ...rows.map((s) {
-        final name = (s['owner_name'] ?? '').toString().isNotEmpty ? s['owner_name'] : s['firm_name'] ?? '';
-        final email = (s['owner_email'] ?? '').toString().isNotEmpty ? s['owner_email'] : s['firm_email'] ?? '';
+        final name = (s['owner_name'] ?? '').toString().isNotEmpty
+            ? s['owner_name']
+            : s['firm_name'] ?? '';
+        final email = (s['owner_email'] ?? '').toString().isNotEmpty
+            ? s['owner_email']
+            : s['firm_email'] ?? '';
         return [
           '$name',
           '$email',
@@ -882,7 +1104,9 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
           '${s['plan_display_name'] ?? ''}',
           fmtRupees(s['plan_price'] as num?),
           fmtDate(s['start_date']),
-          fmtDate((s['current_period_end'] ?? '').toString().isNotEmpty ? s['current_period_end'] : s['trial_ends_at']),
+          fmtDate((s['current_period_end'] ?? '').toString().isNotEmpty
+              ? s['current_period_end']
+              : s['trial_ends_at']),
           '${s['days_remaining'] ?? ''}',
           '${s['payment_status'] ?? ''}',
           '${s['status'] ?? ''}',
@@ -896,15 +1120,20 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
     final csv = table
         .map((row) => row.map((cell) {
               final escaped = cell.replaceAll('"', '""');
-              return escaped.contains(',') || escaped.contains('"') || escaped.contains('\n')
+              return escaped.contains(',') ||
+                      escaped.contains('"') ||
+                      escaped.contains('\n')
                   ? '"$escaped"'
                   : escaped;
             }).join(','))
         .join('\r\n');
     final bytes = Uint8List.fromList(csv.codeUnits);
-    final ok = triggerBrowserDownload(bytes, 'libra_subscriptions_$tab.csv', 'text/csv');
+    final ok = triggerBrowserDownload(
+        bytes, 'libra_subscriptions_$tab.csv', 'text/csv');
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV export is only available in the Chrome admin panel.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('CSV export is only available in the Chrome admin panel.')));
     }
   }
 
@@ -920,30 +1149,60 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4.landscape,
         build: (context) => [
-          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-              pw.Text('LIBRA LAW', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-              pw.Text('Super Admin — Subscriptions Report', style: const pw.TextStyle(fontSize: 12)),
-            ]),
-            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-              pw.Text('Generated: $now', style: const pw.TextStyle(fontSize: 9)),
-              pw.Text('Range: $rangeLabel', style: const pw.TextStyle(fontSize: 9)),
-            ]),
-          ]),
+          pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('LIBRA LAW',
+                          style: pw.TextStyle(
+                              fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Super Admin — Subscriptions Report',
+                          style: const pw.TextStyle(fontSize: 12)),
+                    ]),
+                pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text('Generated: $now',
+                          style: const pw.TextStyle(fontSize: 9)),
+                      pw.Text('Range: $rangeLabel',
+                          style: const pw.TextStyle(fontSize: 9)),
+                    ]),
+              ]),
           pw.SizedBox(height: 6),
-          pw.Text('Section: $tab (${rows.length} records)', style: const pw.TextStyle(fontSize: 10)),
+          pw.Text('Section: $tab (${rows.length} records)',
+              style: const pw.TextStyle(fontSize: 10)),
           pw.SizedBox(height: 10),
-          pw.Text('Summary', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Summary',
+              style:
+                  pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.Bullet(text: 'Total subscriptions: ${_n('total_subscriptions')}'),
-          pw.Bullet(text: 'Active subscriptions: ${_n('active_subscriptions')}'),
+          pw.Bullet(
+              text: 'Active subscriptions: ${_n('active_subscriptions')}'),
           pw.Bullet(text: 'Premium users: ${_n('premium_users')}'),
-          pw.Bullet(text: 'Expired subscriptions: ${_n('expired_subscriptions')}'),
-          pw.Bullet(text: 'Cancelled subscriptions: ${_n('cancelled_subscriptions')}'),
-          pw.Bullet(text: 'Total subscription revenue: ${fmtRupees(_n('total_revenue'))}'),
+          pw.Bullet(
+              text: 'Expired subscriptions: ${_n('expired_subscriptions')}'),
+          pw.Bullet(
+              text:
+                  'Cancelled subscriptions: ${_n('cancelled_subscriptions')}'),
+          pw.Bullet(
+              text:
+                  'Total subscription revenue: ${fmtRupees(_n('total_revenue'))}'),
           pw.SizedBox(height: 10),
-          pw.Text('Plan-wise Statistics', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Plan-wise Statistics',
+              style:
+                  pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.TableHelper.fromTextArray(
-            headers: ['Plan', 'Monthly', 'Total', 'Active', 'Expired', 'Cancelled', 'Revenue'],
+            headers: [
+              'Plan',
+              'Monthly',
+              'Total',
+              'Active',
+              'Expired',
+              'Cancelled',
+              'Revenue'
+            ],
             data: _plans
                 .map((p) => [
                       '${p['display_name'] ?? p['name'] ?? ''}',
@@ -955,16 +1214,20 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                       fmtRupees(p['total_revenue'] as num?),
                     ])
                 .toList(),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+            headerStyle:
+                pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
             cellStyle: const pw.TextStyle(fontSize: 9),
           ),
           pw.SizedBox(height: 14),
-          pw.Text('Detailed Records — $tab', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Detailed Records — $tab',
+              style:
+                  pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.TableHelper.fromTextArray(
             headers: table.first,
             data: table.skip(1).toList(),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+            headerStyle:
+                pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
             cellStyle: const pw.TextStyle(fontSize: 8),
             cellAlignment: pw.Alignment.centerLeft,
           ),
@@ -973,9 +1236,12 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
     );
 
     final bytes = await doc.save();
-    final ok = triggerBrowserDownload(bytes, 'libra_subscriptions_$tab.pdf', 'application/pdf');
+    final ok = triggerBrowserDownload(
+        bytes, 'libra_subscriptions_$tab.pdf', 'application/pdf');
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PDF export is only available in the Chrome admin panel.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('PDF export is only available in the Chrome admin panel.')));
     }
   }
 }

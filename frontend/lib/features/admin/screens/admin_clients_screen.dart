@@ -33,7 +33,8 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
       _error = null;
     });
     try {
-      final res = await _repo.clients(status: _status, search: _search, page: _page);
+      final res =
+          await _repo.clients(status: _status, search: _search, page: _page);
       setState(() {
         _rows = (res['data'] as List?) ?? [];
         _hasMore = (res['meta']?['has_more'] as bool?) ?? false;
@@ -52,7 +53,9 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
       await _repo.setUserActive(id, active);
       _load();
     } on AdminException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
@@ -61,7 +64,9 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
     return AdminShell(
       activeRoute: '/admin/clients',
       title: 'Clients',
-      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
+      actions: [
+        IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)
+      ],
       child: AdminSectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 10, runSpacing: 10, children: [
@@ -72,7 +77,11 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
                   _page = 1;
                   _load();
                 }),
-            for (final s in const [('', 'Any status'), ('active', 'Active'), ('suspended', 'Suspended')])
+            for (final s in const [
+              ('', 'Any status'),
+              ('active', 'Active'),
+              ('suspended', 'Suspended')
+            ])
               AdminFilterChip(
                   label: s.$2,
                   selected: _status == s.$1,
@@ -112,9 +121,12 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
                 rows: _rows.map((cl) {
                   final active = cl['is_active'] == true;
                   return DataRow(cells: [
-                    DataCell(Text(cl['name'] ?? ''), onTap: () => showAdminUserDetail(context, cl['id'])),
-                    DataCell(Text(cl['email'] ?? '', style: const TextStyle(color: kAdminTextMuted))),
-                    DataCell(AdminBadge(active ? 'Active' : 'Suspended', AdminBadge.colorFor(active ? 'active' : 'suspended'))),
+                    DataCell(Text(cl['name'] ?? ''),
+                        onTap: () => showAdminUserDetail(context, cl['id'])),
+                    DataCell(Text(cl['email'] ?? '',
+                        style: const TextStyle(color: kAdminTextMuted))),
+                    DataCell(AdminBadge(active ? 'Active' : 'Suspended',
+                        AdminBadge.colorFor(active ? 'active' : 'suspended'))),
                     DataCell(Text('${cl['total_lawyers_consulted'] ?? 0}')),
                     DataCell(Text('${cl['total_consultations'] ?? 0}')),
                     DataCell(Text('${cl['completed_consultations'] ?? 0}')),
@@ -123,18 +135,26 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
                     DataCell(Text(fmtRupees(cl['total_amount_spent'] as num?))),
                     DataCell(Text(fmtDate(cl['created_at']))),
                     DataCell(IconButton(
-                      icon: Icon(active ? Icons.block_rounded : Icons.check_circle_rounded,
-                          size: 18, color: active ? kAdminRed : kAdminGreen),
+                      icon: Icon(
+                          active
+                              ? Icons.block_rounded
+                              : Icons.check_circle_rounded,
+                          size: 18,
+                          color: active ? kAdminRed : kAdminGreen),
                       onPressed: () => _toggleActive(cl['id'], !active),
                     )),
                   ]);
                 }).toList(),
               ),
             ),
-          AdminPager(page: _page, hasMore: _hasMore, loading: _loading, onPageChange: (p) {
-            setState(() => _page = p);
-            _load();
-          }),
+          AdminPager(
+              page: _page,
+              hasMore: _hasMore,
+              loading: _loading,
+              onPageChange: (p) {
+                setState(() => _page = p);
+                _load();
+              }),
         ]),
       ),
     );

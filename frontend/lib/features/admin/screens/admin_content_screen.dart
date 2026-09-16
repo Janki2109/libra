@@ -208,41 +208,19 @@ class _AdminContentScreenState extends State<AdminContentScreen>
       ),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      LayoutBuilder(builder: (context, constraints) {
-        final cols = constraints.maxWidth > 1200
-            ? 5
-            : (constraints.maxWidth > 700 ? 3 : 2);
-        return GridView.count(
-          crossAxisCount: cols,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 2.3,
-          children: cards
-              .map((c) => AdminStatCard(
-                  label: c.$1, value: c.$2, icon: c.$3, color: c.$4))
-              .toList(),
-        );
-      }),
+      AdminStatGrid(
+        cards: cards
+            .map((c) => AdminStatCard(
+                label: c.$1, value: c.$2, icon: c.$3, color: c.$4))
+            .toList(),
+      ),
       const SizedBox(height: 12),
-      LayoutBuilder(builder: (context, constraints) {
-        final cols = constraints.maxWidth > 1200
-            ? 5
-            : (constraints.maxWidth > 700 ? 3 : 2);
-        return GridView.count(
-          crossAxisCount: cols,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 2.3,
-          children: typeCards
-              .map((c) => AdminStatCard(
-                  label: c.$1, value: c.$2, icon: c.$3, color: c.$4))
-              .toList(),
-        );
-      }),
+      AdminStatGrid(
+        cards: typeCards
+            .map((c) => AdminStatCard(
+                label: c.$1, value: c.$2, icon: c.$3, color: c.$4))
+            .toList(),
+      ),
     ]);
   }
 }
@@ -376,41 +354,45 @@ class _ContentTypeTabState extends State<_ContentTypeTab> {
   Widget build(BuildContext context) {
     return AdminSectionCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              AdminSearchField(
-                hint: 'Search title, content, category…',
-                onChanged: (v) {
-                  _search = v;
-                  _applyFilters();
-                },
-              ),
-              for (final s in const [''])
-                AdminFilterChip(
-                    label: 'All',
-                    selected: _statusFilter == s,
-                    onTap: () {
-                      setState(() => _statusFilter = '');
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  AdminSearchField(
+                    hint: 'Search title, content, category…',
+                    onChanged: (v) {
+                      _search = v;
                       _applyFilters();
-                    }),
-              for (final s in _statuses)
-                AdminFilterChip(
-                    label: s.toUpperCase(),
-                    selected: _statusFilter == s,
-                    onTap: () {
-                      setState(() => _statusFilter = s);
-                      _applyFilters();
-                    }),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: () => _openEditor(),
-                icon: const Icon(Icons.add_rounded, size: 16),
-                label: Text('New $_typeLabel'),
-              ),
-            ]),
+                    },
+                  ),
+                  for (final s in const [''])
+                    AdminFilterChip(
+                        label: 'All',
+                        selected: _statusFilter == s,
+                        onTap: () {
+                          setState(() => _statusFilter = '');
+                          _applyFilters();
+                        }),
+                  for (final s in _statuses)
+                    AdminFilterChip(
+                        label: s.toUpperCase(),
+                        selected: _statusFilter == s,
+                        onTap: () {
+                          setState(() => _statusFilter = s);
+                          _applyFilters();
+                        }),
+                ]),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            onPressed: () => _openEditor(),
+            icon: const Icon(Icons.add_rounded, size: 16),
+            label: Text('New $_typeLabel'),
+          ),
+        ]),
         const SizedBox(height: 16),
         SizedBox(
           height: 460,

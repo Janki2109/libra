@@ -35,7 +35,8 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
       _error = null;
     });
     try {
-      final res = await _repo.payments(status: _status, search: _search, page: _page);
+      final res =
+          await _repo.payments(status: _status, search: _search, page: _page);
       setState(() {
         _rows = (res['data'] as List?) ?? [];
         _hasMore = (res['meta']?['has_more'] as bool?) ?? false;
@@ -57,37 +58,56 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
         child: Container(
           width: 480,
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Expanded(child: Text('Payment Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
-            ]),
-            Row(children: [
-              AdminBadge(p['kind'] ?? '', kAdminAccent),
-              const SizedBox(width: 6),
-              AdminBadge(p['status'] ?? '', AdminBadge.colorFor(p['status'] ?? '')),
-            ]),
-            const Divider(height: 24),
-            _row('Razorpay Order ID', p['order_id'] ?? '—'),
-            _row('Razorpay Payment ID', (p['payment_id'] ?? '').toString().isEmpty ? '—' : p['payment_id']),
-            _row('Amount', '${fmtRupees(p['amount_rupees'] as num?)} ${p['currency'] ?? ''}'),
-            _row('User', '${p['user_name']} (${p['user_role']})'),
-            if ((p['lawyer_name'] ?? '').toString().isNotEmpty) _row('Lawyer', p['lawyer_name']),
-            _row('Created', fmtDate(p['created_at'])),
-            _row('Last Updated', fmtDate(p['updated_at'])),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: kAdminBg, borderRadius: BorderRadius.circular(8)),
-              child: const Row(children: [
-                Icon(Icons.lock_outline_rounded, size: 14, color: kAdminTextMuted),
-                SizedBox(width: 6),
-                Expanded(
-                    child: Text('Razorpay secret keys are never shown here — they stay server-side only.',
-                        style: TextStyle(fontSize: 11, color: kAdminTextMuted))),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Expanded(
+                      child: Text('Payment Details',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w800))),
+                  IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded)),
+                ]),
+                Row(children: [
+                  AdminBadge(p['kind'] ?? '', kAdminAccent),
+                  const SizedBox(width: 6),
+                  AdminBadge(p['status'] ?? '',
+                      AdminBadge.colorFor(p['status'] ?? '')),
+                ]),
+                const Divider(height: 24),
+                _row('Razorpay Order ID', p['order_id'] ?? '—'),
+                _row(
+                    'Razorpay Payment ID',
+                    (p['payment_id'] ?? '').toString().isEmpty
+                        ? '—'
+                        : p['payment_id']),
+                _row('Amount',
+                    '${fmtRupees(p['amount_rupees'] as num?)} ${p['currency'] ?? ''}'),
+                _row('User', '${p['user_name']} (${p['user_role']})'),
+                if ((p['lawyer_name'] ?? '').toString().isNotEmpty)
+                  _row('Lawyer', p['lawyer_name']),
+                _row('Created', fmtDate(p['created_at'])),
+                _row('Last Updated', fmtDate(p['updated_at'])),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                      color: kAdminBg, borderRadius: BorderRadius.circular(8)),
+                  child: const Row(children: [
+                    Icon(Icons.lock_outline_rounded,
+                        size: 14, color: kAdminTextMuted),
+                    SizedBox(width: 6),
+                    Expanded(
+                        child: Text(
+                            'Razorpay secret keys are never shown here — they stay server-side only.',
+                            style: TextStyle(
+                                fontSize: 11, color: kAdminTextMuted))),
+                  ]),
+                ),
               ]),
-            ),
-          ]),
         ),
       ),
     );
@@ -96,8 +116,15 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
   Widget _row(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(children: [
-          SizedBox(width: 140, child: Text(label, style: const TextStyle(color: kAdminTextMuted, fontSize: 12))),
-          Expanded(child: SelectableText(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+          SizedBox(
+              width: 140,
+              child: Text(label,
+                  style:
+                      const TextStyle(color: kAdminTextMuted, fontSize: 12))),
+          Expanded(
+              child: SelectableText(value,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600))),
         ]),
       );
 
@@ -106,7 +133,9 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
     return AdminShell(
       activeRoute: '/admin/payments',
       title: 'Payments',
-      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
+      actions: [
+        IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)
+      ],
       child: AdminSectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 10, runSpacing: 10, children: [
@@ -160,23 +189,34 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
                   return DataRow(
                     onSelectChanged: (_) => _showDetail(p),
                     cells: [
-                      DataCell(Text(p['order_id'] ?? '', style: const TextStyle(fontSize: 11.5))),
-                      DataCell(Text((p['payment_id'] ?? '').toString().isEmpty ? '—' : p['payment_id'], style: const TextStyle(fontSize: 11.5))),
+                      DataCell(Text(p['order_id'] ?? '',
+                          style: const TextStyle(fontSize: 11.5))),
+                      DataCell(Text(
+                          (p['payment_id'] ?? '').toString().isEmpty
+                              ? '—'
+                              : p['payment_id'],
+                          style: const TextStyle(fontSize: 11.5))),
                       DataCell(Text(p['user_name'] ?? '')),
-                      DataCell(Text(p['user_role'] ?? '', style: const TextStyle(color: kAdminTextMuted))),
+                      DataCell(Text(p['user_role'] ?? '',
+                          style: const TextStyle(color: kAdminTextMuted))),
                       DataCell(AdminBadge(p['kind'] ?? '', kAdminAccent)),
                       DataCell(Text(fmtRupees(p['amount_rupees'] as num?))),
-                      DataCell(AdminBadge(p['status'] ?? '', AdminBadge.colorFor(p['status'] ?? ''))),
+                      DataCell(AdminBadge(p['status'] ?? '',
+                          AdminBadge.colorFor(p['status'] ?? ''))),
                       DataCell(Text(fmtDate(p['created_at']))),
                     ],
                   );
                 }).toList(),
               ),
             ),
-          AdminPager(page: _page, hasMore: _hasMore, loading: _loading, onPageChange: (p) {
-            setState(() => _page = p);
-            _load();
-          }),
+          AdminPager(
+              page: _page,
+              hasMore: _hasMore,
+              loading: _loading,
+              onPageChange: (p) {
+                setState(() => _page = p);
+                _load();
+              }),
         ]),
       ),
     );
