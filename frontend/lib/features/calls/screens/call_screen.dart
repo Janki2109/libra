@@ -51,10 +51,23 @@ class _CallScreenState extends State<CallScreen> {
     if (!mounted) return;
     if (_session.state == CallState.ended ||
         _session.state == CallState.failed) {
-      // Give the "call ended" state a beat to render before popping, and
-      // don't try to pop an already-unmounted route.
+      // Give the "call ended" state a beat to render before leaving, and
+      // don't try to navigate from an already-unmounted route.
+      //
+      // This used to be a bare Navigator.maybePop(), which silently does
+      // nothing when this screen isn't the top of a poppable stack — the
+      // one concrete way the *other* party ending the call (a peer-left/
+      // hangup signal correctly flips _session.state to ended) failed to
+      // ever close this screen, leaving whichever side hit that case stuck
+      // looking at a dead call. Falling back to each role's own dashboard
+      // guarantees this screen always closes either way.
       Future.delayed(const Duration(milliseconds: 700), () {
-        if (mounted) Navigator.of(context).maybePop();
+        if (!mounted) return;
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(widget.isCaller ? '/dashboard' : '/portal/dashboard');
+        }
       });
     }
     setState(() {});
@@ -117,7 +130,8 @@ class _CallScreenState extends State<CallScreen> {
             if (widget.video && connected)
               Positioned.fill(
                 child: RTCVideoView(_session.remoteRenderer,
-                    objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                    objectFit:
+                        RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
               )
             else
               Center(
@@ -197,8 +211,8 @@ class _CallScreenState extends State<CallScreen> {
                 right: 0,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(20)),

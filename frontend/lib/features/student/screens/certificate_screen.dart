@@ -54,7 +54,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
       'key': 'ai_study_partner',
       'title': 'AI Study Partner',
       'icon': '💬',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'requirement': 'Send 10 messages to the AI Legal Advisor',
       'xp': 300,
       'skills': ['Legal Q&A', 'Case Law Lookup', 'Concept Clarification'],
@@ -163,207 +163,224 @@ class _CertificateScreenState extends State<CertificateScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: _blue))
                 : ListView(padding: const EdgeInsets.all(16), children: [
-          Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                  color: _gold.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _gold.withValues(alpha: 0.3))),
-              child: const Row(children: [
-                Text('🏅', style: TextStyle(fontSize: 22)),
-                SizedBox(width: 10),
-                Expanded(
-                    child: Text(
-                        'Complete quizzes and mock courts to earn certificates! Each certificate validates your legal skills.',
-                        style: TextStyle(
-                            color: Color(0xFF8B5E3C),
-                            fontSize: 12,
-                            height: 1.4))),
-              ])),
-          const SizedBox(height: 16),
-          ..._certificates.map((cert) {
-            final color = cert['color'] as Color;
-            final status = _status[cert['key']];
-            final earned = status?['earned'] == true;
-            final progress = status?['progress'] as int? ?? 0;
-            final target = status?['target'] as int? ?? 0;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              decoration: BoxDecoration(
-                  color: _bgCard,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: earned ? color : _border, width: earned ? 2 : 0.8),
-                  boxShadow: [
-                    BoxShadow(
-                        color: _blue.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2))
-                  ]),
-              child: Column(children: [
-                // Certificate header
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.06),
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16))),
-                  child: Row(children: [
                     Container(
-                        width: 52,
-                        height: 52,
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
+                            color: _gold.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: color.withValues(alpha: 0.3), width: 2)),
-                        child: Center(
-                            child: Text(cert['icon'],
-                                style: const TextStyle(fontSize: 24)))),
-                    const SizedBox(width: 14),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Text(cert['title'],
-                              style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15)),
-                          const SizedBox(height: 2),
-                          Row(children: [
-                            Icon(Icons.bolt_rounded, color: _gold, size: 14),
-                            Text(' +${cert['xp']} XP',
-                                style: const TextStyle(
-                                    color: _gold,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12)),
-                          ]),
+                                color: _gold.withValues(alpha: 0.3))),
+                        child: const Row(children: [
+                          Text('🏅', style: TextStyle(fontSize: 22)),
+                          SizedBox(width: 10),
+                          Expanded(
+                              child: Text(
+                                  'Complete quizzes and mock courts to earn certificates! Each certificate validates your legal skills.',
+                                  style: TextStyle(
+                                      color: Color(0xFF8B5E3C),
+                                      fontSize: 12,
+                                      height: 1.4))),
                         ])),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: earned
-                            ? color.withValues(alpha: 0.1)
-                            : Colors.grey.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                            earned
-                                ? Icons.verified_rounded
-                                : Icons.lock_rounded,
-                            color: earned ? color : _textMuted,
-                            size: 14),
-                        const SizedBox(width: 4),
-                        Text(earned ? 'Earned' : 'Locked',
-                            style: TextStyle(
-                                color: earned ? color : _textMuted,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700)),
-                      ]),
-                    ),
-                  ]),
-                ),
-
-                // Skills & requirement
-                Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            const Icon(Icons.task_alt_rounded,
-                                color: _textMuted, size: 14),
-                            const SizedBox(width: 6),
-                            Expanded(
-                                child: Text(cert['requirement'],
-                                    style: const TextStyle(
-                                        color: _textMuted, fontSize: 12))),
-                          ]),
-                          if (!earned && target > 0) ...[
-                            const SizedBox(height: 6),
-                            ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(
-                                    value: (progress / target).clamp(0.0, 1.0),
-                                    minHeight: 5,
-                                    backgroundColor: _border,
-                                    color: color)),
-                            const SizedBox(height: 4),
-                            Text('$progress / $target',
-                                style: TextStyle(
-                                    color: color.withValues(alpha: 0.8),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                          const SizedBox(height: 10),
-                          Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: (cert['skills'] as List<String>)
-                                  .map((s) => Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                          color: color.withValues(alpha: 0.08),
-                                          borderRadius:
-                                              BorderRadius.circular(6)),
-                                      child: Text(s,
-                                          style: TextStyle(
-                                              color: color,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600))))
-                                  .toList()),
-                          const SizedBox(height: 12),
-                          // Action button
-                          SizedBox(
-                            width: double.infinity,
-                            child: earned
-                                ? ElevatedButton.icon(
-                                    onPressed: () {
-                                      HapticFeedback.lightImpact();
-                                      _showCertificate(context, cert, color);
-                                    },
-                                    icon: const Icon(Icons.download_rounded,
-                                        color: Colors.white, size: 16),
-                                    label: const Text('View Certificate',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w700)),
-                                    style: ElevatedButton.styleFrom(
-                                        backgroundColor: color,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 10)))
-                                : OutlinedButton.icon(
-                                    onPressed: () {
-                                      HapticFeedback.lightImpact();
-                                      _showHowToEarn(context, cert, color);
-                                    },
-                                    icon: Icon(Icons.info_outline_rounded,
-                                        color: color, size: 16),
-                                    label: Text('How to Earn',
+                    const SizedBox(height: 16),
+                    ..._certificates.map((cert) {
+                      final color = cert['color'] as Color;
+                      final status = _status[cert['key']];
+                      final earned = status?['earned'] == true;
+                      final progress = status?['progress'] as int? ?? 0;
+                      final target = status?['target'] as int? ?? 0;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                            color: _bgCard,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: earned ? color : _border,
+                                width: earned ? 2 : 0.8),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: _blue.withValues(alpha: 0.05),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2))
+                            ]),
+                        child: Column(children: [
+                          // Certificate header
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.06),
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(16))),
+                            child: Row(children: [
+                              Container(
+                                  width: 52,
+                                  height: 52,
+                                  decoration: BoxDecoration(
+                                      color: color.withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: color.withValues(alpha: 0.3),
+                                          width: 2)),
+                                  child: Center(
+                                      child: Text(cert['icon'],
+                                          style:
+                                              const TextStyle(fontSize: 24)))),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                    Text(cert['title'],
                                         style: TextStyle(
                                             color: color,
-                                            fontWeight: FontWeight.w700)),
-                                    style: OutlinedButton.styleFrom(
-                                        side: BorderSide(color: color),
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 10))),
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 15)),
+                                    const SizedBox(height: 2),
+                                    Row(children: [
+                                      Icon(Icons.bolt_rounded,
+                                          color: _gold, size: 14),
+                                      Text(' +${cert['xp']} XP',
+                                          style: const TextStyle(
+                                              color: _gold,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 12)),
+                                    ]),
+                                  ])),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: earned
+                                      ? color.withValues(alpha: 0.1)
+                                      : Colors.grey.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                          earned
+                                              ? Icons.verified_rounded
+                                              : Icons.lock_rounded,
+                                          color: earned ? color : _textMuted,
+                                          size: 14),
+                                      const SizedBox(width: 4),
+                                      Text(earned ? 'Earned' : 'Locked',
+                                          style: TextStyle(
+                                              color:
+                                                  earned ? color : _textMuted,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700)),
+                                    ]),
+                              ),
+                            ]),
                           ),
-                        ])),
-              ]),
-            );
-          }),
-          const SizedBox(height: 40),
-        ])),
+
+                          // Skills & requirement
+                          Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(children: [
+                                      const Icon(Icons.task_alt_rounded,
+                                          color: _textMuted, size: 14),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                          child: Text(cert['requirement'],
+                                              style: const TextStyle(
+                                                  color: _textMuted,
+                                                  fontSize: 12))),
+                                    ]),
+                                    if (!earned && target > 0) ...[
+                                      const SizedBox(height: 6),
+                                      ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          child: LinearProgressIndicator(
+                                              value: (progress / target)
+                                                  .clamp(0.0, 1.0),
+                                              minHeight: 5,
+                                              backgroundColor: _border,
+                                              color: color)),
+                                      const SizedBox(height: 4),
+                                      Text('$progress / $target',
+                                          style: TextStyle(
+                                              color:
+                                                  color.withValues(alpha: 0.8),
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600)),
+                                    ],
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: (cert['skills']
+                                                as List<String>)
+                                            .map((s) => Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 3),
+                                                decoration: BoxDecoration(
+                                                    color: color.withValues(
+                                                        alpha: 0.08),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6)),
+                                                child: Text(s,
+                                                    style: TextStyle(
+                                                        color: color,
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w600))))
+                                            .toList()),
+                                    const SizedBox(height: 12),
+                                    // Action button
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: earned
+                                          ? ElevatedButton.icon(
+                                              onPressed: () {
+                                                HapticFeedback.lightImpact();
+                                                _showCertificate(
+                                                    context, cert, color);
+                                              },
+                                              icon: const Icon(Icons.download_rounded,
+                                                  color: Colors.white,
+                                                  size: 16),
+                                              label: const Text('View Certificate',
+                                                  style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w700)),
+                                              style: ElevatedButton.styleFrom(
+                                                  backgroundColor: color,
+                                                  shape: RoundedRectangleBorder(
+                                                      borderRadius: BorderRadius.circular(
+                                                          10)),
+                                                  padding: const EdgeInsets.symmetric(
+                                                      vertical: 10)))
+                                          : OutlinedButton.icon(
+                                              onPressed: () {
+                                                HapticFeedback.lightImpact();
+                                                _showHowToEarn(
+                                                    context, cert, color);
+                                              },
+                                              icon: Icon(Icons.info_outline_rounded,
+                                                  color: color, size: 16),
+                                              label: Text('How to Earn',
+                                                  style: TextStyle(
+                                                      color: color,
+                                                      fontWeight: FontWeight.w700)),
+                                              style: OutlinedButton.styleFrom(side: BorderSide(color: color), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), padding: const EdgeInsets.symmetric(vertical: 10))),
+                                    ),
+                                  ])),
+                        ]),
+                      );
+                    }),
+                    const SizedBox(height: 40),
+                  ])),
       ]),
     );
   }
@@ -497,6 +514,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
             style: TextStyle(
                 color: color, fontSize: 20, fontWeight: FontWeight.w800)),
         Text(label,
-            style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 10)),
+            style:
+                TextStyle(color: color.withValues(alpha: 0.7), fontSize: 10)),
       ]);
 }

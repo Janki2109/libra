@@ -438,7 +438,7 @@ class _HomeTab extends StatelessWidget {
                       '📅',
                       'Consultation Mode',
                       'Book a lawyer consultation',
-                      const Color(0xFF7C3AED),
+                      const Color(0xFF0288D1),
                       () => onTabChange(3)),
                   _ExploreCard('🏆', 'Leaderboard', 'Top students', _gold,
                       () => context.push('/student/leaderboard')),
@@ -450,7 +450,7 @@ class _HomeTab extends StatelessWidget {
                       '🏛️',
                       'Mock Court',
                       'Argue cases',
-                      const Color(0xFF7C3AED),
+                      const Color(0xFF0288D1),
                       () => context.push('/student/mock-court')),
                   _ExploreCard('🎓', 'Certificates', 'Your achievements', _gold,
                       () => context.push('/student/certificates')),
@@ -587,7 +587,7 @@ class _CasesTabState extends State<_CasesTab> {
       'desc':
           'Complete text with Fundamental Rights, Duties and Directive Principles.',
       'emoji': '🏛️',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'url': 'https://legislative.gov.in/constitution-of-india/',
     },
     {
@@ -764,7 +764,7 @@ class _CasesTabState extends State<_CasesTab> {
       'desc':
           'Foundational statute governing the formation and enforcement of contracts.',
       'emoji': '🤝',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -775,7 +775,7 @@ class _CasesTabState extends State<_CasesTab> {
       'source': 'India Code',
       'desc': 'Governs contracts for the sale and delivery of goods.',
       'emoji': '🤝',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -787,7 +787,7 @@ class _CasesTabState extends State<_CasesTab> {
       'desc':
           'Foundational case on offer and acceptance, widely cited in Indian courts.',
       'emoji': '⚖️',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -1040,7 +1040,7 @@ class _CasesTabState extends State<_CasesTab> {
       'desc':
           'Free open-access study units on evidence law from IGNOU\'s law programmes.',
       'emoji': '📚',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'url': 'https://egyankosh.ac.in/simple-search?query=law',
     },
     // ── Judiciary ───────────────────────────────
@@ -1156,7 +1156,7 @@ class _CasesTabState extends State<_CasesTab> {
       'source': 'legislative.gov.in',
       'desc': 'Official index of all central legislation currently in force.',
       'emoji': '📚',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'url': 'https://legislative.gov.in/central-acts-and-rules/',
     },
     // ── Legal Research ──────────────────────────
@@ -1179,7 +1179,7 @@ class _CasesTabState extends State<_CasesTab> {
       'source': 'livelaw.in',
       'desc': 'Daily coverage and analysis of Indian court judgments.',
       'emoji': '📰',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'url': 'https://www.livelaw.in/supreme-court',
     },
     {
@@ -1202,7 +1202,7 @@ class _CasesTabState extends State<_CasesTab> {
       'desc':
           'Free, open-licence research and study material across law subjects.',
       'emoji': '📚',
-      'color': Color(0xFF7C3AED),
+      'color': Color(0xFF0288D1),
       'url': 'https://egyankosh.ac.in/simple-search?query=law',
     },
     {
@@ -2011,7 +2011,7 @@ class _ProfileTab extends StatelessWidget {
                           child: _ActionTile(
                               '❓',
                               'Quiz',
-                              const Color(0xFF7C3AED),
+                              const Color(0xFF0288D1),
                               () => context.push('/student/quiz'))),
                       const SizedBox(width: 10),
                       Expanded(

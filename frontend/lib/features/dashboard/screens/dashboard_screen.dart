@@ -80,7 +80,19 @@ class _DashboardScreenState extends State<DashboardScreen>
       // twice in one response.
       final byId = <String, dynamic>{};
       for (final c in all) {
-        if (c['status'] != 'confirmed' && c['status'] != 'pending') continue;
+        final status = c['status'];
+        if (status != 'confirmed' && status != 'pending') continue;
+        // A confirmed Chat booking has nothing left for the lawyer to action
+        // here (unlike audio/video, which still need "Start Call") — the
+        // chat itself is reachable from the existing chat/consultations
+        // list. Without this it kept reappearing under "New Booking" as if
+        // still awaiting the lawyer, indefinitely, even after being
+        // approved. A genuinely new (pending) chat request must still show.
+        if (status == 'confirmed' &&
+            _bookingAction((c['consultation_type'] ?? '').toString()) ==
+                'chat') {
+          continue;
+        }
         final id = c['id']?.toString();
         if (id != null) byId[id] = c;
       }
@@ -604,7 +616,8 @@ class _BookingCard extends StatelessWidget {
     });
   }
 
-  Future<void> _callClient(BuildContext context) => _joinCall(context, video: false);
+  Future<void> _callClient(BuildContext context) =>
+      _joinCall(context, video: false);
 
   Future<void> _startVideoCall(BuildContext context) =>
       _joinCall(context, video: true);
@@ -666,140 +679,143 @@ class _BookingCard extends StatelessWidget {
           context.push('/lawyer/consultations');
         },
         child: Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: statusColor.withValues(alpha: 0.35),
-            width: prominent ? 1.4 : 0.8),
-        boxShadow: [
-          BoxShadow(
-              color: _brown.withValues(alpha: prominent ? 0.10 : 0.05),
-              blurRadius: prominent ? 14 : 8,
-              offset: const Offset(0, 3)),
-        ],
-      ),
-      child: Column(children: [
-        Container(
-            height: 4,
-            decoration: BoxDecoration(
-                color: statusColor,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)))),
-        Padding(
-          padding: EdgeInsets.all(prominent ? 14 : 12),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: statusColor.withValues(alpha: 0.35),
+                width: prominent ? 1.4 : 0.8),
+            boxShadow: [
+              BoxShadow(
+                  color: _brown.withValues(alpha: prominent ? 0.10 : 0.05),
+                  blurRadius: prominent ? 14 : 8,
+                  offset: const Offset(0, 3)),
+            ],
+          ),
+          child: Column(children: [
+            Container(
+                height: 4,
                 decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6)),
-                child: Text(status.toUpperCase(),
-                    style: TextStyle(
-                        color: statusColor,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.4)),
-              ),
-              const Spacer(),
-              Icon(Icons.event_available_rounded,
-                  color: statusColor.withValues(alpha: 0.6), size: 14),
-            ]),
-            const SizedBox(height: 8),
-            Text(clientName,
-                style: TextStyle(
-                    color: _textPrimary,
-                    fontSize: prominent ? 16 : 14,
-                    fontWeight: FontWeight.w800),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 10,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('$typeEmoji $typeLabel',
-                    style: TextStyle(
-                        color: actionColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
-            if (date.isNotEmpty || time.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(spacing: 14, runSpacing: 4, children: [
-                if (date.isNotEmpty)
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.calendar_today_rounded,
-                        color: _brown, size: 13),
-                    const SizedBox(width: 5),
-                    Text(_formatBookingDate(date),
-                        style: const TextStyle(
-                            color: _textPrimary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700)),
-                  ]),
-                if (time.isNotEmpty)
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.access_time_rounded,
-                        color: _brown, size: 13),
-                    const SizedBox(width: 5),
-                    Text(time,
-                        style: const TextStyle(
-                            color: _textPrimary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700)),
-                  ]),
-              ]),
-            ],
-            if (isConfirmed) ...[
-              SizedBox(height: prominent ? 12 : 10),
-              SizedBox(
-                width: double.infinity,
-                child: Material(
-                  color: actionColor,
-                  borderRadius: BorderRadius.circular(10),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () {
-                      HapticFeedback.heavyImpact();
-                      if (action == 'audio') {
-                        _callClient(context);
-                      } else if (action == 'video') {
-                        _startVideoCall(context);
-                      } else {
-                        _openChat(context);
-                      }
-                    },
-                    child: Padding(
-                      padding:
-                          EdgeInsets.symmetric(vertical: prominent ? 11 : 9),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(actionIcon, color: Colors.white, size: 16),
-                          const SizedBox(width: 6),
-                          Flexible(
-                              child: Text(actionLabel,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13))),
-                        ],
+                    color: statusColor,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(16)))),
+            Padding(
+              padding: EdgeInsets.all(prominent ? 14 : 12),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6)),
+                        child: Text(status.toUpperCase(),
+                            style: TextStyle(
+                                color: statusColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4)),
                       ),
+                      const Spacer(),
+                      Icon(Icons.event_available_rounded,
+                          color: statusColor.withValues(alpha: 0.6), size: 14),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(clientName,
+                        style: TextStyle(
+                            color: _textPrimary,
+                            fontSize: prominent ? 16 : 14,
+                            fontWeight: FontWeight.w800),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text('$typeEmoji $typeLabel',
+                            style: TextStyle(
+                                color: actionColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600)),
+                      ],
                     ),
-                  ),
-                ),
-              ),
-            ],
+                    if (date.isNotEmpty || time.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(spacing: 14, runSpacing: 4, children: [
+                        if (date.isNotEmpty)
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.calendar_today_rounded,
+                                color: _brown, size: 13),
+                            const SizedBox(width: 5),
+                            Text(_formatBookingDate(date),
+                                style: const TextStyle(
+                                    color: _textPrimary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700)),
+                          ]),
+                        if (time.isNotEmpty)
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.access_time_rounded,
+                                color: _brown, size: 13),
+                            const SizedBox(width: 5),
+                            Text(time,
+                                style: const TextStyle(
+                                    color: _textPrimary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700)),
+                          ]),
+                      ]),
+                    ],
+                    if (isConfirmed) ...[
+                      SizedBox(height: prominent ? 12 : 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Material(
+                          color: actionColor,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              HapticFeedback.heavyImpact();
+                              if (action == 'audio') {
+                                _callClient(context);
+                              } else if (action == 'video') {
+                                _startVideoCall(context);
+                              } else {
+                                _openChat(context);
+                              }
+                            },
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                  vertical: prominent ? 11 : 9),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(actionIcon,
+                                      color: Colors.white, size: 16),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                      child: Text(actionLabel,
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13))),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ]),
+            ),
           ]),
-        ),
-      ]),
         ),
       ),
     );
@@ -969,25 +985,25 @@ class _DateStatCell extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.calendar_today_rounded, color: _brown, size: 16),
-            const SizedBox(height: 4),
-            Text(today,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: _textMuted, fontSize: 9)),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(dateLabel,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.calendar_today_rounded, color: _brown, size: 16),
+              const SizedBox(height: 4),
+              Text(today,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: _brown,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800)),
-            ),
-          ]),
-        ),
+                  style: const TextStyle(color: _textMuted, fontSize: 9)),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(dateLabel,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: _brown,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800)),
+              ),
+            ]),
+          ),
         ),
       );
 }
@@ -1006,27 +1022,29 @@ class _StatCard extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            if (icon != null) ...[
-              Icon(icon, color: color, size: 16),
-              const SizedBox(height: 4),
-            ],
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(value,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: color, fontSize: 13, fontWeight: FontWeight.w800)),
-            ),
-            if (label.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(label,
-                  style: const TextStyle(color: _textMuted, fontSize: 9),
-                  overflow: TextOverflow.ellipsis),
-            ],
-          ]),
-        ),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              if (icon != null) ...[
+                Icon(icon, color: color, size: 16),
+                const SizedBox(height: 4),
+              ],
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(value,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800)),
+              ),
+              if (label.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(label,
+                    style: const TextStyle(color: _textMuted, fontSize: 9),
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ]),
+          ),
         ),
       );
 }
@@ -1590,8 +1608,8 @@ class _BottomNav extends StatelessWidget {
                     () => context.push('/cases')),
                 _NavItem(Icons.chat_bubble_outline_rounded, 'Chat', false,
                     () => context.push('/chat')),
-                _NavItem(Icons.account_balance_wallet_rounded, 'Billing',
-                    false, () => context.push('/lawyer/earnings')),
+                _NavItem(Icons.account_balance_wallet_rounded, 'Billing', false,
+                    () => context.push('/lawyer/earnings')),
                 _NavItem(Icons.person_outline_rounded, 'Profile', false,
                     () => context.push('/profile')),
               ],

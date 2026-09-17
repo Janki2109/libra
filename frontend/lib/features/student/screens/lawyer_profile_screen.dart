@@ -4,17 +4,20 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
 
-// Pink is this screen's default (student panel) palette. Reached from the
-// client portal's green-themed Find a Lawyer page, it switched to this pink
-// scheme mid-flow with nothing else on the page to explain why — so the
-// accent, background and border all key off which caller opened the screen.
+// Blue is this screen's default (student panel) palette, matching the rest
+// of the Student section (law_student_dashboard_screen.dart) — this used to
+// be a pink scheme with nothing else on the page to explain why, the one
+// inconsistent spot in an otherwise all-blue student experience. Reached
+// from the client portal's green-themed Find a Lawyer page too, so the
+// accent, background and border still key off which caller opened the
+// screen — only the student-panel branch's colors changed here.
 const _bgCard = Color(0xFFFFFFFF);
 const _textPri = Color(0xFF1A1A2E);
 const _textMuted = Color(0xFF6B6B8A);
 
-const _pink = Color(0xFFE91E8C);
-const _bgPink = Color(0xFFFFF0F5);
-const _borderPink = Color(0xFFFFD6EB);
+const _blue = Color(0xFF1565C0);
+const _bgBlue = Color(0xFFF0F4FF);
+const _borderBlue = Color(0xFFBBDEFB);
 
 const _green = Color(0xFF0D6E4F);
 const _bgGreen = Color(0xFFF0FAF6);
@@ -24,7 +27,7 @@ class LawyerProfileScreen extends StatefulWidget {
   final String lawyerId, lawyerName;
   // True when opened from the client portal's Find a Lawyer page, so the
   // accent color matches the page the client just came from instead of the
-  // student panel's pink.
+  // student panel's blue.
   final bool fromClientPortal;
   const LawyerProfileScreen(
       {super.key,
@@ -37,9 +40,9 @@ class LawyerProfileScreen extends StatefulWidget {
 
 class _LawyerProfileScreenState extends State<LawyerProfileScreen>
     with TickerProviderStateMixin {
-  Color get _accent => widget.fromClientPortal ? _green : _pink;
-  Color get _bg => widget.fromClientPortal ? _bgGreen : _bgPink;
-  Color get _border => widget.fromClientPortal ? _borderGreen : _borderPink;
+  Color get _accent => widget.fromClientPortal ? _green : _blue;
+  Color get _bg => widget.fromClientPortal ? _bgGreen : _bgBlue;
+  Color get _border => widget.fromClientPortal ? _borderGreen : _borderBlue;
 
   Map<String, dynamic> _profile = {};
   List<dynamic> _wonCases = [];
@@ -159,9 +162,9 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                                 Color(0xFF3FA980)
                               ]
                             : const [
-                                Color(0xFFB5166E),
-                                Color(0xFFE91E8C),
-                                Color(0xFFFF6BB3)
+                                Color(0xFF0A1628),
+                                Color(0xFF1565C0),
+                                Color(0xFF29B6F6)
                               ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight),
@@ -323,8 +326,8 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                               decoration: BoxDecoration(
                                   color: _bgCard,
                                   borderRadius: BorderRadius.circular(14),
-                                  border:
-                                      Border.all(color: _accent.withValues(alpha: 0.2)),
+                                  border: Border.all(
+                                      color: _accent.withValues(alpha: 0.2)),
                                   boxShadow: [
                                     BoxShadow(
                                         color: _accent.withValues(alpha: 0.05),
@@ -339,10 +342,8 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                                         color: _accent.withValues(alpha: 0.1),
                                         borderRadius:
                                             BorderRadius.circular(10)),
-                                    child: Icon(
-                                        Icons.workspace_premium_rounded,
-                                        color: _accent,
-                                        size: 22)),
+                                    child: Icon(Icons.workspace_premium_rounded,
+                                        color: _accent, size: 22)),
                                 const SizedBox(width: 12),
                                 Expanded(
                                     child: Text(speciality,
@@ -374,11 +375,13 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 6),
                                       decoration: BoxDecoration(
-                                          color: _accent.withValues(alpha: 0.08),
+                                          color:
+                                              _accent.withValues(alpha: 0.08),
                                           borderRadius:
                                               BorderRadius.circular(20),
                                           border: Border.all(
-                                              color: _accent.withValues(alpha: 0.25))),
+                                              color: _accent.withValues(
+                                                  alpha: 0.25))),
                                       child: Text(area,
                                           style: TextStyle(
                                               color: _accent,

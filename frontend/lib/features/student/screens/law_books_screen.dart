@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'news_webview_screen.dart';
 
-const _bg = Color(0xFFFFF0F5);
+// Same blue+white palette as the rest of the Student section
+// (law_student_dashboard_screen.dart) — this screen previously used its own
+// pink scheme, which was the one inconsistent spot in an otherwise all-blue
+// student experience.
+const _bg = Color(0xFFF0F4FF);
 const _bgCard = Color(0xFFFFFFFF);
-const _pink = Color(0xFFE91E8C);
-const _textMuted = Color(0xFF6B6B8A);
+const _navy = Color(0xFF0A1628);
+const _blue = Color(0xFF1565C0);
+const _skyBlue = Color(0xFF0288D1);
+const _textMuted = Color(0xFF546E7A);
 
 class LawBooksScreen extends StatelessWidget {
   const LawBooksScreen({super.key});
@@ -17,7 +23,7 @@ class LawBooksScreen extends StatelessWidget {
       'description':
           'Complete text of the Constitution of India with all amendments. Fundamental rights, duties, directive principles.',
       'emoji': '🏛️',
-      'color': Color(0xFF7C3AED),
+      'color': _navy,
       'url': 'https://legislative.gov.in/constitution-of-india/',
       'pages': '395 Articles'
     },
@@ -38,7 +44,7 @@ class LawBooksScreen extends StatelessWidget {
       'description':
           'Latest Supreme Court and High Court judgments, legal news and analysis.',
       'emoji': '📰',
-      'color': Color(0xFF7C3AED),
+      'color': _skyBlue,
       'url': 'https://www.livelaw.in/supreme-court',
       'pages': 'Daily Updates'
     },
@@ -78,7 +84,7 @@ class LawBooksScreen extends StatelessWidget {
       'description':
           'Governs marriage, divorce, maintenance and custody for Hindus, Buddhists, Jains and Sikhs.',
       'emoji': '👫',
-      'color': Color(0xFFE91E8C),
+      'color': _skyBlue,
       'url':
           'https://www.indiacode.nic.in/bitstream/123456789/2188/1/A1955-25.pdf',
       'pages': '30 Sections'
@@ -99,7 +105,7 @@ class LawBooksScreen extends StatelessWidget {
       'author': 'India Code',
       'description': 'Provides protection to women from domestic violence.',
       'emoji': '🛡️',
-      'color': Color(0xFFE91E8C),
+      'color': _navy,
       'url':
           'https://www.indiacode.nic.in/bitstream/123456789/15436/1/protection_of_women_from_domestic.pdf',
       'pages': '37 Sections'
@@ -122,7 +128,7 @@ class LawBooksScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _pink,
+        backgroundColor: _blue,
         title: const Text('Law Library 📚',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         leading: IconButton(
@@ -162,7 +168,7 @@ class LawBooksScreen extends StatelessWidget {
                     border: Border.all(color: color.withValues(alpha: 0.2)),
                     boxShadow: [
                       BoxShadow(
-                          color: _pink.withValues(alpha: 0.05),
+                          color: _blue.withValues(alpha: 0.05),
                           blurRadius: 8,
                           offset: const Offset(0, 2))
                     ]),

@@ -136,6 +136,20 @@ func CallSignalingWS(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "This consultation is chat-only"})
 		return
 	}
+	// Once a session has been ended (either side hung up on a connected call
+	// — see SaveCallDuration), neither party may reopen it: the consultation
+	// id doubles as the call-room key, so without this check a stale client
+	// still holding the old room reference could restart a "new" call on an
+	// already-completed booking. Checked for both roles, independent of the
+	// status!=confirmed check above (which normally already covers this,
+	// since SaveCallDuration flips both fields together) — this is the
+	// explicit, independent enforcement point for "an ended session can
+	// never be resumed."
+	if sessionStatus == "ended" {
+		log.Printf("[call-signaling] rejected: consultation %s session already ended (user %s)", id, userID)
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "This call has ended. A new booking is required to connect again."})
+		return
+	}
 	// Only the client side is gated on session_status: the lawyer's own
 	// InitiateConsultationCall call is what sets it to 'started' in the
 	// first place, and the app fires that request without waiting for it

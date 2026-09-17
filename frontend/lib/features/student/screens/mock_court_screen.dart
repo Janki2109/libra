@@ -60,7 +60,7 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
     {
       'name': 'Constitutional',
       'icon': '📜',
-      'color': Color(0xFF7C3AED),
+      'color': _navy,
       'desc': 'Fundamental rights violations'
     },
     {
@@ -96,7 +96,7 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
     {
       'name': 'Intellectual Property',
       'icon': '©️',
-      'color': Color(0xFF5E35B1),
+      'color': Color(0xFF0288D1),
       'desc': 'Patent, trademark, copyright infringement'
     },
     {
@@ -160,7 +160,8 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
     });
     HapticFeedback.lightImpact();
     try {
-      final response = await DioClient.instance.post('/ai/mock-court/evaluate', data: {
+      final response =
+          await DioClient.instance.post('/ai/mock-court/evaluate', data: {
         'case_title': _caseData?['title'] ?? '',
         'case_facts': _caseData?['facts'] ?? '',
         'issues': (_caseData?['issues'] as List?)?.join(', ') ?? '',
@@ -421,8 +422,9 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                    color:
-                        _role == 'Defence' ? _blue.withValues(alpha: 0.08) : _bgCard,
+                    color: _role == 'Defence'
+                        ? _blue.withValues(alpha: 0.08)
+                        : _bgCard,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                         color: _role == 'Defence' ? _blue : _border,
@@ -536,10 +538,8 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
           _textPri,
           prefix: '• '),
       const SizedBox(height: 10),
-      _Section(
-          '📖 Applicable Laws',
-          (c['applicable_laws'] as List?)?.join('\n• ') ?? '',
-          Color(0xFF7C3AED),
+      _Section('📖 Applicable Laws',
+          (c['applicable_laws'] as List?)?.join('\n• ') ?? '', _navy,
           prefix: '• '),
       const SizedBox(height: 10),
       _Section(
@@ -575,8 +575,8 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
         Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-                color:
-                    (_role == 'Prosecution' ? _red : _blue).withValues(alpha: 0.06),
+                color: (_role == 'Prosecution' ? _red : _blue)
+                    .withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                     color: (_role == 'Prosecution' ? _red : _blue)
@@ -676,7 +676,8 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
       Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [color.withValues(alpha: 0.8), color]),
+              gradient:
+                  LinearGradient(colors: [color.withValues(alpha: 0.8), color]),
               borderRadius: BorderRadius.circular(16)),
           child: Row(children: [
             Container(

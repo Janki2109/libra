@@ -7,7 +7,8 @@ import '../../../core/services/dio_client.dart';
 const _bg = Color(0xFFF6F9FF);
 const _bgCard = Color(0xFFFFFFFF);
 const _navy = Color(0xFF0B1E3D);
-const _pink = Color(0xFF1D4ED8); // primary accent (kept name to avoid touching every call site)
+const _pink = Color(
+    0xFF1D4ED8); // primary accent (kept name to avoid touching every call site)
 const _blueLight = Color(0xFFEAF2FF);
 const _gold = Color(0xFFC9A227);
 const _border = Color(0xFFDCE6F7);
@@ -58,10 +59,10 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
     {
       'name': 'Family Law',
       'icon': '👨‍👩‍👧',
-      'color': const Color(0xFFE91E8C),
+      'color': const Color(0xFF0288D1),
       'desc': 'Custody & divorce',
       'fact': 'Hindu Marriage Act 1955',
-      'gradient': [Color(0xFFE91E8C), Color(0xFFFF6BB3)]
+      'gradient': [Color(0xFF0288D1), Color(0xFF29B6F6)]
     },
     {
       'name': 'Contract Law',
@@ -90,18 +91,18 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
     {
       'name': 'Constitutional',
       'icon': '🏛️',
-      'color': const Color(0xFF7C3AED),
+      'color': const Color(0xFF1D4ED8),
       'desc': 'Fundamental rights',
       'fact': 'Constitution has 395 articles!',
-      'gradient': [Color(0xFF7C3AED), Color(0xFF9F67FF)]
+      'gradient': [Color(0xFF1D4ED8), Color(0xFF3B82F6)]
     },
     {
       'name': 'Random Case',
       'icon': '🎲',
-      'color': const Color(0xFFE91E8C),
+      'color': const Color(0xFF0B1E3D),
       'desc': 'Surprise challenge!',
       'fact': 'Test all legal knowledge',
-      'gradient': [Color(0xFFE91E8C), Color(0xFFFF6BB3)]
+      'gradient': [Color(0xFF0B1E3D), Color(0xFF1D4ED8)]
     },
   ];
 
@@ -215,7 +216,7 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
       case 'decision':
         return _pink;
       default:
-        return const Color(0xFF7C3AED);
+        return const Color(0xFF0288D1);
     }
   }
 
@@ -320,8 +321,7 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [_navy, _pink]),
+                    gradient: const LinearGradient(colors: [_navy, _pink]),
                     shape: BoxShape.circle),
                 child: const Center(
                     child: Text('⚖️', style: TextStyle(fontSize: 50))))),
@@ -342,15 +342,16 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
             child: CircularProgressIndicator(color: _pink, strokeWidth: 3)),
       ]));
 
-  Widget _buildCategorySelect() => LayoutBuilder(
-      builder: (context, constraints) {
+  Widget _buildCategorySelect() =>
+      LayoutBuilder(builder: (context, constraints) {
         final isWide = constraints.maxWidth > 700;
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
             Center(
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: isWide ? 640 : double.infinity),
+                constraints:
+                    BoxConstraints(maxWidth: isWide ? 640 : double.infinity),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
@@ -468,7 +469,8 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                               ])),
                           const SizedBox(width: 8),
                           Icon(Icons.arrow_forward_ios_rounded,
-                              color: _textMuted.withValues(alpha: 0.6), size: 16),
+                              color: _textMuted.withValues(alpha: 0.6),
+                              size: 16),
                         ]),
                   ),
                 ),
@@ -508,8 +510,8 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                               horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                               gradient: const LinearGradient(colors: [
-                                Color(0xFFB5166E),
-                                Color(0xFFE91E8C)
+                                Color(0xFF0B1E3D),
+                                Color(0xFF1D4ED8)
                               ]),
                               borderRadius: BorderRadius.circular(20)),
                           child: Text('📁 $_selectedCategory',
@@ -522,7 +524,8 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                              color: const Color(0xFF059669).withValues(alpha: 0.1),
+                              color: const Color(0xFF059669)
+                                  .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8)),
                           child: const Row(children: [
                             Icon(Icons.auto_awesome,
@@ -696,8 +699,8 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                       decoration: BoxDecoration(
                           color: typeColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border:
-                              Border.all(color: typeColor.withValues(alpha: 0.3))),
+                          border: Border.all(
+                              color: typeColor.withValues(alpha: 0.3))),
                       child: Text(_qTypeLabel(type),
                           style: TextStyle(
                               color: typeColor,
@@ -710,7 +713,8 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                     decoration: BoxDecoration(
                         color: _bgCard,
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: typeColor.withValues(alpha: 0.2)),
+                        border:
+                            Border.all(color: typeColor.withValues(alpha: 0.2)),
                         boxShadow: [
                           BoxShadow(
                               color: typeColor.withValues(alpha: 0.08),
@@ -850,10 +854,12 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                   Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.06),
+                          color:
+                              const Color(0xFF3B82F6).withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: const Color(0xFF3B82F6).withValues(alpha: 0.2))),
+                              color: const Color(0xFF3B82F6)
+                                  .withValues(alpha: 0.2))),
                       child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -969,7 +975,7 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                     colors: passed
-                        ? [const Color(0xFFB5166E), const Color(0xFFE91E8C)]
+                        ? [const Color(0xFF0B1E3D), const Color(0xFF1D4ED8)]
                         : [const Color(0xFFD97706), const Color(0xFFF59E0B)]),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [

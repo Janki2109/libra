@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -69,10 +71,20 @@ class FcmService {
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(),
       ),
-      onDidReceiveNotificationResponse: (_) => _openNotifications(),
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload != null && payload.isNotEmpty) {
+          try {
+            final data = jsonDecode(payload) as Map<String, dynamic>;
+            if (_openChatMessageIfAny(data)) return;
+          } catch (_) {}
+        }
+        _openNotifications();
+      },
     );
-    final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin =
+        _localNotifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(_channel);
 
     final settings = await FirebaseMessaging.instance.requestPermission(
@@ -104,6 +116,9 @@ class FcmService {
       RealtimeEvents.instance.emit(message.data['type'] as String?);
       if (_openIncomingCallIfAny(message.data)) return;
       if (_handleCallCancelledIfAny(message.data)) return;
+      // A foreground chat-message push still shows the normal tray
+      // notification below (the user hasn't tapped anything yet) — only a
+      // tap should navigate, handled by onMessageOpenedApp/getInitialMessage.
       final n = message.notification;
       if (n == null) return;
       _localNotifications.show(
@@ -119,6 +134,11 @@ class FcmService {
           ),
           iOS: DarwinNotificationDetails(),
         ),
+        // Carried through to onDidReceiveNotificationResponse below so a tap
+        // on this tray notification (app already open) can route the same
+        // way a background/cold-start tap does, instead of only ever
+        // opening the generic notifications list.
+        payload: jsonEncode(message.data),
       );
     });
 
@@ -126,7 +146,9 @@ class FcmService {
     // app cold from a notification tap.
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       RealtimeEvents.instance.emit(message.data['type'] as String?);
-      if (!_openIncomingCallIfAny(message.data)) _openNotifications();
+      if (_openIncomingCallIfAny(message.data)) return;
+      if (_openChatMessageIfAny(message.data)) return;
+      _openNotifications();
     });
     final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
@@ -135,7 +157,9 @@ class FcmService {
       // silently no-op and the tap that cold-started the app (e.g. an
       // incoming call) would go nowhere. Wait for the router to exist first.
       AppRouter.ready.then((_) {
-        if (!_openIncomingCallIfAny(initialMessage.data)) _openNotifications();
+        if (_openIncomingCallIfAny(initialMessage.data)) return;
+        if (_openChatMessageIfAny(initialMessage.data)) return;
+        _openNotifications();
       });
     }
 
@@ -156,7 +180,8 @@ class FcmService {
   bool _openIncomingCallIfAny(Map<String, dynamic> data) {
     final type = data['type'] as String? ?? '';
     if (!type.startsWith('incoming_call_')) return false;
-    final callType = type.substring('incoming_call_'.length); // 'audio' | 'video'
+    final callType =
+        type.substring('incoming_call_'.length); // 'audio' | 'video'
     final consultationId = data['reference_id'] as String? ?? '';
     if (consultationId.isEmpty) return false;
     final body = data['body'] as String? ?? '';
@@ -167,6 +192,47 @@ class FcmService {
       'lawyerName': lawyerName.isNotEmpty ? lawyerName : 'Your Lawyer',
     });
     return true;
+  }
+
+  /// If this push is a chat-message notification (see
+  /// notifyOtherChatParticipants on the backend), opens that exact chat room
+  /// directly — the same `reference_id`/`reference_type` a tap inside the
+  /// Notifications screen already uses (see _openReference there) — instead
+  /// of always falling back to the generic notifications list. Also marks
+  /// the matching notification read, same as opening it from that list
+  /// would, so the unread badge doesn't stay stuck after the chat opens.
+  bool _openChatMessageIfAny(Map<String, dynamic> data) {
+    if (data['type'] != 'chat_message') return false;
+    final roomId = data['reference_id'] as String? ?? '';
+    if (roomId.isEmpty) return false;
+    AppRouter.current?.push('/chat/$roomId');
+    unawaited(_markChatNotificationRead(roomId));
+    return true;
+  }
+
+  /// Finds the (most recent, still-unread) notification row this chat push
+  /// corresponds to and marks it read via the existing endpoint. The FCM
+  /// data payload itself carries no notification row id (only
+  /// type/reference_id/reference_type), so the row has to be located by its
+  /// reference — the same identifying fields already used to route here.
+  Future<void> _markChatNotificationRead(String roomId) async {
+    try {
+      final res = await DioClient.instance.get('/notifications');
+      final list = (res.data['data'] as List?) ?? [];
+      for (final n in list) {
+        if (n is Map &&
+            n['reference_type'] == 'chat_room' &&
+            n['reference_id']?.toString() == roomId &&
+            n['is_read'] != true) {
+          final id = n['id']?.toString();
+          if (id != null && id.isNotEmpty) {
+            await DioClient.instance.put('/notifications/$id/read');
+          }
+        }
+      }
+    } catch (_) {
+      // Best-effort — failing to mark read must never block opening the chat.
+    }
   }
 
   /// If this push is CancelConsultationCall's "the caller hung up before you

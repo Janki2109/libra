@@ -44,7 +44,7 @@ class _QuizScreenState extends State<QuizScreen> {
       'icon': '🤝',
       'color': const Color(0xFF2E8B57)
     },
-    {'name': 'Law of Evidence', 'icon': '🔍', 'color': const Color(0xFF7C3AED)},
+    {'name': 'Law of Evidence', 'icon': '🔍', 'color': const Color(0xFF29B6F6)},
     {
       'name': 'Family Law',
       'icon': '👨‍👩‍👧',
@@ -267,7 +267,9 @@ class _QuizScreenState extends State<QuizScreen> {
             Text(_error ?? 'Something went wrong.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    color: _textPri, fontSize: 14, fontWeight: FontWeight.w600)),
+                    color: _textPri,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -629,7 +631,8 @@ class _QuizScreenState extends State<QuizScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: color, width: 3),
                   boxShadow: [
-                    BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 20)
+                    BoxShadow(
+                        color: color.withValues(alpha: 0.2), blurRadius: 20)
                   ]),
               child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

@@ -44,7 +44,7 @@ class _NewsWebViewScreenState extends State<NewsWebViewScreen> {
   Color get _sourceColor {
     switch (widget.source) {
       case 'LiveLaw':
-        return AppColors.purple;
+        return AppColors.primaryLight;
       case 'Bar & Bench':
         return AppColors.info;
       case 'LawBeat':

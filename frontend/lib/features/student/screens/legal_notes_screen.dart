@@ -358,7 +358,7 @@ Anticipatory Breach = Before due date'''
     {
       'name': 'Law of Evidence',
       'icon': '🔍',
-      'color': const Color(0xFF7C3AED),
+      'color': const Color(0xFF0288D1),
       'topics': [
         {
           'title': 'Indian Evidence Act - Key Concepts',
@@ -676,8 +676,7 @@ DEFAMATION:
   }
 
   // ── Subjects Grid ──────────────────────────────────
-  Widget _buildSubjects() => LayoutBuilder(
-      builder: (context, constraints) {
+  Widget _buildSubjects() => LayoutBuilder(builder: (context, constraints) {
         // 2 columns on typical mobile widths; falls back to 1 on very
         // narrow screens so long subject names never get squeezed.
         final crossAxisCount = constraints.maxWidth < 320 ? 1 : 2;
@@ -774,8 +773,7 @@ DEFAMATION:
                                     shape: BoxShape.circle),
                                 child: Center(
                                     child: Text(s['icon'],
-                                        style:
-                                            const TextStyle(fontSize: 18)))),
+                                        style: const TextStyle(fontSize: 18)))),
                             const Spacer(),
                             Icon(Icons.chevron_right_rounded,
                                 color: color.withValues(alpha: 0.5), size: 20),
@@ -936,63 +934,63 @@ DEFAMATION:
               padding: EdgeInsets.fromLTRB(
                   16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
               children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-              color: _bgCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _border, width: 0.8),
-              boxShadow: [
-                BoxShadow(
-                    color: _blue.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2))
-              ]),
-          child: SelectableText(content,
-              style: const TextStyle(
-                  color: _textPri,
-                  fontSize: 14,
-                  height: 1.7,
-                  fontFamily: 'monospace')),
-        ),
-        const SizedBox(height: 20),
-        // Navigation buttons
-        Row(children: [
-          if (topics.indexOf(
-                  topics.firstWhere((t) => t['title'] == _selectedTopic)) >
-              0)
-            Expanded(
-                child: OutlinedButton.icon(
-              onPressed: () {
-                final idx = topics.indexOf(
-                    topics.firstWhere((t) => t['title'] == _selectedTopic));
-                setState(() => _selectedTopic = topics[idx - 1]['title']);
-              },
-              icon: const Icon(Icons.arrow_back_rounded, size: 16),
-              label: const Text('Previous'),
-              style: OutlinedButton.styleFrom(
-                  foregroundColor: _blue, side: BorderSide(color: _border)),
-            )),
-          const SizedBox(width: 10),
-          if (topics.indexOf(
-                  topics.firstWhere((t) => t['title'] == _selectedTopic)) <
-              topics.length - 1)
-            Expanded(
-                child: ElevatedButton.icon(
-              onPressed: () {
-                final idx = topics.indexOf(
-                    topics.firstWhere((t) => t['title'] == _selectedTopic));
-                setState(() => _selectedTopic = topics[idx + 1]['title']);
-              },
-              icon: const Icon(Icons.arrow_forward_rounded,
-                  color: Colors.white, size: 16),
-              label: const Text('Next Topic',
-                  style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(backgroundColor: _blue),
-            )),
-        ]),
-        const SizedBox(height: 40),
-      ])),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                  color: _bgCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _border, width: 0.8),
+                  boxShadow: [
+                    BoxShadow(
+                        color: _blue.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2))
+                  ]),
+              child: SelectableText(content,
+                  style: const TextStyle(
+                      color: _textPri,
+                      fontSize: 14,
+                      height: 1.7,
+                      fontFamily: 'monospace')),
+            ),
+            const SizedBox(height: 20),
+            // Navigation buttons
+            Row(children: [
+              if (topics.indexOf(
+                      topics.firstWhere((t) => t['title'] == _selectedTopic)) >
+                  0)
+                Expanded(
+                    child: OutlinedButton.icon(
+                  onPressed: () {
+                    final idx = topics.indexOf(
+                        topics.firstWhere((t) => t['title'] == _selectedTopic));
+                    setState(() => _selectedTopic = topics[idx - 1]['title']);
+                  },
+                  icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                  label: const Text('Previous'),
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: _blue, side: BorderSide(color: _border)),
+                )),
+              const SizedBox(width: 10),
+              if (topics.indexOf(
+                      topics.firstWhere((t) => t['title'] == _selectedTopic)) <
+                  topics.length - 1)
+                Expanded(
+                    child: ElevatedButton.icon(
+                  onPressed: () {
+                    final idx = topics.indexOf(
+                        topics.firstWhere((t) => t['title'] == _selectedTopic));
+                    setState(() => _selectedTopic = topics[idx + 1]['title']);
+                  },
+                  icon: const Icon(Icons.arrow_forward_rounded,
+                      color: Colors.white, size: 16),
+                  label: const Text('Next Topic',
+                      style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(backgroundColor: _blue),
+                )),
+            ]),
+            const SizedBox(height: 40),
+          ])),
     ]);
   }
 }
