@@ -37,6 +37,15 @@ func CreateRazorpayOrder(c *gin.Context) {
 		req.Currency = "INR"
 	}
 
+	// This route now sits outside RequireFirmStaff() (a client paying their
+	// own invoice is not firm staff), so — same rule CreatePayment already
+	// enforces for the manual/offline flow — a non-staff caller may only pay
+	// their own invoice.
+	if !callerOwnsInvoice(c, firmID, req.InvoiceID) {
+		utils.Error(c, http.StatusForbidden, "You can only pay your own invoice", "")
+		return
+	}
+
 	// The amount is read from the invoice, never taken from the request.
 	// The handler used to accept an `amount` field from the client, so a
 	// caller could open a ₹1 order against a ₹100,000 invoice and — since the
@@ -180,6 +189,11 @@ func VerifyRazorpayPayment(c *gin.Context) {
 	}
 	if orderStatus == "paid" {
 		utils.Error(c, http.StatusConflict, "Order already settled", "duplicate verification")
+		return
+	}
+
+	if !callerOwnsInvoice(c, firmID, invoiceID) {
+		utils.Error(c, http.StatusForbidden, "You can only pay your own invoice", "")
 		return
 	}
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/trial_service.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../../notifications/providers/notification_provider.dart';
@@ -72,15 +74,33 @@ class _DashboardScreenState extends State<DashboardScreen>
       // surface the most relevant one without waiting for a navigation.
       final res = await DioClient.instance.get('/consultations');
       final all = (res.data['data'] as List?) ?? [];
-      final upcoming = all
-          .where((c) => c['status'] == 'confirmed' || c['status'] == 'pending')
-          .toList()
+
+      // Deduplicate by booking id — repeated 3s polling must never produce
+      // duplicate cards even if the backend ever returned the same booking
+      // twice in one response.
+      final byId = <String, dynamic>{};
+      for (final c in all) {
+        if (c['status'] != 'confirmed' && c['status'] != 'pending') continue;
+        final id = c['id']?.toString();
+        if (id != null) byId[id] = c;
+      }
+      final upcoming = byId.values.toList()
         ..sort((a, b) {
           final da = '${a['consultation_date']} ${a['consultation_time']}';
           final db = '${b['consultation_date']} ${b['consultation_time']}';
           return da.compareTo(db);
         });
-      if (mounted) setState(() => _upcomingBookings = upcoming);
+
+      // A silent 3s poll used to setState unconditionally, rebuilding the
+      // whole dashboard (profile photo included) even when the booking list
+      // hadn't changed at all. Only rebuild when the set of ids actually
+      // differs — this is also what makes a brand-new booking (a new id)
+      // appear automatically without a manual refresh.
+      final newIds = upcoming.map((c) => c['id']).toList();
+      final oldIds = _upcomingBookings.map((c) => c['id']).toList();
+      if (mounted && !listEquals(newIds, oldIds)) {
+        setState(() => _upcomingBookings = upcoming);
+      }
     } catch (_) {
       // Booking card is a dashboard convenience, not critical path — if it
       // fails to load, the rest of the dashboard still works and the lawyer
@@ -115,10 +135,19 @@ class _DashboardScreenState extends State<DashboardScreen>
       context.read<ChatUnreadProvider>().load();
       _loadUpcomingBookings();
     });
+
+    // The upcoming-bookings card used to only load once on initState (plus
+    // pull-to-refresh) — never on the existing 3-second auto-refresh loop —
+    // so a client's new booking never appeared on the lawyer's Home until a
+    // manual refresh. Registering it here puts it on the same loop
+    // DashboardProvider/NotificationProvider/ChatUnreadProvider already use.
+    AutoRefreshService.instance
+        .register('dashboard_bookings', _loadUpcomingBookings);
   }
 
   @override
   void dispose() {
+    AutoRefreshService.instance.unregister('dashboard_bookings');
     _headerCtrl.dispose();
     _cardsCtrl.dispose();
     super.dispose();
@@ -788,6 +817,28 @@ class _ProfileBanner extends StatelessWidget {
     required this.greeting,
   });
 
+  // The dashboard rebuilds this widget every 3-second auto-refresh tick
+  // (DashboardProvider/NotificationProvider/ChatUnreadProvider can all
+  // notifyListeners independently of whether the photo itself changed).
+  // base64Decode was previously called fresh inside build() every time,
+  // handing Image.memory a brand-new Uint8List instance each rebuild — since
+  // MemoryImage identity is based on that instance, the framework treated it
+  // as a *different* image every tick and redecoded it, which is what showed
+  // up as the photo blinking. Caching the decoded bytes per source string
+  // means an unchanged photo reuses the exact same bytes/image identity
+  // across rebuilds, so there is nothing to redecode.
+  static String? _cachedSource;
+  static Uint8List? _cachedBytes;
+
+  static Uint8List _decodedPhoto(String raw) {
+    if (_cachedSource != raw || _cachedBytes == null) {
+      _cachedSource = raw;
+      _cachedBytes =
+          base64Decode(raw.replaceFirst('data:image/jpeg;base64,', ''));
+    }
+    return _cachedBytes!;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -801,10 +852,15 @@ class _ProfileBanner extends StatelessWidget {
           height: 155,
           child: hasPhoto
               ? Image.memory(
-                  base64Decode(auth.user!.profilePhoto
-                      .replaceFirst('data:image/jpeg;base64,', '')),
+                  _decodedPhoto(auth.user!.profilePhoto),
+                  key: ValueKey(auth.user!.profilePhoto),
                   fit: BoxFit.cover,
                   alignment: Alignment.topCenter,
+                  // Belt-and-braces alongside the byte cache above: if this
+                  // widget is ever rebuilt with a genuinely new image, keep
+                  // showing the previous frame while the new one decodes
+                  // instead of a blank gap.
+                  gaplessPlayback: true,
                   errorBuilder: (_, __, ___) => _initials(),
                 )
               : _initials(),

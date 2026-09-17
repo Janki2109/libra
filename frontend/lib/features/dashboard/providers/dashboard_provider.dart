@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/auto_refresh_service.dart';
@@ -44,6 +46,16 @@ class DashboardProvider extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
+  // A raw signature of the last successful /dashboard payload. A silent (3s
+  // poll) refresh used to call notifyListeners() unconditionally even when
+  // the numbers came back byte-for-byte identical, forcing every listening
+  // screen — including the profile photo, which re-decodes its base64
+  // string on every rebuild with no caching — to rebuild every cycle. That
+  // rebuild-and-redecode is what showed up as the photo visibly blinking
+  // every 3 seconds. Skipping the notify when nothing actually changed fixes
+  // it without touching auto-refresh itself.
+  String? _lastSignature;
+
   DashboardProvider() {
     AutoRefreshService.instance
         .register('dashboard', () => loadDashboard(silent: true));
@@ -77,10 +89,25 @@ class DashboardProvider extends ChangeNotifier {
       notifyListeners();
     }
 
+    // A manual/foreground load always notifies (loading state changed, and
+    // the caller is actively waiting on this). A silent poll only notifies
+    // if something below actually changed.
+    bool shouldNotify = !silent;
+
     try {
       final response = await DioClient.instance.get('/dashboard');
       final data = response.data['data'] as Map<String, dynamic>? ?? {};
       final stats = data['stats'] as Map<String, dynamic>? ?? {};
+
+      final signature = jsonEncode(data);
+      if (signature != _lastSignature) {
+        _lastSignature = signature;
+        shouldNotify = true;
+      }
+      if (_error != null) {
+        _error = null;
+        shouldNotify = true;
+      }
 
       _stats = DashboardStats(
         totalClients: _asInt(stats['total_clients']),
@@ -102,10 +129,11 @@ class DashboardProvider extends ChangeNotifier {
       // load looks like a failure rather than an empty firm.
       _error = DioClient.describeError(e);
       debugPrint('Dashboard error: $e');
+      shouldNotify = true;
     }
 
     _loading = false;
-    notifyListeners();
+    if (shouldNotify) notifyListeners();
   }
 
   // JSON numbers arrive as int or double depending on whether the value has a

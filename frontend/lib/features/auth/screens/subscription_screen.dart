@@ -20,7 +20,13 @@ const Map<String, String> _kPlanTags = {
 };
 
 class SubscriptionScreen extends StatefulWidget {
-  const SubscriptionScreen({super.key});
+  // True only for the first-time onboarding/registration plan-selection step
+  // (register_screen.dart routes here right after signup). An already
+  // logged-in user opens this same screen from the dashboard's
+  // Upgrade/Subscription action — for them there is no onboarding to skip
+  // and no login to go back to, so those two controls must not show.
+  final bool isOnboarding;
+  const SubscriptionScreen({super.key, this.isOnboarding = false});
   @override
   State<SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
@@ -176,11 +182,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 ]),
               ),
               const Spacer(),
-              TextButton(
-                onPressed: () => context.go('/dashboard'),
-                child: const Text('Skip for now',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-              ),
+              if (widget.isOnboarding)
+                TextButton(
+                  onPressed: () => context.go('/dashboard'),
+                  child: const Text('Skip for now',
+                      style:
+                          TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                ),
             ],
           ),
           const SizedBox(height: 2),
@@ -390,22 +398,25 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   : () => _subscribe(selectedPlan),
             ),
           ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Already have an account? ',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
-              GestureDetector(
-                onTap: () => context.go('/login'),
-                child: const Text('Sign In',
-                    style: TextStyle(
-                        color: AppColors.gold,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700)),
-              ),
-            ],
-          ),
+          if (widget.isOnboarding) ...[
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Already have an account? ',
+                    style:
+                        TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+                GestureDetector(
+                  onTap: () => context.go('/login'),
+                  child: const Text('Sign In',
+                      style: TextStyle(
+                          color: AppColors.gold,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -144,7 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 borderRadius: BorderRadius.circular(12))));
       }
       HapticFeedback.heavyImpact();
-      if (mounted) context.go('/subscription');
+      if (mounted) context.go('/subscription?onboarding=true');
     } else if (mounted) {
       HapticFeedback.vibrate();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

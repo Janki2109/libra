@@ -30,6 +30,7 @@ import '../../features/documents/screens/document_list_screen.dart';
 import '../../features/billing/screens/billing_list_screen.dart';
 import '../../features/billing/screens/create_invoice_screen.dart';
 import '../../features/billing/screens/payment_screen.dart';
+import '../../features/billing/screens/invoice_checkout_screen.dart';
 import '../../features/billing/screens/payment_verification_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
@@ -199,8 +200,15 @@ class AppRouter {
             path: '/student/register',
             builder: (_, __) => const StudentRegisterScreen()),
         GoRoute(
-            path: '/subscription',
-            builder: (_, __) => const SubscriptionScreen()),
+          path: '/subscription',
+          // ?onboarding=true only when register_screen.dart routes here right
+          // after signup — an existing user opening this from the
+          // dashboard's Upgrade action omits it, hiding "Skip for now" and
+          // "Already have an account? Sign In".
+          builder: (_, state) => SubscriptionScreen(
+            isOnboarding: state.uri.queryParameters['onboarding'] == 'true',
+          ),
+        ),
         GoRoute(
             path: '/subscription-wall',
             builder: (_, __) => const SubscriptionWallScreen()),
@@ -281,8 +289,12 @@ class AppRouter {
             path: '/portal/messages',
             builder: (_, __) => const PortalMessagesScreen()),
         GoRoute(
+          // "Pay Now" opens the existing Razorpay integration now, not the
+          // manual UPI/bank-transfer screen — that screen (PaymentScreen)
+          // still exists, unchanged, reachable from InvoiceCheckoutScreen's
+          // "Pay manually" fallback via /billing/pay-manual/:invoiceId below.
           path: '/portal/payment/:invoiceId',
-          builder: (_, state) => PaymentScreen(
+          builder: (_, state) => InvoiceCheckoutScreen(
             invoiceId: state.pathParameters['invoiceId']!,
             amount: double.parse(state.uri.queryParameters['amount'] ?? '0'),
             invoiceNumber: state.uri.queryParameters['invoice'] ?? '',
@@ -416,7 +428,20 @@ class AppRouter {
               InvoiceDetailsScreen(invoiceId: state.pathParameters['id']!),
         ),
         GoRoute(
+          // See the matching comment on /portal/payment/:invoiceId above —
+          // same change, same fallback route.
           path: '/billing/pay/:invoiceId',
+          builder: (_, state) => InvoiceCheckoutScreen(
+            invoiceId: state.pathParameters['invoiceId']!,
+            amount: double.parse(state.uri.queryParameters['amount'] ?? '0'),
+            invoiceNumber: state.uri.queryParameters['invoice'] ?? '',
+          ),
+        ),
+        GoRoute(
+          // The manual UPI/bank-transfer + payment-proof-upload flow,
+          // preserved exactly as it was — now reached only as a fallback from
+          // InvoiceCheckoutScreen rather than being "Pay Now"'s default.
+          path: '/billing/pay-manual/:invoiceId',
           builder: (_, state) => PaymentScreen(
             invoiceId: state.pathParameters['invoiceId']!,
             amount: double.parse(state.uri.queryParameters['amount'] ?? '0'),

@@ -136,6 +136,16 @@ func SetupRoutes() *gin.Engine {
 		// now checks that a non-staff caller may only pay their own invoice.
 		protected.POST("/payments", controllers.CreatePayment)
 
+		// Online invoice payment (Razorpay). Same reasoning as /payments just
+		// above: a client paying their own invoice is not firm staff, so these
+		// cannot sit behind RequireFirmStaff() — they used to, which meant
+		// "Pay Now" could never actually reach Razorpay for a client and the
+		// app fell back to the manual UPI/bank-transfer screen instead.
+		// CreateRazorpayOrder/VerifyRazorpayPayment each check the caller owns
+		// the invoice when the caller isn't firm staff.
+		protected.POST("/payments/razorpay/order", controllers.CreateRazorpayOrder)
+		protected.POST("/payments/razorpay/verify", controllers.VerifyRazorpayPayment)
+
 		// ── Client Portal ──────────────────────
 		portal := protected.Group("/portal")
 		{
@@ -267,8 +277,6 @@ func SetupRoutes() *gin.Engine {
 			billed.GET("/invoices/:id/pdf", controllers.ExportInvoicePdf)
 			billed.PUT("/invoices/:id", controllers.UpdateInvoice)
 			billed.GET("/payments", controllers.GetPayments)
-			billed.POST("/payments/razorpay/order", controllers.CreateRazorpayOrder)
-			billed.POST("/payments/razorpay/verify", controllers.VerifyRazorpayPayment)
 			billed.PUT("/payments/:id/verify", controllers.VerifyPayment)
 			billed.POST("/payments/:id/refund", controllers.RefundPayment)
 		}

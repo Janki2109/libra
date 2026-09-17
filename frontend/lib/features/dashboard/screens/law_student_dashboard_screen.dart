@@ -151,7 +151,9 @@ class _BottomNav extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
-                    color: sel ? _blue.withValues(alpha: 0.12) : Colors.transparent,
+                    color: sel
+                        ? _blue.withValues(alpha: 0.12)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -296,7 +298,8 @@ class _HomeTab extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                             child: LinearProgressIndicator(
                               value: ((xp % 500) / 500.0).clamp(0.0, 1.0),
-                              backgroundColor: Colors.white.withValues(alpha: 0.15),
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.15),
                               valueColor:
                                   const AlwaysStoppedAnimation(_lightBlue),
                               minHeight: 10,
@@ -581,8 +584,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Constitutional',
       'year': '1950',
       'source': 'legislative.gov.in',
-      'desc': 'Complete text with Fundamental Rights, Duties and Directive Principles.',
-      'emoji': '🏛️', 'color': Color(0xFF7C3AED),
+      'desc':
+          'Complete text with Fundamental Rights, Duties and Directive Principles.',
+      'emoji': '🏛️',
+      'color': Color(0xFF7C3AED),
       'url': 'https://legislative.gov.in/constitution-of-india/',
     },
     {
@@ -592,7 +597,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1973',
       'source': 'Indian Kanoon',
       'desc': 'Landmark case establishing the Basic Structure Doctrine.',
-      'emoji': '⚖️', 'color': Color(0xFF1565C0),
+      'emoji': '⚖️',
+      'color': Color(0xFF1565C0),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -601,8 +607,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Constitutional',
       'year': '1978',
       'source': 'Indian Kanoon',
-      'desc': 'Expanded the scope of Article 21 — Right to Life and Personal Liberty.',
-      'emoji': '⚖️', 'color': Color(0xFF1565C0),
+      'desc':
+          'Expanded the scope of Article 21 — Right to Life and Personal Liberty.',
+      'emoji': '⚖️',
+      'color': Color(0xFF1565C0),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -611,8 +619,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Constitutional',
       'year': '',
       'source': 'NPTEL',
-      'desc': 'Free video lecture course on the structure and doctrines of Indian constitutional law.',
-      'emoji': '🎓', 'color': Color(0xFF0EA5E9),
+      'desc':
+          'Free video lecture course on the structure and doctrines of Indian constitutional law.',
+      'emoji': '🎓',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://nptel.ac.in/courses',
     },
     {
@@ -621,8 +631,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Constitutional',
       'year': '',
       'source': 'lawcommissionofindia.nic.in',
-      'desc': 'Official reports examining constitutional questions and reform recommendations.',
-      'emoji': '📑', 'color': Color(0xFF00897B),
+      'desc':
+          'Official reports examining constitutional questions and reform recommendations.',
+      'emoji': '📑',
+      'color': Color(0xFF00897B),
       'url': 'https://lawcommissionofindia.nic.in/',
     },
     // ── Criminal ────────────────────────────────
@@ -632,8 +644,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Criminal',
       'year': '1860',
       'source': 'India Code',
-      'desc': 'Primary criminal code of India — offences, punishments and general exceptions.',
-      'emoji': '🔒', 'color': Color(0xFFDC2626),
+      'desc':
+          'Primary criminal code of India — offences, punishments and general exceptions.',
+      'emoji': '🔒',
+      'color': Color(0xFFDC2626),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -642,8 +656,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Criminal',
       'year': '1973',
       'source': 'India Code',
-      'desc': 'Procedural law governing the conduct of criminal trials in India.',
-      'emoji': '🔒', 'color': Color(0xFFDC2626),
+      'desc':
+          'Procedural law governing the conduct of criminal trials in India.',
+      'emoji': '🔒',
+      'color': Color(0xFFDC2626),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -652,8 +668,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Criminal',
       'year': '2012',
       'source': 'India Code',
-      'desc': 'Protection of Children from Sexual Offences Act — official text.',
-      'emoji': '🔒', 'color': Color(0xFFDC2626),
+      'desc':
+          'Protection of Children from Sexual Offences Act — official text.',
+      'emoji': '🔒',
+      'color': Color(0xFFDC2626),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -663,7 +681,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '2003',
       'source': 'Indian Kanoon',
       'desc': 'Explores standards for corroboration of eyewitness testimony.',
-      'emoji': '⚖️', 'color': Color(0xFFDC2626),
+      'emoji': '⚖️',
+      'color': Color(0xFFDC2626),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -673,7 +692,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'barandbench.com',
       'desc': 'Ongoing coverage of major criminal law judgments and reforms.',
-      'emoji': '📰', 'color': Color(0xFF0EA5E9),
+      'emoji': '📰',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://www.barandbench.com',
     },
     // ── Civil ───────────────────────────────────
@@ -684,7 +704,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1908',
       'source': 'India Code',
       'desc': 'Governs civil court procedure across India.',
-      'emoji': '📘', 'color': Color(0xFF059669),
+      'emoji': '📘',
+      'color': Color(0xFF059669),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -694,7 +715,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1963',
       'source': 'India Code',
       'desc': 'Provides remedies for enforcement of individual civil rights.',
-      'emoji': '📘', 'color': Color(0xFF059669),
+      'emoji': '📘',
+      'color': Color(0xFF059669),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -703,8 +725,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Civil',
       'year': '1963',
       'source': 'India Code',
-      'desc': 'Prescribes time limits for filing civil suits, appeals and applications.',
-      'emoji': '📘', 'color': Color(0xFF059669),
+      'desc':
+          'Prescribes time limits for filing civil suits, appeals and applications.',
+      'emoji': '📘',
+      'color': Color(0xFF059669),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -714,7 +738,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'lawcommissionofindia.nic.in',
       'desc': 'Reports recommending reform of civil procedure law.',
-      'emoji': '📑', 'color': Color(0xFF00897B),
+      'emoji': '📑',
+      'color': Color(0xFF00897B),
       'url': 'https://lawcommissionofindia.nic.in/',
     },
     {
@@ -723,8 +748,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Civil',
       'year': '',
       'source': 'legalserviceindia.com',
-      'desc': 'Free student-contributed articles explaining core civil law concepts.',
-      'emoji': '📝', 'color': Color(0xFFD97706),
+      'desc':
+          'Free student-contributed articles explaining core civil law concepts.',
+      'emoji': '📝',
+      'color': Color(0xFFD97706),
       'url': 'https://www.legalserviceindia.com/',
     },
     // ── Contract ────────────────────────────────
@@ -734,8 +761,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Contract',
       'year': '1872',
       'source': 'India Code',
-      'desc': 'Foundational statute governing the formation and enforcement of contracts.',
-      'emoji': '🤝', 'color': Color(0xFF7C3AED),
+      'desc':
+          'Foundational statute governing the formation and enforcement of contracts.',
+      'emoji': '🤝',
+      'color': Color(0xFF7C3AED),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -745,7 +774,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1930',
       'source': 'India Code',
       'desc': 'Governs contracts for the sale and delivery of goods.',
-      'emoji': '🤝', 'color': Color(0xFF7C3AED),
+      'emoji': '🤝',
+      'color': Color(0xFF7C3AED),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -754,8 +784,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Contract',
       'year': '1893',
       'source': 'Indian Kanoon',
-      'desc': 'Foundational case on offer and acceptance, widely cited in Indian courts.',
-      'emoji': '⚖️', 'color': Color(0xFF7C3AED),
+      'desc':
+          'Foundational case on offer and acceptance, widely cited in Indian courts.',
+      'emoji': '⚖️',
+      'color': Color(0xFF7C3AED),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -765,7 +797,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'latestlaws.com',
       'desc': 'Searchable bare-act text with amendment history.',
-      'emoji': '📄', 'color': Color(0xFFD97706),
+      'emoji': '📄',
+      'color': Color(0xFFD97706),
       'url': 'https://www.latestlaws.com/bare-acts/central-acts-rules/',
     },
     {
@@ -775,7 +808,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'NPTEL',
       'desc': 'Free video course on contract formation, breach and remedies.',
-      'emoji': '🎓', 'color': Color(0xFF0EA5E9),
+      'emoji': '🎓',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://nptel.ac.in/courses',
     },
     // ── Family ──────────────────────────────────
@@ -785,8 +819,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Family',
       'year': '1955',
       'source': 'India Code',
-      'desc': 'Governs marriage and divorce for Hindus, Sikhs, Jains and Buddhists.',
-      'emoji': '👫', 'color': Color(0xFFE91E8C),
+      'desc':
+          'Governs marriage and divorce for Hindus, Sikhs, Jains and Buddhists.',
+      'emoji': '👫',
+      'color': Color(0xFFE91E8C),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -796,7 +832,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1954',
       'source': 'India Code',
       'desc': 'Provides for civil marriage irrespective of religion.',
-      'emoji': '👫', 'color': Color(0xFFE91E8C),
+      'emoji': '👫',
+      'color': Color(0xFFE91E8C),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -806,7 +843,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1956',
       'source': 'India Code',
       'desc': 'Governs inheritance and succession among Hindus.',
-      'emoji': '👨‍👩‍👧', 'color': Color(0xFFE91E8C),
+      'emoji': '👨‍👩‍👧',
+      'color': Color(0xFFE91E8C),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -815,8 +853,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Family',
       'year': '1985',
       'source': 'Indian Kanoon',
-      'desc': 'Landmark maintenance case under family law and Section 125 CrPC.',
-      'emoji': '⚖️', 'color': Color(0xFFE91E8C),
+      'desc':
+          'Landmark maintenance case under family law and Section 125 CrPC.',
+      'emoji': '⚖️',
+      'color': Color(0xFFE91E8C),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -825,8 +865,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Family',
       'year': '2005',
       'source': 'India Code',
-      'desc': 'Provides civil remedies and protection against domestic violence.',
-      'emoji': '🛡️', 'color': Color(0xFFE91E8C),
+      'desc':
+          'Provides civil remedies and protection against domestic violence.',
+      'emoji': '🛡️',
+      'color': Color(0xFFE91E8C),
       'url': 'https://www.indiacode.nic.in/',
     },
     // ── Property ────────────────────────────────
@@ -837,7 +879,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1882',
       'source': 'India Code',
       'desc': 'Governs the transfer of immovable property in India.',
-      'emoji': '🏠', 'color': Color(0xFFD97706),
+      'emoji': '🏠',
+      'color': Color(0xFFD97706),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -847,7 +890,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1908',
       'source': 'India Code',
       'desc': 'Governs compulsory and optional registration of documents.',
-      'emoji': '🏠', 'color': Color(0xFFD97706),
+      'emoji': '🏠',
+      'color': Color(0xFFD97706),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -857,7 +901,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1899',
       'source': 'India Code',
       'desc': 'Governs stamp duty payable on legal instruments.',
-      'emoji': '🏠', 'color': Color(0xFFD97706),
+      'emoji': '🏠',
+      'color': Color(0xFFD97706),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -867,7 +912,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '2016',
       'source': 'India Code',
       'desc': 'Regulates the real estate sector and protects home buyers.',
-      'emoji': '🏢', 'color': Color(0xFFD97706),
+      'emoji': '🏢',
+      'color': Color(0xFFD97706),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -877,7 +923,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'latestlaws.com',
       'desc': 'Searchable collection of property-related central legislation.',
-      'emoji': '📄', 'color': Color(0xFFD97706),
+      'emoji': '📄',
+      'color': Color(0xFFD97706),
       'url': 'https://www.latestlaws.com/bare-acts/central-acts-rules/',
     },
     // ── Company ─────────────────────────────────
@@ -887,8 +934,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Company',
       'year': '2013',
       'source': 'India Code',
-      'desc': 'Governs incorporation, governance and winding up of companies in India.',
-      'emoji': '🏢', 'color': Color(0xFF0EA5E9),
+      'desc':
+          'Governs incorporation, governance and winding up of companies in India.',
+      'emoji': '🏢',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -898,7 +947,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '2008',
       'source': 'India Code',
       'desc': 'Governs the formation and regulation of LLPs.',
-      'emoji': '🏢', 'color': Color(0xFF0EA5E9),
+      'emoji': '🏢',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -908,7 +958,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '2002',
       'source': 'India Code',
       'desc': 'Prevents anti-competitive practices in Indian markets.',
-      'emoji': '🏢', 'color': Color(0xFF0EA5E9),
+      'emoji': '🏢',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -918,7 +969,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'swayam.gov.in',
       'desc': 'Free UGC-approved course covering company law fundamentals.',
-      'emoji': '🎓', 'color': Color(0xFF0288D1),
+      'emoji': '🎓',
+      'color': Color(0xFF0288D1),
       'url': 'https://swayam.gov.in/',
     },
     {
@@ -928,7 +980,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'legalserviceindia.com',
       'desc': 'Free articles explaining corporate governance and company law.',
-      'emoji': '📝', 'color': Color(0xFFD97706),
+      'emoji': '📝',
+      'color': Color(0xFFD97706),
       'url': 'https://www.legalserviceindia.com/',
     },
     // ── Evidence ────────────────────────────────
@@ -938,8 +991,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Evidence',
       'year': '1872',
       'source': 'India Code',
-      'desc': 'Governs admissibility and appreciation of evidence in Indian courts.',
-      'emoji': '🔍', 'color': Color(0xFF00897B),
+      'desc':
+          'Governs admissibility and appreciation of evidence in Indian courts.',
+      'emoji': '🔍',
+      'color': Color(0xFF00897B),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -948,8 +1003,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Evidence',
       'year': '1977',
       'source': 'lawcommissionofindia.nic.in',
-      'desc': 'Comprehensive review and reform recommendations on the Evidence Act.',
-      'emoji': '📑', 'color': Color(0xFF00897B),
+      'desc':
+          'Comprehensive review and reform recommendations on the Evidence Act.',
+      'emoji': '📑',
+      'color': Color(0xFF00897B),
       'url': 'https://lawcommissionofindia.nic.in/',
     },
     {
@@ -959,7 +1016,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1975',
       'source': 'Indian Kanoon',
       'desc': 'Landmark case on privilege and admissibility of evidence.',
-      'emoji': '⚖️', 'color': Color(0xFF00897B),
+      'emoji': '⚖️',
+      'color': Color(0xFF00897B),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -969,7 +1027,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'NPTEL',
       'desc': 'Free video course on the principles of evidence law.',
-      'emoji': '🎓', 'color': Color(0xFF0EA5E9),
+      'emoji': '🎓',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://nptel.ac.in/courses',
     },
     {
@@ -978,8 +1037,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Evidence',
       'year': '',
       'source': 'eGyanKosh',
-      'desc': 'Free open-access study units on evidence law from IGNOU\'s law programmes.',
-      'emoji': '📚', 'color': Color(0xFF7C3AED),
+      'desc':
+          'Free open-access study units on evidence law from IGNOU\'s law programmes.',
+      'emoji': '📚',
+      'color': Color(0xFF7C3AED),
       'url': 'https://egyankosh.ac.in/simple-search?query=law',
     },
     // ── Judiciary ───────────────────────────────
@@ -990,7 +1051,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'nja.gov.in',
       'desc': 'Training material and guidance for judicial exam aspirants.',
-      'emoji': '🏛️', 'color': Color(0xFF1565C0),
+      'emoji': '🏛️',
+      'color': Color(0xFF1565C0),
       'url': 'https://nja.gov.in/',
     },
     {
@@ -1000,7 +1062,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'lawcommissionofindia.nic.in',
       'desc': 'Reports on judicial appointments, pendency and court reform.',
-      'emoji': '📑', 'color': Color(0xFF00897B),
+      'emoji': '📑',
+      'color': Color(0xFF00897B),
       'url': 'https://lawcommissionofindia.nic.in/',
     },
     {
@@ -1009,8 +1072,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Judiciary',
       'year': '',
       'source': 'barcouncilofindia.org',
-      'desc': 'Official guidance on eligibility and standards for judicial services.',
-      'emoji': '⚖️', 'color': Color(0xFF059669),
+      'desc':
+          'Official guidance on eligibility and standards for judicial services.',
+      'emoji': '⚖️',
+      'color': Color(0xFF059669),
       'url': 'https://www.barcouncilofindia.org/',
     },
     {
@@ -1019,8 +1084,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Judiciary',
       'year': '',
       'source': 'Indian Kanoon',
-      'desc': 'Search and read full judgments — practice material for answer writing.',
-      'emoji': '🔍', 'color': Color(0xFF1565C0),
+      'desc':
+          'Search and read full judgments — practice material for answer writing.',
+      'emoji': '🔍',
+      'color': Color(0xFF1565C0),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -1029,8 +1096,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Judiciary',
       'year': '',
       'source': 'swayam.gov.in',
-      'desc': 'Free course on the structure and functioning of the Indian judiciary.',
-      'emoji': '🎓', 'color': Color(0xFF0288D1),
+      'desc':
+          'Free course on the structure and functioning of the Indian judiciary.',
+      'emoji': '🎓',
+      'color': Color(0xFF0288D1),
       'url': 'https://swayam.gov.in/',
     },
     // ── Bare Acts ───────────────────────────────
@@ -1040,8 +1109,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Bare Acts',
       'year': '1996',
       'source': 'India Code',
-      'desc': 'Governs arbitration and alternative dispute resolution in India.',
-      'emoji': '📄', 'color': Color(0xFF059669),
+      'desc':
+          'Governs arbitration and alternative dispute resolution in India.',
+      'emoji': '📄',
+      'color': Color(0xFF059669),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -1051,7 +1122,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '1881',
       'source': 'India Code',
       'desc': 'Governs cheques, promissory notes and bills of exchange.',
-      'emoji': '📄', 'color': Color(0xFF059669),
+      'emoji': '📄',
+      'color': Color(0xFF059669),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -1061,7 +1133,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '2019',
       'source': 'India Code',
       'desc': 'Protects consumer rights and provides redressal mechanisms.',
-      'emoji': '📄', 'color': Color(0xFF059669),
+      'emoji': '📄',
+      'color': Color(0xFF059669),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -1071,7 +1144,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '2005',
       'source': 'India Code',
       'desc': 'Provides citizens the right to access government information.',
-      'emoji': '📋', 'color': Color(0xFF059669),
+      'emoji': '📋',
+      'color': Color(0xFF059669),
       'url': 'https://www.indiacode.nic.in/',
     },
     {
@@ -1081,7 +1155,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'legislative.gov.in',
       'desc': 'Official index of all central legislation currently in force.',
-      'emoji': '📚', 'color': Color(0xFF7C3AED),
+      'emoji': '📚',
+      'color': Color(0xFF7C3AED),
       'url': 'https://legislative.gov.in/central-acts-and-rules/',
     },
     // ── Legal Research ──────────────────────────
@@ -1092,7 +1167,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'indiankanoon.org',
       'desc': 'Free search engine for Supreme Court and High Court judgments.',
-      'emoji': '🔍', 'color': Color(0xFF1565C0),
+      'emoji': '🔍',
+      'color': Color(0xFF1565C0),
       'url': 'https://indiankanoon.org',
     },
     {
@@ -1102,7 +1178,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'livelaw.in',
       'desc': 'Daily coverage and analysis of Indian court judgments.',
-      'emoji': '📰', 'color': Color(0xFF7C3AED),
+      'emoji': '📰',
+      'color': Color(0xFF7C3AED),
       'url': 'https://www.livelaw.in/supreme-court',
     },
     {
@@ -1112,7 +1189,8 @@ class _CasesTabState extends State<_CasesTab> {
       'year': '',
       'source': 'barandbench.com',
       'desc': 'In-depth legal news, interviews and case analysis.',
-      'emoji': '📰', 'color': Color(0xFF0EA5E9),
+      'emoji': '📰',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://www.barandbench.com',
     },
     {
@@ -1121,8 +1199,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Legal Research',
       'year': '',
       'source': 'eGyanKosh',
-      'desc': 'Free, open-licence research and study material across law subjects.',
-      'emoji': '📚', 'color': Color(0xFF7C3AED),
+      'desc':
+          'Free, open-licence research and study material across law subjects.',
+      'emoji': '📚',
+      'color': Color(0xFF7C3AED),
       'url': 'https://egyankosh.ac.in/simple-search?query=law',
     },
     {
@@ -1131,8 +1211,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'Legal Research',
       'year': '',
       'source': 'lawcommissionofindia.nic.in',
-      'desc': 'Complete archive of Law Commission reports — a key legal research resource.',
-      'emoji': '📑', 'color': Color(0xFF00897B),
+      'desc':
+          'Complete archive of Law Commission reports — a key legal research resource.',
+      'emoji': '📑',
+      'color': Color(0xFF00897B),
       'url': 'https://lawcommissionofindia.nic.in/',
     },
     // ── General ─────────────────────────────────
@@ -1142,8 +1224,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'General',
       'year': '',
       'source': 'wipo.int',
-      'desc': 'Free official resources on copyright, patents and trademark law.',
-      'emoji': '💡', 'color': Color(0xFFD97706),
+      'desc':
+          'Free official resources on copyright, patents and trademark law.',
+      'emoji': '💡',
+      'color': Color(0xFFD97706),
       'url': 'https://www.wipo.int/en/web/copyright',
     },
     {
@@ -1152,8 +1236,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'General',
       'year': '',
       'source': 'nhrc.nic.in',
-      'desc': 'Reports, guidelines and case material on human rights law in India.',
-      'emoji': '🕊️', 'color': Color(0xFF059669),
+      'desc':
+          'Reports, guidelines and case material on human rights law in India.',
+      'emoji': '🕊️',
+      'color': Color(0xFF059669),
       'url': 'https://nhrc.nic.in/',
     },
     {
@@ -1162,8 +1248,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'General',
       'year': '',
       'source': 'barcouncilofindia.org',
-      'desc': 'Official rules on legal ethics and professional standards for advocates.',
-      'emoji': '⚖️', 'color': Color(0xFF059669),
+      'desc':
+          'Official rules on legal ethics and professional standards for advocates.',
+      'emoji': '⚖️',
+      'color': Color(0xFF059669),
       'url': 'https://www.barcouncilofindia.org/',
     },
     {
@@ -1172,8 +1260,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'General',
       'year': '',
       'source': 'NPTEL',
-      'desc': 'Free video course on legal research methods and academic writing.',
-      'emoji': '🎓', 'color': Color(0xFF0EA5E9),
+      'desc':
+          'Free video course on legal research methods and academic writing.',
+      'emoji': '🎓',
+      'color': Color(0xFF0EA5E9),
       'url': 'https://nptel.ac.in/courses',
     },
     {
@@ -1182,8 +1272,10 @@ class _CasesTabState extends State<_CasesTab> {
       'category': 'General',
       'year': '',
       'source': 'legalserviceindia.com',
-      'desc': 'Wide-ranging free articles covering the basics of the Indian legal system.',
-      'emoji': '📝', 'color': Color(0xFFD97706),
+      'desc':
+          'Wide-ranging free articles covering the basics of the Indian legal system.',
+      'emoji': '📝',
+      'color': Color(0xFFD97706),
       'url': 'https://www.legalserviceindia.com/',
     },
   ];
@@ -1233,9 +1325,7 @@ class _CasesTabState extends State<_CasesTab> {
                   borderRadius: BorderRadius.circular(12)),
               child: Text('${_library.length} resources',
                   style: const TextStyle(
-                      color: _blue,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600)),
+                      color: _blue, fontSize: 11, fontWeight: FontWeight.w600)),
             ),
           ]),
         ),
@@ -1288,8 +1378,7 @@ class _CasesTabState extends State<_CasesTab> {
                       decoration: BoxDecoration(
                         color: sel ? _blue : _bgCard,
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                            color: sel ? _blue : _border),
+                        border: Border.all(color: sel ? _blue : _border),
                       ),
                       child: Text(cat,
                           style: TextStyle(
@@ -1330,79 +1419,83 @@ class _CasesTabState extends State<_CasesTab> {
                             blurRadius: 8,
                             offset: const Offset(0, 2))
                       ]),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12)),
-                        child: Center(
-                            child: Text(r['emoji'],
-                                style: const TextStyle(fontSize: 20)))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Text(r['title'],
-                              style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13),
-                              maxLines: 2),
-                          const SizedBox(height: 2),
-                          Text(r['author'],
-                              style: const TextStyle(
-                                  color: _textMuted, fontSize: 10)),
-                          const SizedBox(height: 6),
-                          Text(r['desc'],
-                              style: const TextStyle(
-                                  color: _textPri, fontSize: 11, height: 1.35),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 8),
-                          Row(children: [
-                            Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 3),
-                                decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8)),
-                                child: Text(r['category'],
-                                    style: TextStyle(
-                                        color: color,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700))),
-                            const SizedBox(width: 6),
-                            Expanded(
-                                child: Text(
-                                    (r['year'] as String).isNotEmpty
-                                        ? '${r['source']} • ${r['year']}'
-                                        : r['source'],
-                                    style: const TextStyle(
-                                        color: _textMuted, fontSize: 9),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis)),
-                          ]),
-                        ])),
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: () => _openResource(r),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: BorderRadius.circular(8)),
-                        child: const Text('Open',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ]),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12)),
+                            child: Center(
+                                child: Text(r['emoji'],
+                                    style: const TextStyle(fontSize: 20)))),
+                        const SizedBox(width: 12),
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text(r['title'],
+                                  style: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13),
+                                  maxLines: 2),
+                              const SizedBox(height: 2),
+                              Text(r['author'],
+                                  style: const TextStyle(
+                                      color: _textMuted, fontSize: 10)),
+                              const SizedBox(height: 6),
+                              Text(r['desc'],
+                                  style: const TextStyle(
+                                      color: _textPri,
+                                      fontSize: 11,
+                                      height: 1.35),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis),
+                              const SizedBox(height: 8),
+                              Row(children: [
+                                Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 7, vertical: 3),
+                                    decoration: BoxDecoration(
+                                        color: color.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8)),
+                                    child: Text(r['category'],
+                                        style: TextStyle(
+                                            color: color,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700))),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                    child: Text(
+                                        (r['year'] as String).isNotEmpty
+                                            ? '${r['source']} • ${r['year']}'
+                                            : r['source'],
+                                        style: const TextStyle(
+                                            color: _textMuted, fontSize: 9),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis)),
+                              ]),
+                            ])),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => _openResource(r),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(8)),
+                            child: const Text('Open',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ]),
                 );
               }),
           ],
@@ -1792,10 +1885,16 @@ class _ProfileTab extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: _bg,
-      body: SafeArea(
-          child: ListView(children: [
+      // The gradient header used to sit inside the outer SafeArea, which
+      // inset the whole ListView (header included) below the status bar —
+      // leaving the status-bar strip painted in the Scaffold's own
+      // (light) background instead of the header's navy gradient. The
+      // header now sits outside that SafeArea so its background paints all
+      // the way to the top edge, with its own inner SafeArea(bottom: false)
+      // only pushing its content below the notch/status bar.
+      body: Column(children: [
         Container(
-          padding: const EdgeInsets.fromLTRB(20, 30, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           decoration: const BoxDecoration(
             gradient: LinearGradient(colors: [
               Color(0xFF0A1628),
@@ -1803,130 +1902,153 @@ class _ProfileTab extends StatelessWidget {
               Color(0xFF1565C0)
             ], begin: Alignment.topLeft, end: Alignment.bottomRight),
           ),
-          child: Column(children: [
-            Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.4), width: 2.5),
-                ),
-                child: Center(
-                    child: Text(initials,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 36)))),
-            const SizedBox(height: 12),
-            Text(name,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20)),
-              child: const Text('LAW STUDENT',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11)),
-            ),
-            const SizedBox(height: 16),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-              _ProfStat('Level $level', 'Level', Icons.military_tech_rounded),
-              _ProfStat('$xp XP', 'XP', Icons.bolt_rounded),
-              _ProfStat('$cases', 'Cases', Icons.gavel_rounded),
-              _ProfStat(
-                  '$streak 🔥', 'Streak', Icons.local_fire_department_rounded),
-            ]),
-          ]),
-        ),
-        Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Personal Info',
-                      style: TextStyle(
-                          color: _textMuted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600))),
-              const SizedBox(height: 10),
-              _InfoTile(Icons.person_outline_rounded, 'Full Name', name, _blue),
-              const SizedBox(height: 8),
-              _InfoTile(Icons.email_outlined, 'Email', email, _skyBlue),
-              const SizedBox(height: 8),
-              _InfoTile(Icons.phone_outlined, 'Phone', phone,
-                  const Color(0xFF00897B)),
-              const SizedBox(height: 20),
-              const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Quick Actions',
-                      style: TextStyle(
-                          color: _textMuted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600))),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(
-                    child: _ActionTile('🏆', 'Leaderboard', _gold,
-                        () => context.push('/student/leaderboard'))),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: _ActionTile('💬', 'AI Lawyer', _skyBlue,
-                        () => context.push('/student/ai-lawyer'))),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: _ActionTile('📚', 'Law Books', _blue,
-                        () => context.push('/student/law-books'))),
-              ]),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(
-                    child: _ActionTile('📖', 'Legal Notes', _skyBlue,
-                        () => context.push('/student/notes'))),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: _ActionTile('❓', 'Quiz', const Color(0xFF7C3AED),
-                        () => context.push('/student/quiz'))),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: _ActionTile(
-                        '🏛️',
-                        'Mock Court',
-                        const Color(0xFF00897B),
-                        () => context.push('/student/mock-court'))),
-              ]),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await auth.logout();
-                    if (context.mounted) context.go('/login');
-                  },
-                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
-                  label: const Text('Sign Out',
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 30),
+              child: Column(children: [
+                Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          width: 2.5),
+                    ),
+                    child: Center(
+                        child: Text(initials,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 36)))),
+                const SizedBox(height: 12),
+                Text(name,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20)),
+                  child: const Text('LAW STUDENT',
                       style: TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15)),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD9534F),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14))),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11)),
                 ),
-              ),
-              const SizedBox(height: 40),
-            ])),
-      ])),
+                const SizedBox(height: 16),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _ProfStat(
+                          'Level $level', 'Level', Icons.military_tech_rounded),
+                      _ProfStat('$xp XP', 'XP', Icons.bolt_rounded),
+                      _ProfStat('$cases', 'Cases', Icons.gavel_rounded),
+                      _ProfStat('$streak 🔥', 'Streak',
+                          Icons.local_fire_department_rounded),
+                    ]),
+              ]),
+            ),
+          ),
+        ),
+        Expanded(
+          child: SafeArea(
+            top: false,
+            child: ListView(children: [
+              Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(children: [
+                    const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Personal Info',
+                            style: TextStyle(
+                                color: _textMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600))),
+                    const SizedBox(height: 10),
+                    _InfoTile(
+                        Icons.person_outline_rounded, 'Full Name', name, _blue),
+                    const SizedBox(height: 8),
+                    _InfoTile(Icons.email_outlined, 'Email', email, _skyBlue),
+                    const SizedBox(height: 8),
+                    _InfoTile(Icons.phone_outlined, 'Phone', phone,
+                        const Color(0xFF00897B)),
+                    const SizedBox(height: 20),
+                    const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Quick Actions',
+                            style: TextStyle(
+                                color: _textMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600))),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(
+                          child: _ActionTile('🏆', 'Leaderboard', _gold,
+                              () => context.push('/student/leaderboard'))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: _ActionTile('💬', 'AI Lawyer', _skyBlue,
+                              () => context.push('/student/ai-lawyer'))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: _ActionTile('📚', 'Law Books', _blue,
+                              () => context.push('/student/law-books'))),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(
+                          child: _ActionTile('📖', 'Legal Notes', _skyBlue,
+                              () => context.push('/student/notes'))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: _ActionTile(
+                              '❓',
+                              'Quiz',
+                              const Color(0xFF7C3AED),
+                              () => context.push('/student/quiz'))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: _ActionTile(
+                              '🏛️',
+                              'Mock Court',
+                              const Color(0xFF00897B),
+                              () => context.push('/student/mock-court'))),
+                    ]),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          await auth.logout();
+                          if (context.mounted) context.go('/login');
+                        },
+                        icon: const Icon(Icons.logout_rounded,
+                            color: Colors.white),
+                        label: const Text('Sign Out',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15)),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD9534F),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14))),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ])),
+            ]),
+          ),
+        ),
+      ]),
     );
   }
 }

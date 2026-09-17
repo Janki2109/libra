@@ -86,6 +86,28 @@ func firmStaffRole(role string) bool {
 	return false
 }
 
+// callerOwnsInvoice reports whether the caller may pay this invoice: firm
+// staff may act on any invoice in their firm, but a client-role caller (the
+// only kind of caller Pay Now serves) may only pay an invoice billed to their
+// own client record — the same "own invoice only" rule CreatePayment already
+// enforces for the manual/offline payment flow, applied here for the
+// Razorpay order/verify endpoints since they too sit outside RequireFirmStaff().
+func callerOwnsInvoice(c *gin.Context, firmID, invoiceID string) bool {
+	if firmStaffRole(utils.Role(c)) {
+		return true
+	}
+	email, ok := portalClientEmail(c)
+	if !ok || !isUUID(invoiceID) || !isUUID(firmID) {
+		return false
+	}
+	var one int
+	return config.DB.QueryRow(`
+		SELECT 1 FROM invoices i
+		WHERE i.id = $1::uuid AND i.firm_id = $2::uuid
+		  AND i.client_id IN (SELECT id FROM clients WHERE lower(email) = $3)
+	`, invoiceID, firmID, email).Scan(&one) == nil
+}
+
 // isUUID does a shape check so a malformed path parameter fails fast with a
 // 400 instead of surfacing a Postgres cast error as a 500.
 func isUUID(s string) bool {

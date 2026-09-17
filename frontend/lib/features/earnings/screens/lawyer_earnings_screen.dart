@@ -83,8 +83,12 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
     try {
       final result = await _repo.fetch(
         status: _statusFilter,
-        from: _dateRange != null ? DateFormat('yyyy-MM-dd').format(_dateRange!.start) : null,
-        to: _dateRange != null ? DateFormat('yyyy-MM-dd').format(_dateRange!.end) : null,
+        from: _dateRange != null
+            ? DateFormat('yyyy-MM-dd').format(_dateRange!.start)
+            : null,
+        to: _dateRange != null
+            ? DateFormat('yyyy-MM-dd').format(_dateRange!.end)
+            : null,
       );
       if (!mounted) return;
       setState(() {
@@ -205,13 +209,15 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
             const SizedBox(height: 16),
             Text(_error!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: _textPri, fontSize: 14, height: 1.5)),
+                style: const TextStyle(
+                    color: _textPri, fontSize: 14, height: 1.5)),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _load,
               style: ElevatedButton.styleFrom(
                   backgroundColor: _brown,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
               child: const Text('Retry', style: TextStyle(color: Colors.white)),
             ),
           ]),
@@ -230,31 +236,42 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
       );
 
   Widget _buildSummaryGrid() {
-    final f = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    return GridView.count(
-      crossAxisCount: 2,
+    final f =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final cards = [
+      _StatCard('Total Earnings', f.format(_summary.totalEarnings),
+          Icons.account_balance_wallet_rounded, _green),
+      _StatCard('Total Received', f.format(_summary.totalReceived),
+          Icons.savings_rounded, _blue),
+      _StatCard('Pending Payments', f.format(_summary.pendingAmount),
+          Icons.hourglass_top_rounded, _gold,
+          subtitle: '${_summary.pendingPayments} txn'),
+      _StatCard('Completed Payments', '${_summary.completedPayments}',
+          Icons.check_circle_rounded, _green,
+          subtitle: 'of ${_summary.totalTransactions} total'),
+      _StatCard('Refunded Payments', f.format(_summary.refundedAmount),
+          Icons.replay_rounded, _red,
+          subtitle: '${_summary.refundedPayments} txn'),
+      _StatCard('Transactions', '${_summary.totalTransactions}',
+          Icons.receipt_long_rounded, _brown),
+    ];
+    // A fixed mainAxisExtent (not childAspectRatio) so each card's height
+    // never depends on the narrower widths this screen renders at — a
+    // width-derived aspect ratio is exactly what caused the "BOTTOM
+    // OVERFLOWED" class of bug on similar stat-card grids elsewhere in the
+    // app, since content that fits at one width can be taller than the cell
+    // an aspect ratio produces at another.
+    return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 1.65,
-      children: [
-        _StatCard('Total Earnings', f.format(_summary.totalEarnings),
-            Icons.account_balance_wallet_rounded, _green),
-        _StatCard('Total Received', f.format(_summary.totalReceived),
-            Icons.savings_rounded, _blue),
-        _StatCard('Pending Payments', f.format(_summary.pendingAmount),
-            Icons.hourglass_top_rounded, _gold,
-            subtitle: '${_summary.pendingPayments} txn'),
-        _StatCard('Completed Payments', '${_summary.completedPayments}',
-            Icons.check_circle_rounded, _green,
-            subtitle: 'of ${_summary.totalTransactions} total'),
-        _StatCard('Refunded Payments', f.format(_summary.refundedAmount),
-            Icons.replay_rounded, _red,
-            subtitle: '${_summary.refundedPayments} txn'),
-        _StatCard('Transactions', '${_summary.totalTransactions}',
-            Icons.receipt_long_rounded, _brown),
-      ],
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        mainAxisExtent: 122,
+      ),
+      itemCount: cards.length,
+      itemBuilder: (context, i) => cards[i],
     );
   }
 
@@ -278,7 +295,9 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: _dateRange != null ? _brown.withValues(alpha: 0.1) : _bgCard,
+                color: _dateRange != null
+                    ? _brown.withValues(alpha: 0.1)
+                    : _bgCard,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                     color: _dateRange != null ? _brown : _border,
@@ -295,12 +314,15 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
                     style: TextStyle(
                         color: _dateRange != null ? _brown : _textMuted,
                         fontSize: 12,
-                        fontWeight: _dateRange != null ? FontWeight.w700 : FontWeight.w400)),
+                        fontWeight: _dateRange != null
+                            ? FontWeight.w700
+                            : FontWeight.w400)),
                 if (_dateRange != null) ...[
                   const SizedBox(width: 4),
                   GestureDetector(
                       onTap: _clearDateRange,
-                      child: const Icon(Icons.close_rounded, color: _brown, size: 14)),
+                      child: const Icon(Icons.close_rounded,
+                          color: _brown, size: 14)),
                 ],
               ]),
             ),
@@ -312,7 +334,8 @@ class _LawyerEarningsScreenState extends State<LawyerEarningsScreen> {
 
   Widget _buildTransactionsHeader() => Row(children: [
         const Text('Transaction History',
-            style: TextStyle(color: _textPri, fontSize: 15, fontWeight: FontWeight.w800)),
+            style: TextStyle(
+                color: _textPri, fontSize: 15, fontWeight: FontWeight.w800)),
         const Spacer(),
         Text('${_transactions.length} shown',
             style: const TextStyle(color: _textMuted, fontSize: 12)),
@@ -324,7 +347,8 @@ class _StatCard extends StatelessWidget {
   final String? subtitle;
   final IconData icon;
   final Color color;
-  const _StatCard(this.label, this.value, this.icon, this.color, {this.subtitle});
+  const _StatCard(this.label, this.value, this.icon, this.color,
+      {this.subtitle});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -335,7 +359,9 @@ class _StatCard extends StatelessWidget {
           border: Border.all(color: _border, width: 0.8),
           boxShadow: [
             BoxShadow(
-                color: _brown.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+                color: _brown.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
           ],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -344,7 +370,8 @@ class _StatCard extends StatelessWidget {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(9)),
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(9)),
                 child: Icon(icon, color: color, size: 16)),
             const Spacer(),
           ]),
@@ -358,10 +385,14 @@ class _StatCard extends StatelessWidget {
           Text(label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _textMuted, fontSize: 10, fontWeight: FontWeight.w600)),
+              style: const TextStyle(
+                  color: _textMuted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600)),
           if (subtitle != null)
             Text(subtitle!,
-                style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    color: color, fontSize: 9, fontWeight: FontWeight.w700)),
         ]),
       );
 }
@@ -417,83 +448,119 @@ class _TransactionCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('/lawyer/earnings/${t.id}'),
       child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _statusColor.withValues(alpha: 0.2), width: 0.8),
-        boxShadow: [
-          BoxShadow(
-              color: _brown.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                  color: _statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10)),
-              child: Icon(_typeIcon, color: _statusColor, size: 18)),
-          const SizedBox(width: 12),
-          Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(t.clientName,
-                style: const TextStyle(
-                    color: _textPri, fontWeight: FontWeight.w700, fontSize: 14),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-            Text(t.consultationType.isNotEmpty ? t.consultationType : 'Consultation',
-                style: const TextStyle(color: _textMuted, fontSize: 12)),
-          ])),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('₹${t.amountRupees.toStringAsFixed(0)}',
-                style: const TextStyle(
-                    color: _textPri, fontWeight: FontWeight.w800, fontSize: 15)),
-            Container(
-              margin: const EdgeInsets.only(top: 3),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                  color: _statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Text(t.paymentStatus.toUpperCase(),
-                  style: TextStyle(
-                      color: _statusColor, fontSize: 9, fontWeight: FontWeight.w800)),
-            ),
-          ]),
-        ]),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-              color: _bg, borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _border, width: 0.6)),
-          child: Wrap(spacing: 14, runSpacing: 4, children: [
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.calendar_today_rounded, color: _brown, size: 12),
-              const SizedBox(width: 5),
-              Text(DateFormat('d MMM yyyy').format(date),
-                  style: const TextStyle(color: _textPri, fontSize: 11, fontWeight: FontWeight.w600)),
-            ]),
-            if (t.razorpayPaymentId.isNotEmpty)
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.tag_rounded, color: _brown, size: 12),
-                const SizedBox(width: 4),
-                Text(t.razorpayPaymentId,
-                    style: const TextStyle(color: _textMuted, fontSize: 10)),
-              ]),
-            if (t.paymentMethod.isNotEmpty)
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.credit_card_rounded, color: _brown, size: 12),
-                const SizedBox(width: 4),
-                Text(t.paymentMethod,
-                    style: const TextStyle(color: _textMuted, fontSize: 10)),
-              ]),
-          ]),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _bgCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: _statusColor.withValues(alpha: 0.2), width: 0.8),
+          boxShadow: [
+            BoxShadow(
+                color: _brown.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
         ),
-      ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                    color: _statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10)),
+                child: Icon(_typeIcon, color: _statusColor, size: 18)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(t.clientName,
+                      style: const TextStyle(
+                          color: _textPri,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Text(
+                      t.consultationType.isNotEmpty
+                          ? t.consultationType
+                          : 'Consultation',
+                      style: const TextStyle(color: _textMuted, fontSize: 12)),
+                ])),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('₹${t.amountRupees.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      color: _textPri,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15)),
+              Container(
+                margin: const EdgeInsets.only(top: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                    color: _statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text(t.paymentStatus.toUpperCase(),
+                    style: TextStyle(
+                        color: _statusColor,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800)),
+              ),
+            ]),
+          ]),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+                color: _bg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _border, width: 0.6)),
+            child: Wrap(spacing: 14, runSpacing: 4, children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.calendar_today_rounded,
+                    color: _brown, size: 12),
+                const SizedBox(width: 5),
+                Text(DateFormat('d MMM yyyy').format(date),
+                    style: const TextStyle(
+                        color: _textPri,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+              ]),
+              if (t.razorpayPaymentId.isNotEmpty)
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.tag_rounded, color: _brown, size: 12),
+                  const SizedBox(width: 4),
+                  // Transaction ids (e.g. Razorpay's pay_...) can run longer
+                  // than this card is wide — cap and ellipsize rather than let
+                  // it push past the card's edge. The full id is still visible
+                  // on this card's own detail screen (see onTap above).
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 160),
+                    child: Text(t.razorpayPaymentId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            const TextStyle(color: _textMuted, fontSize: 10)),
+                  ),
+                ]),
+              if (t.paymentMethod.isNotEmpty)
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.credit_card_rounded,
+                      color: _brown, size: 12),
+                  const SizedBox(width: 4),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(t.paymentMethod,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            const TextStyle(color: _textMuted, fontSize: 10)),
+                  ),
+                ]),
+            ]),
+          ),
+        ]),
       ),
     );
   }

@@ -18,10 +18,25 @@ const Map<String, List<String>> _dashAllowedExtByType = {
   'Photo': ['jpg', 'jpeg', 'png', 'webp'],
   'Video': ['mp4', 'mov', 'avi', 'mkv', 'webm'],
   'Other': [
-    'pdf', 'doc', 'docx', 'txt',
-    'jpg', 'jpeg', 'png', 'webp',
-    'mp4', 'mov', 'avi', 'mkv', 'webm',
-    'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'zip',
+    'pdf',
+    'doc',
+    'docx',
+    'txt',
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+    'webm',
+    'xls',
+    'xlsx',
+    'csv',
+    'ppt',
+    'pptx',
+    'zip',
   ],
 };
 
@@ -30,7 +45,8 @@ const int _dashMaxUploadFileBytes = 6 * 1024 * 1024;
 const Map<String, String> _dashExtToMime = {
   'pdf': 'application/pdf',
   'doc': 'application/msword',
-  'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'docx':
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'txt': 'text/plain',
   'jpg': 'image/jpeg',
   'jpeg': 'image/jpeg',
@@ -45,7 +61,8 @@ const Map<String, String> _dashExtToMime = {
   'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'csv': 'text/csv',
   'ppt': 'application/vnd.ms-powerpoint',
-  'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'pptx':
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'zip': 'application/zip',
 };
 
@@ -127,7 +144,10 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
 
   void _onRealtimeEvent() {
     if (RealtimeEvents.instance.matches([
-      'booking_', 'incoming_call_', 'chat_session_started', 'call_response_',
+      'booking_',
+      'incoming_call_',
+      'chat_session_started',
+      'call_response_',
     ])) {
       _loadData(silent: true);
     }
@@ -250,7 +270,8 @@ class _BottomNav extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: sel ? _green.withValues(alpha: 0.12) : Colors.transparent,
+                  color:
+                      sel ? _green.withValues(alpha: 0.12) : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -420,7 +441,8 @@ class _HomeTab extends StatelessWidget {
                           color: Colors.white.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.4), width: 2),
+                              color: Colors.white.withValues(alpha: 0.4),
+                              width: 2),
                         ),
                         child: Center(
                             child: Text(auth.user?.initials ?? 'C',
@@ -450,8 +472,8 @@ class _HomeTab extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
-                          border:
-                              Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.4)),
                         ),
                         child: const Text('CLIENT',
                             style: TextStyle(
@@ -723,320 +745,301 @@ class _DocumentsTabState extends State<_DocumentsTab> {
       backgroundColor: _bgCard,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => StatefulBuilder(
-          builder: (ctx, setS) {
-            Future<void> pickFile() async {
-              setS(() => picking = true);
-              try {
-                final allowed =
-                    _dashAllowedExtByType[selectedType] ?? const <String>[];
-                final result = await FilePicker.platform.pickFiles(
-                    type: FileType.custom,
-                    allowedExtensions: allowed,
-                    withData: true);
-                if (result == null || result.files.isEmpty) return;
-                final f = result.files.single;
-                final ext = _dashExtOf(f.name);
-                if (!allowed.contains(ext)) {
-                  if (ctx.mounted)
-                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                        content: Text(
-                            'Unsupported file type for $selectedType. Allowed: ${allowed.join(', ').toUpperCase()}'),
-                        backgroundColor: const Color(0xFFD9534F)));
-                  return;
-                }
-                if (f.size > _dashMaxUploadFileBytes) {
-                  if (ctx.mounted)
-                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                        content:
-                            Text('File is too large. Maximum size is 6 MB.'),
-                        backgroundColor: Color(0xFFD9534F)));
-                  return;
-                }
-                if (f.bytes == null) {
-                  if (ctx.mounted)
-                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                        content: Text(
-                            'Could not read the selected file. Please try again.'),
-                        backgroundColor: Color(0xFFD9534F)));
-                  return;
-                }
-                setS(() => pickedFile = f);
-              } finally {
-                setS(() => picking = false);
-              }
+      builder: (_) => StatefulBuilder(builder: (ctx, setS) {
+        Future<void> pickFile() async {
+          setS(() => picking = true);
+          try {
+            final allowed =
+                _dashAllowedExtByType[selectedType] ?? const <String>[];
+            final result = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
+                allowedExtensions: allowed,
+                withData: true);
+            if (result == null || result.files.isEmpty) return;
+            final f = result.files.single;
+            final ext = _dashExtOf(f.name);
+            if (!allowed.contains(ext)) {
+              if (ctx.mounted)
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text(
+                        'Unsupported file type for $selectedType. Allowed: ${allowed.join(', ').toUpperCase()}'),
+                    backgroundColor: const Color(0xFFD9534F)));
+              return;
             }
+            if (f.size > _dashMaxUploadFileBytes) {
+              if (ctx.mounted)
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                    content: Text('File is too large. Maximum size is 6 MB.'),
+                    backgroundColor: Color(0xFFD9534F)));
+              return;
+            }
+            if (f.bytes == null) {
+              if (ctx.mounted)
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Could not read the selected file. Please try again.'),
+                    backgroundColor: Color(0xFFD9534F)));
+              return;
+            }
+            setS(() => pickedFile = f);
+          } finally {
+            setS(() => picking = false);
+          }
+        }
 
-            return Padding(
-                padding: EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 20,
-                    bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-                child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                          child: Container(
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                  color: _border,
-                                  borderRadius: BorderRadius.circular(2)))),
-                      const SizedBox(height: 16),
-                      Row(children: [
-                        Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                                color: _green,
-                                borderRadius: BorderRadius.circular(10)),
-                            child: const Icon(Icons.upload_rounded,
-                                color: Colors.white, size: 20)),
-                        const SizedBox(width: 12),
-                        const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Upload Document',
-                                  style: TextStyle(
-                                      color: _textPri,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700)),
-                              Text('Select a file from your device',
-                                  style: TextStyle(
-                                      color: _textMuted, fontSize: 12)),
-                            ]),
-                      ]),
-                      const SizedBox(height: 16),
-                      if (widget.cases.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                              color: _bg,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: _border, width: 0.8)),
-                          child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                            value: _selectedCaseId,
-                            hint: const Text('Select Case (optional)',
-                                style:
-                                    TextStyle(color: _textMuted, fontSize: 13)),
-                            dropdownColor: _bgCard,
-                            style: const TextStyle(color: _textPri),
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                                color: _green),
-                            isExpanded: true,
-                            items: widget.cases
-                                .map<DropdownMenuItem<String>>((c) =>
-                                    DropdownMenuItem(
-                                        value: c['id'],
-                                        child: Text(c['case_title'] ?? 'Case',
-                                            style:
-                                                const TextStyle(fontSize: 13))))
-                                .toList(),
-                            onChanged: (v) => setS(() => _selectedCaseId = v),
-                          )),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      SizedBox(
-                          height: 50,
-                          child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              children: types.map((t) {
-                                final sel = selectedType == t;
-                                return GestureDetector(
-                                  onTap: () => setS(() {
-                                    selectedType = t;
-                                    pickedFile = null;
-                                  }),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    margin: const EdgeInsets.only(right: 8),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          sel ? _green.withValues(alpha: 0.12) : _bg,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: sel ? _green : _border,
-                                          width: sel ? 2 : 1),
-                                    ),
-                                    child: Text(t,
-                                        style: TextStyle(
-                                            color: sel ? _green : _textMuted,
-                                            fontWeight: sel
-                                                ? FontWeight.w700
-                                                : FontWeight.w400,
-                                            fontSize: 12)),
-                                  ),
-                                );
-                              }).toList())),
-                      const SizedBox(height: 12),
-                      _sheetField(nameCtrl, 'Document Name *',
-                          Icons.drive_file_rename_outline_rounded),
-                      const SizedBox(height: 12),
-                      pickedFile == null
-                          ? _DashPickFileButton(
-                              loading: picking,
-                              allowedExt:
-                                  _dashAllowedExtByType[selectedType] ??
-                                      const [],
-                              onTap: picking ? null : pickFile,
-                            )
-                          : _DashPickedFilePreview(
-                              file: pickedFile!,
-                              onRemove: () => setS(() => pickedFile = null),
-                              onChange: pickFile,
-                            ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
+        return Padding(
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                    child: Container(
+                        width: 40,
+                        height: 4,
                         decoration: BoxDecoration(
-                            color: _bg,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _border, width: 0.8)),
-                        child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                          value: selectedCategory,
-                          dropdownColor: _bgCard,
-                          style: const TextStyle(color: _textPri),
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                              color: _green),
-                          isExpanded: true,
-                          items: categories
-                              .map((c) =>
-                                  DropdownMenuItem(value: c, child: Text(c)))
-                              .toList(),
-                          onChanged: (v) => setS(() => selectedCategory = v!),
-                        )),
-                      ),
-                      if (_uploading) ...[
-                        const SizedBox(height: 16),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                              value:
-                                  _uploadProgress > 0 ? _uploadProgress : null,
-                              backgroundColor: _border,
-                              color: _green,
-                              minHeight: 6),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                            _uploadProgress > 0
-                                ? 'Uploading... ${(_uploadProgress * 100).toStringAsFixed(0)}%'
-                                : 'Uploading...',
-                            style:
-                                const TextStyle(color: _textMuted, fontSize: 12)),
-                      ],
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _uploading
-                              ? null
-                              : () async {
-                                  if (nameCtrl.text.trim().isEmpty) {
-                                    ScaffoldMessenger.of(ctx).showSnackBar(
-                                        const SnackBar(
-                                            content: Text(
-                                                'Please enter document name'),
-                                            backgroundColor:
-                                                Color(0xFFD9534F)));
-                                    return;
-                                  }
-                                  final file = pickedFile;
-                                  if (file == null || file.bytes == null) {
-                                    ScaffoldMessenger.of(ctx).showSnackBar(
-                                        const SnackBar(
-                                            content: Text(
-                                                'Please select a file to upload'),
-                                            backgroundColor:
-                                                Color(0xFFD9534F)));
-                                    return;
-                                  }
-                                  setS(() {
-                                    _uploading = true;
-                                    _uploadProgress = 0;
-                                  });
-                                  try {
-                                    final ext = _dashExtOf(file.name);
-                                    final title = nameCtrl.text.trim();
-                                    final storedName = ext.isNotEmpty &&
-                                            !title
-                                                .toLowerCase()
-                                                .endsWith('.$ext')
-                                        ? '$title.$ext'
-                                        : title;
-                                    await DioClient.instance.post(
-                                        '/portal/documents/upload',
-                                        data: {
-                                          'file_name': storedName,
-                                          'file_content':
-                                              base64Encode(file.bytes!),
-                                          'file_type': ext.isNotEmpty
-                                              ? ext
-                                              : selectedType.toLowerCase(),
-                                          'file_size': file.size,
-                                          'mime_type':
-                                              _dashExtToMime[ext] ??
-                                                  'application/octet-stream',
-                                          'category': selectedCategory,
-                                          'case_id': _selectedCaseId ?? '',
-                                          'description': 'Uploaded by client',
-                                        },
-                                        onSendProgress: (sent, total) {
-                                      if (total > 0)
-                                        setS(() =>
-                                            _uploadProgress = sent / total);
-                                    });
-                                    if (ctx.mounted) Navigator.pop(ctx);
-                                    widget.onRefresh();
-                                    if (mounted)
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(const SnackBar(
-                                        content: Text(
-                                            'Document uploaded! Lawyer can see it.'),
-                                        backgroundColor: Color(0xFF2E8B57),
-                                        behavior: SnackBarBehavior.floating,
-                                      ));
-                                  } catch (e) {
-                                    setS(() => _uploading = false);
-                                    if (ctx.mounted)
-                                      ScaffoldMessenger.of(ctx).showSnackBar(
-                                          const SnackBar(
-                                              content: Text(
-                                                  'Upload failed. Please try again.'),
-                                              backgroundColor:
-                                                  Color(0xFFD9534F)));
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: _green,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14))),
-                          child: _uploading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2))
-                              : const Text('Add Document',
+                            color: _border,
+                            borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                          color: _green,
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.upload_rounded,
+                          color: Colors.white, size: 20)),
+                  const SizedBox(width: 12),
+                  const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Upload Document',
+                            style: TextStyle(
+                                color: _textPri,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700)),
+                        Text('Select a file from your device',
+                            style: TextStyle(color: _textMuted, fontSize: 12)),
+                      ]),
+                ]),
+                const SizedBox(height: 16),
+                if (widget.cases.isNotEmpty) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: _bg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _border, width: 0.8)),
+                    child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                      value: _selectedCaseId,
+                      hint: const Text('Select Case (optional)',
+                          style: TextStyle(color: _textMuted, fontSize: 13)),
+                      dropdownColor: _bgCard,
+                      style: const TextStyle(color: _textPri),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                          color: _green),
+                      isExpanded: true,
+                      items: widget.cases
+                          .map<DropdownMenuItem<String>>((c) =>
+                              DropdownMenuItem(
+                                  value: c['id'],
+                                  child: Text(c['case_title'] ?? 'Case',
+                                      style: const TextStyle(fontSize: 13))))
+                          .toList(),
+                      onChanged: (v) => setS(() => _selectedCaseId = v),
+                    )),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                SizedBox(
+                    height: 50,
+                    child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: types.map((t) {
+                          final sel = selectedType == t;
+                          return GestureDetector(
+                            onTap: () => setS(() {
+                              selectedType = t;
+                              pickedFile = null;
+                            }),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color:
+                                    sel ? _green.withValues(alpha: 0.12) : _bg,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: sel ? _green : _border,
+                                    width: sel ? 2 : 1),
+                              ),
+                              child: Text(t,
                                   style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15)),
-                        ),
+                                      color: sel ? _green : _textMuted,
+                                      fontWeight: sel
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
+                                      fontSize: 12)),
+                            ),
+                          );
+                        }).toList())),
+                const SizedBox(height: 12),
+                _sheetField(nameCtrl, 'Document Name *',
+                    Icons.drive_file_rename_outline_rounded),
+                const SizedBox(height: 12),
+                pickedFile == null
+                    ? _DashPickFileButton(
+                        loading: picking,
+                        allowedExt:
+                            _dashAllowedExtByType[selectedType] ?? const [],
+                        onTap: picking ? null : pickFile,
+                      )
+                    : _DashPickedFilePreview(
+                        file: pickedFile!,
+                        onRemove: () => setS(() => pickedFile = null),
+                        onChange: pickFile,
                       ),
-                    ]),
-              );
-          }),
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: _bg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _border, width: 0.8)),
+                  child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                    value: selectedCategory,
+                    dropdownColor: _bgCard,
+                    style: const TextStyle(color: _textPri),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: _green),
+                    isExpanded: true,
+                    items: categories
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                        .toList(),
+                    onChanged: (v) => setS(() => selectedCategory = v!),
+                  )),
+                ),
+                if (_uploading) ...[
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                        value: _uploadProgress > 0 ? _uploadProgress : null,
+                        backgroundColor: _border,
+                        color: _green,
+                        minHeight: 6),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                      _uploadProgress > 0
+                          ? 'Uploading... ${(_uploadProgress * 100).toStringAsFixed(0)}%'
+                          : 'Uploading...',
+                      style: const TextStyle(color: _textMuted, fontSize: 12)),
+                ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _uploading
+                        ? null
+                        : () async {
+                            if (nameCtrl.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(
+                                      content:
+                                          Text('Please enter document name'),
+                                      backgroundColor: Color(0xFFD9534F)));
+                              return;
+                            }
+                            final file = pickedFile;
+                            if (file == null || file.bytes == null) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Please select a file to upload'),
+                                      backgroundColor: Color(0xFFD9534F)));
+                              return;
+                            }
+                            setS(() {
+                              _uploading = true;
+                              _uploadProgress = 0;
+                            });
+                            try {
+                              final ext = _dashExtOf(file.name);
+                              final title = nameCtrl.text.trim();
+                              final storedName = ext.isNotEmpty &&
+                                      !title.toLowerCase().endsWith('.$ext')
+                                  ? '$title.$ext'
+                                  : title;
+                              await DioClient.instance
+                                  .post('/portal/documents/upload', data: {
+                                'file_name': storedName,
+                                'file_content': base64Encode(file.bytes!),
+                                'file_type': ext.isNotEmpty
+                                    ? ext
+                                    : selectedType.toLowerCase(),
+                                'file_size': file.size,
+                                'mime_type': _dashExtToMime[ext] ??
+                                    'application/octet-stream',
+                                'category': selectedCategory,
+                                'case_id': _selectedCaseId ?? '',
+                                'description': 'Uploaded by client',
+                              }, onSendProgress: (sent, total) {
+                                if (total > 0)
+                                  setS(() => _uploadProgress = sent / total);
+                              });
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              widget.onRefresh();
+                              if (mounted)
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(const SnackBar(
+                                  content: Text(
+                                      'Document uploaded! Lawyer can see it.'),
+                                  backgroundColor: Color(0xFF2E8B57),
+                                  behavior: SnackBarBehavior.floating,
+                                ));
+                            } catch (e) {
+                              setS(() => _uploading = false);
+                              if (ctx.mounted)
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Upload failed. Please try again.'),
+                                        backgroundColor: Color(0xFFD9534F)));
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: _green,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14))),
+                    child: _uploading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text('Add Document',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15)),
+                  ),
+                ),
+              ]),
+        );
+      }),
     );
   }
 
@@ -1167,14 +1170,16 @@ class _DashPickFileButton extends StatelessWidget {
               const SizedBox(
                   width: 28,
                   height: 28,
-                  child:
-                      CircularProgressIndicator(color: _green, strokeWidth: 2.5))
+                  child: CircularProgressIndicator(
+                      color: _green, strokeWidth: 2.5))
             else
               const Icon(Icons.cloud_upload_rounded, color: _green, size: 32),
             const SizedBox(height: 8),
             Text(loading ? 'Opening file picker...' : 'Tap to select a file',
                 style: const TextStyle(
-                    color: _textPri, fontSize: 13, fontWeight: FontWeight.w600)),
+                    color: _textPri,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text(allowedExt.map((e) => e.toUpperCase()).join(', '),
                 textAlign: TextAlign.center,
@@ -1580,176 +1585,205 @@ class _ProfileTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: _bg,
-        body: SafeArea(
-            child: ListView(children: [
+        // The green header used to sit *inside* the outer SafeArea, which
+        // inset the whole ListView (header included) below the status bar —
+        // leaving the status-bar strip painted in the Scaffold's own
+        // background color instead of green. The header's gradient now sits
+        // outside that SafeArea so it paints all the way to the top edge,
+        // with its own inner SafeArea(bottom: false) only pushing its
+        // content (not its background) below the notch/status bar.
+        body: Column(children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 40, 20, 30),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                   colors: [Color(0xFF0A4A32), Color(0xFF0D6E4F)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter),
             ),
-            child: Column(children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: GestureDetector(
-                  onTap: () => context.push('/profile/edit'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.35)),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 40),
+                child: Column(children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: GestureDetector(
+                      onTap: () => context.push('/profile/edit'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.35)),
+                        ),
+                        child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.edit_rounded,
+                                  color: Colors.white, size: 13),
+                              SizedBox(width: 5),
+                              Text('Edit Profile',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
+                            ]),
+                      ),
                     ),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.edit_rounded, color: Colors.white, size: 13),
-                      SizedBox(width: 5),
-                      Text('Edit Profile',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ]),
                   ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Stack(children: [
-                Container(
-                    width: 90,
-                    height: 90,
+                  const SizedBox(height: 10),
+                  Stack(children: [
+                    Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              width: 2.5),
+                        ),
+                        child: Center(
+                            child: Text(auth.user?.initials ?? 'C',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 34)))),
+                    Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: const BoxDecoration(
+                                color: Color(0xFF4CAF7D),
+                                shape: BoxShape.circle),
+                            child: const Icon(Icons.check_rounded,
+                                color: Colors.white, size: 16))),
+                  ]),
+                  const SizedBox(height: 14),
+                  Text(auth.user?.name ?? '',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.5), width: 2.5),
-                    ),
-                    child: Center(
-                        child: Text(auth.user?.initials ?? 'C',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 34)))),
-                Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: const BoxDecoration(
-                            color: Color(0xFF4CAF7D), shape: BoxShape.circle),
-                        child: const Icon(Icons.check_rounded,
-                            color: Colors.white, size: 16))),
-              ]),
-              const SizedBox(height: 14),
-              Text(auth.user?.name ?? '',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800)),
-              const SizedBox(height: 6),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20)),
-                child: const Text('VERIFIED CLIENT',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 11)),
-              ),
-              const SizedBox(height: 6),
-              Text(auth.user?.email ?? '',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6), fontSize: 13)),
-            ]),
-          ),
-          Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(children: [
-                _InfoTile(Icons.person_outline_rounded, 'Full Name',
-                    auth.user?.name ?? '', _green),
-                const SizedBox(height: 10),
-                _InfoTile(Icons.email_outlined, 'Email', auth.user?.email ?? '',
-                    _teal),
-                const SizedBox(height: 10),
-                _InfoTile(Icons.phone_outlined, 'Phone',
-                    auth.user?.phone ?? 'Not added', const Color(0xFF2E8B57)),
-                const SizedBox(height: 20),
-                const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('Features',
-                        style: TextStyle(
-                            color: _textMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600))),
-                const SizedBox(height: 10),
-                _SettingsTile(
-                    icon: Icons.gavel_rounded,
-                    title: 'My Cases',
-                    subtitle: 'View all your legal cases',
-                    color: _green,
-                    onTap: () => context.push('/portal/cases')),
-                const SizedBox(height: 8),
-                _SettingsTile(
-                    icon: Icons.receipt_long_rounded,
-                    title: 'Payment History',
-                    subtitle: 'All invoices & payments',
-                    color: const Color(0xFF2E8B57),
-                    onTap: () => context.push('/portal/invoices')),
-                const SizedBox(height: 8),
-                _SettingsTile(
-                    icon: Icons.folder_rounded,
-                    title: 'My Documents',
-                    subtitle: 'Upload & manage files',
-                    color: _teal,
-                    onTap: () => context.push('/portal/documents')),
-                const SizedBox(height: 8),
-                _SettingsTile(
-                    icon: Icons.history_rounded,
-                    title: 'Call History',
-                    subtitle: 'Past chat, audio & video consultations',
-                    color: const Color(0xFF4A90D9),
-                    onTap: () => context.push('/portal/consultation-history')),
-                const SizedBox(height: 8),
-                _SettingsTile(
-                    icon: Icons.notifications_outlined,
-                    title: 'Notifications',
-                    subtitle: 'Case updates & reminders',
-                    color: const Color(0xFFD4A017),
-                    onTap: () => context.push('/notifications')),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      await auth.logout();
-                      if (context.mounted) context.go('/login');
-                    },
-                    icon: const Icon(Icons.logout_rounded, color: Colors.white),
-                    label: const Text('Sign Out',
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(20)),
+                    child: const Text('VERIFIED CLIENT',
                         style: TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15)),
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD9534F),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14))),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11)),
                   ),
-                ),
-                const SizedBox(height: 40),
-              ])),
-        ])),
+                  const SizedBox(height: 6),
+                  Text(auth.user?.email ?? '',
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 13)),
+                ]),
+              ),
+            ),
+          ),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: ListView(children: [
+                Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(children: [
+                      _InfoTile(Icons.person_outline_rounded, 'Full Name',
+                          auth.user?.name ?? '', _green),
+                      const SizedBox(height: 10),
+                      _InfoTile(Icons.email_outlined, 'Email',
+                          auth.user?.email ?? '', _teal),
+                      const SizedBox(height: 10),
+                      _InfoTile(
+                          Icons.phone_outlined,
+                          'Phone',
+                          auth.user?.phone ?? 'Not added',
+                          const Color(0xFF2E8B57)),
+                      const SizedBox(height: 20),
+                      const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Features',
+                              style: TextStyle(
+                                  color: _textMuted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600))),
+                      const SizedBox(height: 10),
+                      _SettingsTile(
+                          icon: Icons.gavel_rounded,
+                          title: 'My Cases',
+                          subtitle: 'View all your legal cases',
+                          color: _green,
+                          onTap: () => context.push('/portal/cases')),
+                      const SizedBox(height: 8),
+                      _SettingsTile(
+                          icon: Icons.receipt_long_rounded,
+                          title: 'Payment History',
+                          subtitle: 'All invoices & payments',
+                          color: const Color(0xFF2E8B57),
+                          onTap: () => context.push('/portal/invoices')),
+                      const SizedBox(height: 8),
+                      _SettingsTile(
+                          icon: Icons.folder_rounded,
+                          title: 'My Documents',
+                          subtitle: 'Upload & manage files',
+                          color: _teal,
+                          onTap: () => context.push('/portal/documents')),
+                      const SizedBox(height: 8),
+                      _SettingsTile(
+                          icon: Icons.history_rounded,
+                          title: 'Call History',
+                          subtitle: 'Past chat, audio & video consultations',
+                          color: const Color(0xFF4A90D9),
+                          onTap: () =>
+                              context.push('/portal/consultation-history')),
+                      const SizedBox(height: 8),
+                      _SettingsTile(
+                          icon: Icons.notifications_outlined,
+                          title: 'Notifications',
+                          subtitle: 'Case updates & reminders',
+                          color: const Color(0xFFD4A017),
+                          onTap: () => context.push('/notifications')),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            await auth.logout();
+                            if (context.mounted) context.go('/login');
+                          },
+                          icon: const Icon(Icons.logout_rounded,
+                              color: Colors.white),
+                          label: const Text('Sign Out',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15)),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFD9534F),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14))),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                    ])),
+              ]),
+            ),
+          ),
+        ]),
       );
 }
-
 
 class _CaseCard extends StatelessWidget {
   final dynamic caseData;
@@ -2185,7 +2219,8 @@ class _ConsultationCard extends StatelessWidget {
       _showActionError('This booking is missing its consultation id.');
       return;
     }
-    final lawyerName = (consultation['lawyer_name'] ?? 'Your Lawyer').toString();
+    final lawyerName =
+        (consultation['lawyer_name'] ?? 'Your Lawyer').toString();
     context.push('/call', extra: {
       'consultationId': id.toString(),
       'peerName': lawyerName,
@@ -2360,7 +2395,8 @@ class _ConsultationCard extends StatelessWidget {
                       color: const Color(0xFF2E8B57).withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: const Color(0xFF2E8B57).withValues(alpha: 0.2))),
+                          color:
+                              const Color(0xFF2E8B57).withValues(alpha: 0.2))),
                   child: Row(children: [
                     const Icon(Icons.check_circle_rounded,
                         color: Color(0xFF2E8B57), size: 16),
@@ -2386,7 +2422,8 @@ class _ConsultationCard extends StatelessWidget {
                       color: const Color(0xFFD9534F).withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: const Color(0xFFD9534F).withValues(alpha: 0.2))),
+                          color:
+                              const Color(0xFFD9534F).withValues(alpha: 0.2))),
                   child: const Row(children: [
                     Icon(Icons.cancel_outlined,
                         color: Color(0xFFD9534F), size: 16),
@@ -2412,7 +2449,8 @@ class _ConsultationCard extends StatelessWidget {
                       color: const Color(0xFFD9534F).withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: const Color(0xFFD9534F).withValues(alpha: 0.2))),
+                          color:
+                              const Color(0xFFD9534F).withValues(alpha: 0.2))),
                   child: const Row(children: [
                     Icon(Icons.timer_off_outlined,
                         color: Color(0xFFD9534F), size: 16),
@@ -2437,7 +2475,8 @@ class _ConsultationCard extends StatelessWidget {
                       color: const Color(0xFF4A90D9).withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: const Color(0xFF4A90D9).withValues(alpha: 0.15))),
+                          color:
+                              const Color(0xFF4A90D9).withValues(alpha: 0.15))),
                   child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -2522,7 +2561,8 @@ class _ConsultationCard extends StatelessWidget {
                           color: const Color(0xFFD4A017).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                              color: const Color(0xFFD4A017).withValues(alpha: 0.3))),
+                              color: const Color(0xFFD4A017)
+                                  .withValues(alpha: 0.3))),
                       child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
