@@ -24,9 +24,14 @@ class ResearchHistoryScreen extends StatefulWidget {
 class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
   List<dynamic> _items = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  int _page = 1;
   String? _error;
   String _sort = 'newest';
   final _searchCtrl = TextEditingController();
+
+  static const _pageSize = 20;
 
   @override
   void initState() {
@@ -40,20 +45,24 @@ class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
     super.dispose();
   }
 
+  /// Loads page 1 fresh (a new search/sort, pull-to-refresh, or first open).
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
+      _page = 1;
     });
     try {
-      final res = await DioClient.instance.get('/ai/research/history',
-          queryParameters: {
-            'q': _searchCtrl.text.trim(),
-            'sort': _sort,
-            'limit': 50,
-          });
+      final res = await DioClient.instance
+          .get('/ai/research/history', queryParameters: {
+        'q': _searchCtrl.text.trim(),
+        'sort': _sort,
+        'page': 1,
+        'limit': _pageSize,
+      });
       setState(() {
         _items = res.data['data'] ?? [];
+        _hasMore = res.data['meta']?['has_more'] == true;
         _loading = false;
       });
     } catch (e) {
@@ -64,14 +73,43 @@ class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
     }
   }
 
+  /// Appends the next page — a lawyer's history can grow past one page's
+  /// worth of queries over time; this is what lets them reach older ones
+  /// instead of only ever seeing the newest batch.
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    final nextPage = _page + 1;
+    try {
+      final res = await DioClient.instance
+          .get('/ai/research/history', queryParameters: {
+        'q': _searchCtrl.text.trim(),
+        'sort': _sort,
+        'page': nextPage,
+        'limit': _pageSize,
+      });
+      final newItems = (res.data['data'] as List?) ?? [];
+      if (!mounted) return;
+      setState(() {
+        _items = [..._items, ...newItems];
+        _page = nextPage;
+        _hasMore = res.data['meta']?['has_more'] == true;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      // Best-effort — leave the already-loaded page visible and let the
+      // lawyer retry via the same "Load more" control.
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
   Future<void> _delete(String id) async {
     HapticFeedback.mediumImpact();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _bgCard,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete this research?',
             style: TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
         content: const Text(
@@ -122,7 +160,8 @@ class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
               bottom: false,
               child: Column(children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(children: [
                     IconButton(
                         icon: const Icon(Icons.arrow_back_rounded,
@@ -142,8 +181,10 @@ class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
                         _load();
                       },
                       itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'newest', child: Text('Newest first')),
-                        PopupMenuItem(value: 'oldest', child: Text('Oldest first')),
+                        PopupMenuItem(
+                            value: 'newest', child: Text('Newest first')),
+                        PopupMenuItem(
+                            value: 'oldest', child: Text('Oldest first')),
                       ],
                     ),
                   ]),
@@ -161,8 +202,8 @@ class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
                       decoration: const InputDecoration(
                         hintText: 'Search your research history...',
                         hintStyle: TextStyle(color: _textMuted, fontSize: 13),
-                        prefixIcon: Icon(Icons.search_rounded,
-                            color: _brown, size: 20),
+                        prefixIcon:
+                            Icon(Icons.search_rounded, color: _brown, size: 20),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -215,8 +256,23 @@ class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
       onRefresh: _load,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _items.length,
+        itemCount: _items.length + (_hasMore ? 1 : 0),
         itemBuilder: (_, i) {
+          if (i == _items.length) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: _loadingMore
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            color: _brown, strokeWidth: 2.4))
+                    : OutlinedButton(
+                        onPressed: _loadMore, child: const Text('Load more')),
+              ),
+            );
+          }
           final item = _items[i];
           final date = (item['created_at'] ?? '').toString();
           final shortDate = date.length >= 10 ? date.substring(0, 10) : date;
@@ -234,11 +290,13 @@ class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
               decoration: BoxDecoration(
                   color: const Color(0xFFD9534F),
                   borderRadius: BorderRadius.circular(14)),
-              child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+              child:
+                  const Icon(Icons.delete_outline_rounded, color: Colors.white),
             ),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
-              onTap: () => context.push('/lawyer/ai-research/history/${item['id']}'),
+              onTap: () =>
+                  context.push('/lawyer/ai-research/history/${item['id']}'),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(14),
@@ -246,33 +304,38 @@ class _ResearchHistoryScreenState extends State<ResearchHistoryScreen> {
                     color: _bgCard,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: _border, width: 0.8)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(
-                        child: Text(item['query'] ?? '',
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                            child: Text(item['query'] ?? '',
+                                style: const TextStyle(
+                                    color: _textPri,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis)),
+                        const SizedBox(width: 8),
+                        Icon(Icons.chevron_right_rounded,
+                            color: _textMuted.withValues(alpha: 0.6), size: 18),
+                      ]),
+                      const SizedBox(height: 6),
+                      Text(item['preview'] ?? '',
+                          style:
+                              const TextStyle(color: _textMuted, fontSize: 12),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        const Icon(Icons.schedule_rounded,
+                            color: _textMuted, size: 12),
+                        const SizedBox(width: 4),
+                        Text(shortDate,
                             style: const TextStyle(
-                                color: _textPri,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 8),
-                    Icon(Icons.chevron_right_rounded,
-                        color: _textMuted.withValues(alpha: 0.6), size: 18),
-                  ]),
-                  const SizedBox(height: 6),
-                  Text(item['preview'] ?? '',
-                      style: const TextStyle(color: _textMuted, fontSize: 12),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    const Icon(Icons.schedule_rounded, color: _textMuted, size: 12),
-                    const SizedBox(width: 4),
-                    Text(shortDate,
-                        style: const TextStyle(color: _textMuted, fontSize: 11)),
-                  ]),
-                ]),
+                                color: _textMuted, fontSize: 11)),
+                      ]),
+                    ]),
               ),
             ),
           );
@@ -363,22 +426,22 @@ class _ResearchHistoryDetailScreenState
                       child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline_rounded,
-                                color: _textMuted, size: 40),
-                            const SizedBox(height: 12),
-                            Text(_error ?? 'Research entry not found',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: _textMuted, fontSize: 13)),
-                            if (_error != null) ...[
-                              const SizedBox(height: 16),
-                              OutlinedButton.icon(
-                                  onPressed: _load,
-                                  icon: const Icon(Icons.refresh_rounded,
-                                      size: 16),
-                                  label: const Text('Retry')),
-                            ],
-                          ]))
+                          const Icon(Icons.error_outline_rounded,
+                              color: _textMuted, size: 40),
+                          const SizedBox(height: 12),
+                          Text(_error ?? 'Research entry not found',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  color: _textMuted, fontSize: 13)),
+                          if (_error != null) ...[
+                            const SizedBox(height: 16),
+                            OutlinedButton.icon(
+                                onPressed: _load,
+                                icon:
+                                    const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Retry')),
+                          ],
+                        ]))
                   : ListView(padding: const EdgeInsets.all(16), children: [
                       Container(
                         padding: const EdgeInsets.all(14),
@@ -386,21 +449,22 @@ class _ResearchHistoryDetailScreenState
                             color: _bgCard,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: _border, width: 0.8)),
-                        child:
-                            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          const Text('QUERY',
-                              style: TextStyle(
-                                  color: _textMuted,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5)),
-                          const SizedBox(height: 6),
-                          Text(_item!['query'] ?? '',
-                              style: const TextStyle(
-                                  color: _textPri,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700)),
-                        ]),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('QUERY',
+                                  style: TextStyle(
+                                      color: _textMuted,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.5)),
+                              const SizedBox(height: 6),
+                              Text(_item!['query'] ?? '',
+                                  style: const TextStyle(
+                                      color: _textPri,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700)),
+                            ]),
                       ),
                       const SizedBox(height: 12),
                       Container(
