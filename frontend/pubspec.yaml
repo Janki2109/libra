@@ -42,17 +42,22 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/logo/app logo.png"
+  # The source photo (assets/logo/app logo.png) is a non-square (4:3),
+  # full-bleed dark-navy image with no margin of its own — Android launcher
+  # icons must be square, and letting the generator stretch a 4:3 source into
+  # a square would distort the emblem. app_logo_square.png is the same
+  # artwork padded to a square with its own sampled background color (no
+  # cropping, no visible seam) — this is what the legacy (pre-Android-8)
+  # icon uses.
+  image_path: "assets/logo/app_logo_square.png"
   min_sdk_android: 21
-  adaptive_icon_background: "#FFFFFF"
-  # The plain logo (image_path above) fills almost the entire square, edge to
-  # edge — fine for the legacy (non-adaptive) icon, which just scales the
-  # whole square as-is, but Android's adaptive-icon mask (circle/squircle/
-  # rounded-square, varies by launcher) only guarantees the inner ~66% of the
-  # foreground layer stays visible. Using the same edge-to-edge image as the
-  # foreground let real launchers crop the "ONE LEGAL" text and the wreath
-  # tips off the home-screen icon. This is the same badge redrawn onto a
-  # larger transparent canvas so its content sits inside that safe zone.
+  adaptive_icon_background: "#0F1A27"
+  # Android's adaptive-icon mask (circle/squircle/rounded-square, varies by
+  # launcher) only guarantees the inner ~66% of the foreground layer stays
+  # visible. This is the same square artwork scaled down and padded with its
+  # own background color (not transparent, so there's no visible seam) so the
+  # "ONE LEGAL" text and wreath sit inside that safe zone instead of being
+  # cropped by the mask.
   adaptive_icon_foreground: "assets/logo/app_logo_adaptive_fg.png"
 
 flutter:
