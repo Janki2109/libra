@@ -45,7 +45,15 @@ flutter_launcher_icons:
   image_path: "assets/logo/app logo.png"
   min_sdk_android: 21
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/logo/app logo.png"
+  # The plain logo (image_path above) fills almost the entire square, edge to
+  # edge — fine for the legacy (non-adaptive) icon, which just scales the
+  # whole square as-is, but Android's adaptive-icon mask (circle/squircle/
+  # rounded-square, varies by launcher) only guarantees the inner ~66% of the
+  # foreground layer stays visible. Using the same edge-to-edge image as the
+  # foreground let real launchers crop the "ONE LEGAL" text and the wreath
+  # tips off the home-screen icon. This is the same badge redrawn onto a
+  # larger transparent canvas so its content sits inside that safe zone.
+  adaptive_icon_foreground: "assets/logo/app_logo_adaptive_fg.png"
 
 flutter:
   uses-material-design: true
