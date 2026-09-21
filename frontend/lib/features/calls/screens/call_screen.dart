@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/dio_client.dart';
+import '../../../core/services/fcm_service.dart';
 import '../../../core/services/webrtc_call_service.dart';
 
 const _navyDeep = Color(0xFF0B0726);
@@ -45,32 +46,52 @@ class _CallScreenState extends State<CallScreen> {
     _durationTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _session.state == CallState.connected) setState(() {});
     });
+    // The callee (client) declining or never answering never opens a WebRTC
+    // socket in this room at all, so peer-left/hangup below never fires for
+    // it — this is the caller's only other channel telling it the call is
+    // over. See RespondToConsultationCall on the backend.
+    FcmService.instance.callDeclinedOrMissed
+        .addListener(_onCallDeclinedOrMissed);
+  }
+
+  void _onCallDeclinedOrMissed() {
+    if (FcmService.instance.callDeclinedOrMissed.value !=
+        widget.consultationId) {
+      return;
+    }
+    if (!mounted || _session.state == CallState.ended) return;
+    setState(() => _session.state = CallState.ended);
+    _closeSoon();
   }
 
   void _onSessionChange() {
     if (!mounted) return;
     if (_session.state == CallState.ended ||
         _session.state == CallState.failed) {
-      // Give the "call ended" state a beat to render before leaving, and
-      // don't try to navigate from an already-unmounted route.
-      //
-      // This used to be a bare Navigator.maybePop(), which silently does
-      // nothing when this screen isn't the top of a poppable stack — the
-      // one concrete way the *other* party ending the call (a peer-left/
-      // hangup signal correctly flips _session.state to ended) failed to
-      // ever close this screen, leaving whichever side hit that case stuck
-      // looking at a dead call. Falling back to each role's own dashboard
-      // guarantees this screen always closes either way.
-      Future.delayed(const Duration(milliseconds: 700), () {
-        if (!mounted) return;
-        if (context.canPop()) {
-          context.pop();
-        } else {
-          context.go(widget.isCaller ? '/dashboard' : '/portal/dashboard');
-        }
-      });
+      _closeSoon();
     }
     setState(() {});
+  }
+
+  /// Gives the "call ended" state a beat to render before leaving, and
+  /// doesn't try to navigate from an already-unmounted route.
+  ///
+  /// This used to be a bare Navigator.maybePop(), which silently does
+  /// nothing when this screen isn't the top of a poppable stack — the one
+  /// concrete way the *other* party ending the call (a peer-left/hangup
+  /// signal, or the callee declining/not answering before ever connecting)
+  /// failed to ever close this screen, leaving whichever side hit that case
+  /// stuck looking at a dead call. Falling back to each role's own dashboard
+  /// guarantees this screen always closes either way.
+  void _closeSoon() {
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(widget.isCaller ? '/dashboard' : '/portal/dashboard');
+      }
+    });
   }
 
   String _formatDuration(int totalSeconds) {
@@ -95,6 +116,8 @@ class _CallScreenState extends State<CallScreen> {
       }());
     }
     _session.removeListener(_onSessionChange);
+    FcmService.instance.callDeclinedOrMissed
+        .removeListener(_onCallDeclinedOrMissed);
     _session.hangup();
     _session.dispose();
     super.dispose();

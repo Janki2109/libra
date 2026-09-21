@@ -53,6 +53,15 @@ class FcmService {
   /// open yet at that point.
   final ValueNotifier<String?> callCancelled = ValueNotifier(null);
 
+  /// Fires with a consultation id whenever the callee (the client) declines
+  /// or never answers a ringing call (see RespondToConsultationCall on the
+  /// backend, response 'declined'/'missed'). The caller's own CallScreen has
+  /// no WebRTC peer connected yet at this point (the callee never joined the
+  /// signaling room), so the existing peer-left/hangup WebRTC signal never
+  /// fires either — this push is the only channel back to the ringing caller
+  /// telling it the call is over and to stop waiting.
+  final ValueNotifier<String?> callDeclinedOrMissed = ValueNotifier(null);
+
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
@@ -116,6 +125,7 @@ class FcmService {
       RealtimeEvents.instance.emit(message.data['type'] as String?);
       if (_openIncomingCallIfAny(message.data)) return;
       if (_handleCallCancelledIfAny(message.data)) return;
+      if (_handleCallResponseIfAny(message.data)) return;
       // A foreground chat-message push still shows the normal tray
       // notification below (the user hasn't tapped anything yet) — only a
       // tap should navigate, handled by onMessageOpenedApp/getInitialMessage.
@@ -248,6 +258,25 @@ class FcmService {
     // but a stale value should never re-trigger it) still notifies listeners
     // via a fresh assignment.
     Future.microtask(() => callCancelled.value = null);
+    return true;
+  }
+
+  /// If this push is RespondToConsultationCall's "the callee declined/never
+  /// answered" notice (see backend), tells the caller's own ringing
+  /// CallScreen for that consultation to stop waiting and close, and returns
+  /// true so normal notification handling doesn't also show a tray
+  /// notification for it. The caller is expected to still be in the
+  /// foreground on that screen (they just placed the call), so this only
+  /// needs to be wired into the foreground onMessage path.
+  bool _handleCallResponseIfAny(Map<String, dynamic> data) {
+    final type = data['type'] as String? ?? '';
+    if (type != 'call_response_declined' && type != 'call_response_missed') {
+      return false;
+    }
+    final consultationId = data['reference_id'] as String? ?? '';
+    if (consultationId.isEmpty) return false;
+    callDeclinedOrMissed.value = consultationId;
+    Future.microtask(() => callDeclinedOrMissed.value = null);
     return true;
   }
 

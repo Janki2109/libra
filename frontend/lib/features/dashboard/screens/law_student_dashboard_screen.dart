@@ -19,6 +19,50 @@ const _textPri = Color(0xFF0A1628);
 const _textMuted = Color(0xFF546E7A);
 const _gold = Color(0xFFFFD700);
 
+/// Same confirm-before-signing-out pattern already used on the shared
+/// Profile screen (lawyer side) — this Sign Out button used to log out
+/// immediately on tap, with no confirmation and no way to back out of an
+/// accidental press.
+void _confirmStudentLogout(BuildContext context, AuthProvider auth) {
+  showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+            backgroundColor: _bgCard,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(children: [
+              Icon(Icons.logout_rounded, color: Color(0xFFD9534F), size: 22),
+              SizedBox(width: 8),
+              Text('Sign Out',
+                  style:
+                      TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
+            ]),
+            content: const Text('Are you sure you want to sign out?',
+                style: TextStyle(color: _textMuted)),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: _textMuted))),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  HapticFeedback.heavyImpact();
+                  await auth.logout();
+                  if (context.mounted) context.go('/login');
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD9534F),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10))),
+                child: const Text('Sign Out',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ));
+}
+
 class LawStudentDashboardScreen extends StatefulWidget {
   const LawStudentDashboardScreen({super.key});
   @override
@@ -2026,10 +2070,7 @@ class _ProfileTab extends StatelessWidget {
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton.icon(
-                        onPressed: () async {
-                          await auth.logout();
-                          if (context.mounted) context.go('/login');
-                        },
+                        onPressed: () => _confirmStudentLogout(context, auth),
                         icon: const Icon(Icons.logout_rounded,
                             color: Colors.white),
                         label: const Text('Sign Out',

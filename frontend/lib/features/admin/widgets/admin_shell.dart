@@ -185,6 +185,48 @@ const Map<String, String> _kAdminNavSectionBefore = {
 /// Desktop-first (this panel's whole reason to exist is Chrome at
 /// 1366x768+), but degrades to an icon-only rail below ~1000px rather than
 /// breaking, since Chrome windows do get resized.
+/// Same confirm-before-signing-out pattern already used on the Lawyer/Client/
+/// Student sides — this top-bar icon used to log out immediately on tap,
+/// with no confirmation and no way to back out of an accidental press.
+void _confirmAdminLogout(BuildContext context, AuthProvider auth) {
+  showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+            backgroundColor: kAdminCard,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(children: [
+              Icon(Icons.logout_rounded, color: kAdminRed, size: 22),
+              SizedBox(width: 8),
+              Text('Log out',
+                  style: TextStyle(
+                      color: kAdminTextPri, fontWeight: FontWeight.w700)),
+            ]),
+            content: const Text('Are you sure you want to log out?',
+                style: TextStyle(color: kAdminTextMuted)),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: kAdminTextMuted))),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await auth.logout();
+                  if (context.mounted) context.go('/login');
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: kAdminRed,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10))),
+                child: const Text('Log out',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ));
+}
+
 class AdminShell extends StatelessWidget {
   final String activeRoute;
   final String title;
@@ -697,10 +739,7 @@ class _TopBarState extends State<_TopBar> {
           _HoverIconButton(
             tooltip: 'Log out',
             icon: Icons.logout_rounded,
-            onPressed: () async {
-              await auth.logout();
-              if (context.mounted) context.go('/login');
-            },
+            onPressed: () => _confirmAdminLogout(context, auth),
           ),
         ]);
       }),

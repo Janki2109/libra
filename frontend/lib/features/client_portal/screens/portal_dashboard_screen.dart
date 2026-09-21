@@ -8,6 +8,7 @@ import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
 import '../../../core/services/auto_refresh_service.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../chat/providers/chat_unread_provider.dart';
 
 // Same allow-list/format helpers used by the dedicated My Documents screen
 // (portal_documents_screen.dart) — duplicated here (Dart privacy is
@@ -91,6 +92,65 @@ String _consultationAction(String rawType) {
   return 'chat'; // Office Visit and anything unrecognized keep the prior chat fallback.
 }
 
+/// Same confirm-before-signing-out pattern already used on the shared
+/// Profile screen (lawyer side) — this Settings tab used to log out
+/// immediately on tap, with no confirmation and no way to back out of an
+/// accidental press.
+void _confirmPortalLogout(BuildContext context, AuthProvider auth) {
+  showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+            backgroundColor: _bgCard,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(children: [
+              Icon(Icons.logout_rounded, color: Color(0xFFD9534F), size: 22),
+              SizedBox(width: 8),
+              Text('Sign Out',
+                  style:
+                      TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
+            ]),
+            content: const Text('Are you sure you want to sign out?',
+                style: TextStyle(color: _textMuted)),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: _textMuted))),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  HapticFeedback.heavyImpact();
+                  await auth.logout();
+                  if (context.mounted) context.go('/login');
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD9534F),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10))),
+                child: const Text('Sign Out',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ));
+}
+
+/// Human-readable status badge text. `declined`/`missed` are set by
+/// RespondToConsultationCall when this client explicitly declined a ringing
+/// call or never answered it in time — every other status still just reads
+/// as its own uppercased name, unchanged.
+String _consultationStatusLabel(String status) {
+  switch (status) {
+    case 'declined':
+      return 'CALL DECLINED BY CLIENT';
+    case 'missed':
+      return 'CALL MISSED BY CLIENT';
+    default:
+      return status.toUpperCase();
+  }
+}
+
 // ── Green/White Theme Colors ───────────────────────
 const _bg = Color(0xFFF0FAF6);
 const _bgCard = Color(0xFFFFFFFF);
@@ -148,6 +208,7 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
       'incoming_call_',
       'chat_session_started',
       'call_response_',
+      'chat_message',
     ])) {
       _loadData(silent: true);
     }
@@ -407,6 +468,10 @@ class _HomeTab extends StatelessWidget {
         .length;
     final upcomingHearings =
         hearings.where((h) => h['status'] == 'scheduled').length;
+    // Real unread chat count (GET /chat/unread) — the same provider/badge
+    // pattern the lawyer dashboard already uses, just not previously wired
+    // up anywhere in the client portal.
+    final chatUnread = context.watch<ChatUnreadProvider>().unreadCount;
 
     return FadeTransition(
       opacity: fadeAnim,
@@ -513,7 +578,8 @@ class _HomeTab extends StatelessWidget {
                     const Color(0xFF2E8B57), () => onTabChange(3)),
                 const SizedBox(width: 10),
                 _QuickBtn(Icons.chat_rounded, 'Chat', const Color(0xFF7C3AED),
-                    () => onTabChange(4)),
+                    () => onTabChange(4),
+                    badge: chatUnread),
               ]),
               const SizedBox(height: 12),
               // Find Lawyer banner
@@ -1489,6 +1555,9 @@ class _ChatTab extends StatelessWidget {
                               room['other_name'] ??
                               'Your Lawyer';
                           final lastMsg = room['last_message'] ?? 'Tap to chat';
+                          // Real per-room unread count (GET /chat/rooms).
+                          final unread =
+                              (room['unread_count'] as num?)?.toInt() ?? 0;
                           return GestureDetector(
                             onTap: () {
                               HapticFeedback.lightImpact();
@@ -1510,25 +1579,47 @@ class _ChatTab extends StatelessWidget {
                                         offset: const Offset(0, 2))
                                   ]),
                               child: Row(children: [
-                                Container(
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      gradient: const LinearGradient(colors: [
-                                        Color(0xFF0D6E4F),
-                                        Color(0xFF1A9E72)
-                                      ]),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                        child: Text(
-                                            lawyerName.isNotEmpty
-                                                ? lawyerName[0].toUpperCase()
-                                                : 'L',
+                                Stack(clipBehavior: Clip.none, children: [
+                                  Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(colors: [
+                                          Color(0xFF0D6E4F),
+                                          Color(0xFF1A9E72)
+                                        ]),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                          child: Text(
+                                              lawyerName.isNotEmpty
+                                                  ? lawyerName[0].toUpperCase()
+                                                  : 'L',
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 18)))),
+                                  if (unread > 0)
+                                    Positioned(
+                                      right: -2,
+                                      top: -2,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 5, vertical: 1),
+                                        constraints:
+                                            const BoxConstraints(minWidth: 18),
+                                        decoration: const BoxDecoration(
+                                            color: Color(0xFFD9534F),
+                                            shape: BoxShape.circle),
+                                        child: Text('$unread',
+                                            textAlign: TextAlign.center,
                                             style: const TextStyle(
                                                 color: Colors.white,
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 18)))),
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800)),
+                                      ),
+                                    ),
+                                ]),
                                 const SizedBox(width: 12),
                                 Expanded(
                                     child: Column(
@@ -1536,16 +1627,27 @@ class _ChatTab extends StatelessWidget {
                                             CrossAxisAlignment.start,
                                         children: [
                                       Text(lawyerName,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               color: _textPri,
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: unread > 0
+                                                  ? FontWeight.w800
+                                                  : FontWeight.w700,
                                               fontSize: 15)),
                                       const Text('Advocate',
                                           style: TextStyle(
                                               color: _green, fontSize: 11)),
-                                      Text(lastMsg,
-                                          style: const TextStyle(
-                                              color: _textMuted, fontSize: 12),
+                                      Text(
+                                          unread > 0
+                                              ? '$unread unread message${unread == 1 ? '' : 's'}'
+                                              : lastMsg,
+                                          style: TextStyle(
+                                              color: unread > 0
+                                                  ? _green
+                                                  : _textMuted,
+                                              fontSize: 12,
+                                              fontWeight: unread > 0
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis),
                                     ])),
@@ -1759,10 +1861,7 @@ class _ProfileTab extends StatelessWidget {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton.icon(
-                          onPressed: () async {
-                            await auth.logout();
-                            if (context.mounted) context.go('/login');
-                          },
+                          onPressed: () => _confirmPortalLogout(context, auth),
                           icon: const Icon(Icons.logout_rounded,
                               color: Colors.white),
                           label: const Text('Sign Out',
@@ -2270,7 +2369,14 @@ class _ConsultationCard extends StatelessWidget {
 
     final Color color = status == 'confirmed'
         ? const Color(0xFF2E8B57)
-        : (status == 'cancelled' || status == 'rejected' || status == 'expired')
+        : (status == 'cancelled' ||
+                status == 'rejected' ||
+                status == 'expired' ||
+                // Set by RespondToConsultationCall when this client declined
+                // a ringing call or never answered it in time — terminal,
+                // same red as any other closed booking.
+                status == 'declined' ||
+                status == 'missed')
             ? const Color(0xFFD9534F)
             : status == 'completed'
                 ? const Color(0xFF4A90D9)
@@ -2354,7 +2460,7 @@ class _ConsultationCard extends StatelessWidget {
                   decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10)),
-                  child: Text(status.toUpperCase(),
+                  child: Text(_consultationStatusLabel(status),
                       style: TextStyle(
                           color: color,
                           fontSize: 10,
@@ -2655,7 +2761,9 @@ class _QuickBtn extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
-  const _QuickBtn(this.icon, this.label, this.color, this.onTap);
+  final int badge;
+  const _QuickBtn(this.icon, this.label, this.color, this.onTap,
+      {this.badge = 0});
   @override
   Widget build(BuildContext context) => Expanded(
           child: GestureDetector(
@@ -2675,12 +2783,32 @@ class _QuickBtn extends StatelessWidget {
                     blurRadius: 6,
                     offset: const Offset(0, 2))
               ]),
-          child: Column(children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 4),
-            Text(label,
-                style: TextStyle(
-                    color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+          child: Stack(clipBehavior: Clip.none, children: [
+            Column(children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(height: 4),
+              Text(label,
+                  style: TextStyle(
+                      color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+            ]),
+            if (badge > 0)
+              Positioned(
+                right: 8,
+                top: -4,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  constraints: const BoxConstraints(minWidth: 16),
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFD9534F), shape: BoxShape.circle),
+                  child: Text('$badge',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800)),
+                ),
+              ),
           ]),
         ),
       ));

@@ -18,6 +18,21 @@ String _consultTypeAction(String rawType) {
   return 'chat';
 }
 
+/// Human-readable status badge text. `declined`/`missed` are set by
+/// RespondToConsultationCall when the client explicitly declines a ringing
+/// call or never answers it in time — every other status still just reads as
+/// its own uppercased name, unchanged.
+String _consultStatusLabel(String status) {
+  switch (status) {
+    case 'declined':
+      return 'CALL DECLINED BY CLIENT';
+    case 'missed':
+      return 'CALL MISSED BY CLIENT';
+    default:
+      return status.toUpperCase();
+  }
+}
+
 /// "2026-08-30" -> "30 Aug 2026". Falls back to the raw string for anything
 /// that doesn't parse (never crashes the card over a formatting edge case).
 String _formatConsultDate(String isoDate) {
@@ -37,7 +52,8 @@ bool _isStartingSoon(String isoDate, String timeLabel) {
   try {
     final date = DateTime.parse(isoDate);
     final time = DateFormat('h:mm a').parse(timeLabel);
-    final when = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final when =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
     final diff = when.difference(DateTime.now());
     return diff.inMinutes <= 30 && diff.inMinutes >= -15;
   } catch (_) {
@@ -60,7 +76,8 @@ String _formatCallDuration(int seconds) {
 String _formatSessionTime(String? isoTimestamp) {
   if (isoTimestamp == null || isoTimestamp.isEmpty) return '—';
   try {
-    return DateFormat('d MMM, h:mm a').format(DateTime.parse(isoTimestamp).toLocal());
+    return DateFormat('d MMM, h:mm a')
+        .format(DateTime.parse(isoTimestamp).toLocal());
   } catch (_) {
     return '—';
   }
@@ -71,7 +88,8 @@ String _formatSessionTime(String? isoTimestamp) {
 /// Already returned by GetLawyerConsultations; just not shown until now.
 String _formatRequestedAt(String isoTimestamp) {
   try {
-    return DateFormat('d MMM yyyy, h:mm a').format(DateTime.parse(isoTimestamp).toLocal());
+    return DateFormat('d MMM yyyy, h:mm a')
+        .format(DateTime.parse(isoTimestamp).toLocal());
   } catch (_) {
     return isoTimestamp;
   }
@@ -123,7 +141,10 @@ class _ConsultationManagementScreenState
 
   void _onRealtimeEvent() {
     if (RealtimeEvents.instance.matches([
-      'booking_', 'incoming_call_', 'chat_session_started', 'call_response_',
+      'booking_',
+      'incoming_call_',
+      'chat_session_started',
+      'call_response_',
     ])) {
       _load(silent: true);
     }
@@ -160,7 +181,12 @@ class _ConsultationManagementScreenState
           c['status'] == 'completed' ||
           c['status'] == 'cancelled' ||
           c['status'] == 'rejected' ||
-          c['status'] == 'expired')
+          c['status'] == 'expired' ||
+          // A ringing call the client declined or never answered (see
+          // RespondToConsultationCall) — terminal, same as any other closed
+          // booking, so it belongs in History, not left looking "Confirmed".
+          c['status'] == 'declined' ||
+          c['status'] == 'missed')
       .toList();
 
   Future<void> _updateConsultation(dynamic c, String status,
@@ -242,8 +268,8 @@ class _ConsultationManagementScreenState
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: _red));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message), backgroundColor: _red));
   }
 
   void _showActionSheet(dynamic c) {
@@ -291,7 +317,8 @@ class _ConsultationManagementScreenState
                     decoration: BoxDecoration(
                         color: _blue.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _blue.withValues(alpha: 0.2))),
+                        border:
+                            Border.all(color: _blue.withValues(alpha: 0.2))),
                     child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -378,8 +405,7 @@ class _ConsultationManagementScreenState
                       child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      _updateConsultation(c, 'rejected',
-                          notes: notesCtrl.text);
+                      _updateConsultation(c, 'rejected', notes: notesCtrl.text);
                     },
                     icon:
                         const Icon(Icons.close_rounded, color: _red, size: 16),
@@ -504,7 +530,11 @@ class _ConsultationManagementScreenState
           final status = c['status'] ?? 'pending';
           final color = status == 'confirmed'
               ? _green
-              : (status == 'cancelled' || status == 'rejected' || status == 'expired')
+              : (status == 'cancelled' ||
+                      status == 'rejected' ||
+                      status == 'expired' ||
+                      status == 'declined' ||
+                      status == 'missed')
                   ? _red
                   : status == 'completed'
                       ? _blue
@@ -528,8 +558,8 @@ class _ConsultationManagementScreenState
                       : '💬';
           final consultDate = (c['consultation_date'] ?? '').toString();
           final consultTime = (c['consultation_time'] ?? '').toString();
-          final startingSoon =
-              status == 'confirmed' && _isStartingSoon(consultDate, consultTime);
+          final startingSoon = status == 'confirmed' &&
+              _isStartingSoon(consultDate, consultTime);
 
           return GestureDetector(
             onTap: () {
@@ -542,9 +572,8 @@ class _ConsultationManagementScreenState
                   color: _bgCard,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                      color: startingSoon
-                          ? _gold
-                          : color.withValues(alpha: 0.25),
+                      color:
+                          startingSoon ? _gold : color.withValues(alpha: 0.25),
                       width: startingSoon ? 1.6 : 1),
                   boxShadow: [
                     BoxShadow(
@@ -585,7 +614,8 @@ class _ConsultationManagementScreenState
                                           fontSize: 15),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis),
-                                  Text('$typeEmoji ${rawType.isNotEmpty ? rawType : 'Consultation'}',
+                                  Text(
+                                      '$typeEmoji ${rawType.isNotEmpty ? rawType : 'Consultation'}',
                                       style: TextStyle(
                                           color: color,
                                           fontSize: 12,
@@ -600,7 +630,7 @@ class _ConsultationManagementScreenState
                                     decoration: BoxDecoration(
                                         color: color.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(8)),
-                                    child: Text(status.toUpperCase(),
+                                    child: Text(_consultStatusLabel(status),
                                         style: TextStyle(
                                             color: color,
                                             fontSize: 9,
@@ -618,8 +648,7 @@ class _ConsultationManagementScreenState
                             decoration: BoxDecoration(
                                 color: _bg,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                    color: _border, width: 0.6)),
+                                border: Border.all(color: _border, width: 0.6)),
                             child: Wrap(
                               spacing: 14,
                               runSpacing: 4,
@@ -642,38 +671,47 @@ class _ConsultationManagementScreenState
                                   const Icon(Icons.access_time_rounded,
                                       color: _brown, size: 13),
                                   const SizedBox(width: 5),
-                                  Text(consultTime.isNotEmpty ? consultTime : '—',
+                                  Text(
+                                      consultTime.isNotEmpty
+                                          ? consultTime
+                                          : '—',
                                       style: const TextStyle(
                                           color: _textPri,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700)),
                                 ]),
                                 if (c['payment_status'] == 'paid')
-                                  Row(mainAxisSize: MainAxisSize.min, children: [
-                                    const Icon(Icons.check_circle_rounded,
-                                        color: _green, size: 13),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                        '₹${(((c['amount_paise'] ?? 0) as num) / 100).toStringAsFixed(0)} Paid',
-                                        style: const TextStyle(
-                                            color: _green,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700)),
-                                  ]),
-                                if (((c['call_duration_seconds'] ?? 0) as num) > 0) ...[
-                                  Row(mainAxisSize: MainAxisSize.min, children: [
-                                    const Icon(Icons.timer_outlined,
-                                        color: _blue, size: 13),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                        _formatCallDuration(
-                                            (c['call_duration_seconds'] as num)
-                                                .toInt()),
-                                        style: const TextStyle(
-                                            color: _blue,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700)),
-                                  ]),
+                                  Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.check_circle_rounded,
+                                            color: _green, size: 13),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                            '₹${(((c['amount_paise'] ?? 0) as num) / 100).toStringAsFixed(0)} Paid',
+                                            style: const TextStyle(
+                                                color: _green,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700)),
+                                      ]),
+                                if (((c['call_duration_seconds'] ?? 0) as num) >
+                                    0) ...[
+                                  Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.timer_outlined,
+                                            color: _blue, size: 13),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                            _formatCallDuration(
+                                                (c['call_duration_seconds']
+                                                        as num)
+                                                    .toInt()),
+                                            style: const TextStyle(
+                                                color: _blue,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700)),
+                                      ]),
                                   if (c['session_started_at'] != null)
                                     Text(
                                         'Started ${_formatSessionTime(c['session_started_at']?.toString())}',
@@ -691,8 +729,7 @@ class _ConsultationManagementScreenState
                                         horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                         color: _gold.withValues(alpha: 0.15),
-                                        borderRadius:
-                                            BorderRadius.circular(6)),
+                                        borderRadius: BorderRadius.circular(6)),
                                     child: const Text('STARTING SOON',
                                         style: TextStyle(
                                             color: _gold,
@@ -702,7 +739,9 @@ class _ConsultationManagementScreenState
                               ],
                             ),
                           ),
-                          if ((c['created_at'] ?? '').toString().isNotEmpty) ...[
+                          if ((c['created_at'] ?? '')
+                              .toString()
+                              .isNotEmpty) ...[
                             const SizedBox(height: 6),
                             Row(children: [
                               const Icon(Icons.mark_email_unread_outlined,
@@ -822,7 +861,8 @@ class _ConsultationManagementScreenState
                               // lawyer sees a clear reason instead of a call
                               // that mysteriously won't connect.
                               final isPaid = c['payment_status'] == 'paid';
-                              final sessionStarted = c['session_status'] == 'started';
+                              final sessionStarted =
+                                  c['session_status'] == 'started';
                               return SizedBox(
                                 width: double.infinity,
                                 child: Material(

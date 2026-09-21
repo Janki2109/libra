@@ -389,14 +389,14 @@ func fetchConsultationSummary(consultationID string) gin.H {
 		&lawyerName, &clientName, &amountPaise)
 
 	out := gin.H{
-		"id":                 consultationID,
-		"status":             status,
-		"payment_status":     paymentStatus,
-		"consultation_type":  consultType,
-		"consultation_date":  consultDate,
-		"consultation_time":  consultTime,
-		"lawyer_name":        lawyerName,
-		"client_name":        clientName,
+		"id":                consultationID,
+		"status":            status,
+		"payment_status":    paymentStatus,
+		"consultation_type": consultType,
+		"consultation_date": consultDate,
+		"consultation_time": consultTime,
+		"lawyer_name":       lawyerName,
+		"client_name":       clientName,
 	}
 	if amountPaise.Valid {
 		out["amount_rupees"] = float64(amountPaise.Int64) / 100
@@ -925,12 +925,18 @@ func UpdateConsultation(c *gin.Context) {
 		  session_status = CASE WHEN $1::text = 'completed' THEN 'ended' ELSE session_status END,
 		  updated_at   = NOW()
 		WHERE id=$4::uuid AND lawyer_id=$5::uuid
+		  AND status IN ('pending','confirmed')
 		RETURNING client_id::text, consultation_type, consultation_date::text, consultation_time
 	`, req.Status, req.LawyerNotes, req.MeetingLink, id, userID).Scan(
 		&clientID, &consultType, &consultDate, &consultTime)
 
 	if err == sql.ErrNoRows {
-		utils.Error(c, http.StatusNotFound, "Consultation not found", "not the assigned lawyer")
+		// Also the shape a lawyer would hit trying to re-confirm a booking
+		// that's already reached a terminal state (declined, missed,
+		// completed, rejected, cancelled, expired) — once closed, a booking
+		// stays closed; the client has to make a new one.
+		utils.Error(c, http.StatusNotFound, "Consultation not found",
+			"not the assigned lawyer, or this booking is already closed")
 		return
 	}
 	if err != nil {
@@ -1099,14 +1105,14 @@ func RespondToConsultationCall(c *gin.Context) {
 	userID := utils.UserID(c)
 
 	var req struct {
-		Response string `json:"response" binding:"required"` // "accepted" | "declined"
+		Response string `json:"response" binding:"required"` // "accepted" | "declined" | "missed"
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
 		return
 	}
-	if req.Response != "accepted" && req.Response != "declined" {
-		utils.Error(c, http.StatusBadRequest, "Invalid response", "expected accepted or declined")
+	if req.Response != "accepted" && req.Response != "declined" && req.Response != "missed" {
+		utils.Error(c, http.StatusBadRequest, "Invalid response", "expected accepted, declined or missed")
 		return
 	}
 
@@ -1136,11 +1142,30 @@ func RespondToConsultationCall(c *gin.Context) {
 
 	title := "Call Declined"
 	body := fmt.Sprintf("%s declined the call.", responderName)
-	if req.Response == "accepted" {
+	switch req.Response {
+	case "accepted":
 		title = "Call Accepted"
 		body = fmt.Sprintf("%s accepted the call.", responderName)
+	case "missed":
+		title = "Call Missed"
+		body = fmt.Sprintf("%s did not answer the call.", responderName)
 	}
 	utils.NotifyWithRef(callerID, callerFirmID, title, body, "call_response_"+req.Response, id, "consultation")
+
+	// A ringing call the callee declines or never answers is over — the
+	// booking must not keep sitting at status='confirmed' looking like an
+	// active, callable session forever (this used to be push-notification
+	// only, with nothing ever persisted, which is why a declined/missed call
+	// stayed on the lawyer's "New Booking" pending list and stayed callable
+	// indefinitely). Guarded by status='confirmed' so this can never clobber
+	// a booking that already reached some other terminal state (e.g. the
+	// call already connected and completed normally via SaveCallDuration).
+	if req.Response == "declined" || req.Response == "missed" {
+		config.DB.Exec(`
+			UPDATE consultations SET status=$1, session_status='ended', updated_at=NOW()
+			WHERE id=$2::uuid AND status='confirmed'
+		`, req.Response, id)
+	}
 
 	utils.Success(c, http.StatusOK, "Response recorded", nil)
 }

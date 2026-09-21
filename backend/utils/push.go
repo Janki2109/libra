@@ -87,7 +87,14 @@ func SendPushToUser(userID, title, body, notifType, referenceID, referenceType s
 	if fcmClient == nil {
 		return // not configured — the DB notification row is still written
 	}
-	rows, err := config.DB.Query(`SELECT token FROM device_tokens WHERE user_id = $1::uuid`, userID)
+	// Respects the user's own push toggle (users.push_enabled, default true) —
+	// the in-app notifications row above is written either way; only the
+	// device push itself is skipped.
+	rows, err := config.DB.Query(`
+		SELECT dt.token FROM device_tokens dt
+		JOIN users u ON dt.user_id = u.id
+		WHERE dt.user_id = $1::uuid AND u.push_enabled = true
+	`, userID)
 	if err != nil {
 		log.Printf("[fcm] failed to load device tokens for user %s: %v", userID, err)
 		return
@@ -179,7 +186,12 @@ func SendPushToUserTracked(userID, title, body, notifType, referenceID, referenc
 	if fcmClient == nil {
 		return PushResult{Status: "no_token"} // push not configured; treated the same as "nothing to send to"
 	}
-	rows, err := config.DB.Query(`SELECT token FROM device_tokens WHERE user_id = $1::uuid`, userID)
+	// Same push_enabled respect as SendPushToUser above.
+	rows, err := config.DB.Query(`
+		SELECT dt.token FROM device_tokens dt
+		JOIN users u ON dt.user_id = u.id
+		WHERE dt.user_id = $1::uuid AND u.push_enabled = true
+	`, userID)
 	if err != nil {
 		log.Printf("[fcm] failed to load device tokens for user %s: %v", userID, err)
 		return PushResult{Status: "failed", Error: "could not load device tokens"}

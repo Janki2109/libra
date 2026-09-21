@@ -52,8 +52,16 @@ class IncomingCallScreen extends StatefulWidget {
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Timer? _hapticTimer;
+  Timer? _ringTimeoutTimer;
   bool _responding = false;
   bool _endedByCaller = false;
+
+  // How long a call rings before it's treated as unanswered. Nothing
+  // previously timed this out at all — a client who never tapped Accept or
+  // Decline (backgrounded the app, ignored it, etc.) left the booking at
+  // status='confirmed'/session_status='started' forever, indistinguishable
+  // from an actually-active call.
+  static const _ringTimeout = Duration(seconds: 45);
 
   @override
   void initState() {
@@ -68,10 +76,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       HapticFeedback.heavyImpact();
     });
     FcmService.instance.callCancelled.addListener(_onCallCancelled);
+    _ringTimeoutTimer = Timer(_ringTimeout, () {
+      if (!_responding) _respond('missed');
+    });
   }
 
   void _stopRinging() {
     _hapticTimer?.cancel();
+    _ringTimeoutTimer?.cancel();
     _RingtoneChannel.stop();
   }
 
@@ -113,7 +125,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       // itself (dialer/meeting link) below does not depend on this.
     }
 
-    if (response == 'declined') {
+    if (response == 'declined' || response == 'missed') {
       if (mounted) context.pop();
       return;
     }
@@ -146,7 +158,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
               Text(
                   _endedByCaller
                       ? 'Call Ended'
-                      : (isVideo ? 'Incoming Video Call' : 'Incoming Audio Call'),
+                      : (isVideo
+                          ? 'Incoming Video Call'
+                          : 'Incoming Audio Call'),
                   style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 15,

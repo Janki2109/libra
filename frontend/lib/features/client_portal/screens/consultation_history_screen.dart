@@ -24,6 +24,20 @@ String _historyAction(String rawType) {
   return 'chat';
 }
 
+/// Human-readable status badge text — `declined`/`missed` are set by
+/// RespondToConsultationCall; every other status still just reads as its own
+/// uppercased name, unchanged.
+String _historyStatusLabel(String status) {
+  switch (status) {
+    case 'declined':
+      return 'CALL DECLINED BY CLIENT';
+    case 'missed':
+      return 'CALL MISSED BY CLIENT';
+    default:
+      return status.toUpperCase();
+  }
+}
+
 String _formatDate(String isoDate) {
   try {
     return DateFormat('d MMM yyyy').format(DateTime.parse(isoDate));
@@ -45,7 +59,8 @@ String _formatDuration(int seconds) {
 String _formatSessionTime(String? isoTimestamp) {
   if (isoTimestamp == null || isoTimestamp.isEmpty) return '—';
   try {
-    return DateFormat('d MMM, h:mm a').format(DateTime.parse(isoTimestamp).toLocal());
+    return DateFormat('d MMM, h:mm a')
+        .format(DateTime.parse(isoTimestamp).toLocal());
   } catch (_) {
     return '—';
   }
@@ -63,8 +78,7 @@ class ConsultationHistoryScreen extends StatefulWidget {
       _ConsultationHistoryScreenState();
 }
 
-class _ConsultationHistoryScreenState
-    extends State<ConsultationHistoryScreen> {
+class _ConsultationHistoryScreenState extends State<ConsultationHistoryScreen> {
   List<dynamic> _consultations = [];
   bool _loading = true;
   String? _error;
@@ -122,7 +136,8 @@ class _ConsultationHistoryScreenState
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: _textMuted)),
                       const SizedBox(height: 12),
-                      OutlinedButton(onPressed: _load, child: const Text('Retry')),
+                      OutlinedButton(
+                          onPressed: _load, child: const Text('Retry')),
                     ]),
                   ),
                 )
@@ -131,12 +146,13 @@ class _ConsultationHistoryScreenState
                       child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                        Icon(Icons.history_rounded,
-                            color: _green.withValues(alpha: 0.3), size: 56),
-                        const SizedBox(height: 12),
-                        const Text('No chat, audio or video history yet',
-                            style: TextStyle(color: _textMuted, fontSize: 14)),
-                      ]))
+                          Icon(Icons.history_rounded,
+                              color: _green.withValues(alpha: 0.3), size: 56),
+                          const SizedBox(height: 12),
+                          const Text('No chat, audio or video history yet',
+                              style:
+                                  TextStyle(color: _textMuted, fontSize: 14)),
+                        ]))
                   : RefreshIndicator(
                       color: _green,
                       onRefresh: _load,
@@ -171,7 +187,9 @@ class _HistoryCard extends StatelessWidget {
     final color = switch (status) {
       'confirmed' => _green,
       'completed' => _blue,
-      'rejected' || 'cancelled' || 'expired' => _red,
+      // 'declined'/'missed' are set by RespondToConsultationCall when this
+      // client declined a ringing call or never answered it in time.
+      'rejected' || 'cancelled' || 'expired' || 'declined' || 'missed' => _red,
       _ => _gold,
     };
 
@@ -180,7 +198,8 @@ class _HistoryCard extends StatelessWidget {
       'audio' => Icons.phone_rounded,
       _ => Icons.chat_rounded,
     };
-    final emoji = switch (action) { 'video' => '🎥', 'audio' => '📞', _ => '💬' };
+    final emoji =
+        switch (action) { 'video' => '🎥', 'audio' => '📞', _ => '💬' };
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -212,7 +231,9 @@ class _HistoryCard extends StatelessWidget {
             children: [
               Text(lawyerName,
                   style: const TextStyle(
-                      color: _textPri, fontWeight: FontWeight.w700, fontSize: 15),
+                      color: _textPri,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
               Text('$emoji ${rawType.isNotEmpty ? rawType : 'Consultation'}',
@@ -221,8 +242,10 @@ class _HistoryCard extends StatelessWidget {
               const SizedBox(height: 4),
               Wrap(spacing: 10, runSpacing: 2, children: [
                 if (date.isNotEmpty)
-                  Text('${_formatDate(date)}${time.isNotEmpty ? " • $time" : ""}',
-                      style: const TextStyle(color: _textMuted, fontSize: 11.5)),
+                  Text(
+                      '${_formatDate(date)}${time.isNotEmpty ? " • $time" : ""}',
+                      style:
+                          const TextStyle(color: _textMuted, fontSize: 11.5)),
                 if (durationSeconds > 0)
                   Text('⏱ ${_formatDuration(durationSeconds)}',
                       style: const TextStyle(
@@ -244,7 +267,7 @@ class _HistoryCard extends StatelessWidget {
           decoration: BoxDecoration(
               color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8)),
-          child: Text(status.toUpperCase(),
+          child: Text(_historyStatusLabel(status),
               style: TextStyle(
                   color: color, fontSize: 9, fontWeight: FontWeight.w800)),
         ),

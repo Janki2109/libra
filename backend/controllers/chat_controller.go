@@ -31,7 +31,9 @@ func GetChatRooms(c *gin.Context) {
 			       COALESCE(cr.last_message,'') as last_message,
 			       COALESCE(cr.last_message_at::text,'') as last_message_at,
 			       COALESCE(u.name,'Your Lawyer') as other_name,
-			       cr.created_at
+			       cr.created_at,
+			       (SELECT COUNT(*) FROM chat_messages cm
+			        WHERE cm.room_id = cr.id AND cm.sender_id != $1::uuid AND cm.is_read = false) as unread_count
 			FROM chat_rooms cr
 			LEFT JOIN users u ON cr.lawyer_id = u.id
 			WHERE cr.client_id = (
@@ -49,7 +51,9 @@ func GetChatRooms(c *gin.Context) {
 			       COALESCE(cr.last_message,'') as last_message,
 			       COALESCE(cr.last_message_at::text,'') as last_message_at,
 			       COALESCE(u.name,'Lawyer') as other_name,
-			       cr.created_at
+			       cr.created_at,
+			       (SELECT COUNT(*) FROM chat_messages cm
+			        WHERE cm.room_id = cr.id AND cm.sender_id != $1::uuid AND cm.is_read = false) as unread_count
 			FROM chat_rooms cr
 			LEFT JOIN users u ON cr.lawyer_id = u.id
 			WHERE cr.student_id = $1::uuid AND cr.is_active = true
@@ -71,13 +75,15 @@ func GetChatRooms(c *gin.Context) {
 			       COALESCE(cr.last_message,'') as last_message,
 			       COALESCE(cr.last_message_at::text,'') as last_message_at,
 			       COALESCE(NULLIF(cl.name,''), NULLIF(su.name,''), 'Client') as other_name,
-			       cr.created_at
+			       cr.created_at,
+			       (SELECT COUNT(*) FROM chat_messages cm
+			        WHERE cm.room_id = cr.id AND cm.sender_id != $2::uuid AND cm.is_read = false) as unread_count
 			FROM chat_rooms cr
 			LEFT JOIN clients cl ON cr.client_id = cl.id
 			LEFT JOIN users su ON cr.student_id = su.id
 			WHERE cr.firm_id=$1::uuid AND cr.is_active=true
 			ORDER BY cr.last_message_at DESC NULLS LAST
-		`, fID)
+		`, fID, uID)
 	}
 
 	if err != nil {
@@ -93,12 +99,13 @@ func GetChatRooms(c *gin.Context) {
 		LastMsgAt   string    `json:"last_message_at"`
 		OtherName   string    `json:"other_name"`
 		CreatedAt   time.Time `json:"created_at"`
+		UnreadCount int       `json:"unread_count"`
 	}
 	rooms := []Room{}
 	for rows.Next() {
 		var r Room
 		rows.Scan(&r.ID, &r.LawyerName, &r.LastMessage,
-			&r.LastMsgAt, &r.OtherName, &r.CreatedAt)
+			&r.LastMsgAt, &r.OtherName, &r.CreatedAt, &r.UnreadCount)
 		rooms = append(rooms, r)
 	}
 	utils.Success(c, http.StatusOK, "Rooms fetched", rooms)
@@ -667,13 +674,22 @@ func GetRoomPresence(c *gin.Context) {
 func GetUnreadCount(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var count int
+	// Must match every room membership shape GetChatRooms/requireChatRoomAccess
+	// already recognize (lawyer, law student, or client-by-email) — this used
+	// to only match cr.lawyer_id/cr.firm_id, so a client (who is never a
+	// room's lawyer_id and typically has no firm_id of their own) or a law
+	// student (cr.student_id, never checked here) always got 0 regardless of
+	// how many messages were actually waiting for them.
 	config.DB.QueryRow(`
 		SELECT COUNT(*) FROM chat_messages cm
 		JOIN chat_rooms cr ON cm.room_id = cr.id
+		LEFT JOIN clients cl ON cr.client_id = cl.id
 		WHERE cm.sender_id != $1::uuid AND cm.is_read=false
-		AND (cr.lawyer_id=$1::uuid OR cr.firm_id=(
-			SELECT firm_id FROM users WHERE id=$1::uuid
-		))
+		AND (
+			cr.lawyer_id = $1::uuid
+			OR cr.student_id = $1::uuid
+			OR lower(cl.email) = (SELECT lower(email) FROM users WHERE id = $1::uuid)
+		)
 	`, userID).Scan(&count)
 	utils.Success(c, http.StatusOK, "Unread count", gin.H{"count": count})
 }

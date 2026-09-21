@@ -65,41 +65,52 @@ class LibraApp extends StatelessWidget {
           return _AutoRefreshGate(
             isAuthenticated: auth.isAuthenticated,
             child: MaterialApp.router(
-            title: 'Libra Law Practice',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeMode.dark, // ✅ Always dark
-            routerConfig: AppRouter.router(auth),
-            // Only reached once go_router's own Navigator has nothing left
-            // to pop — i.e. the system/gesture back press would otherwise
-            // exit the app outright with no warning. In-app back navigation
-            // elsewhere is untouched; this never intercepts a pop that a
-            // screen further down the stack can still handle itself.
-            builder: (context, child) => PopScope(
-              canPop: false,
-              onPopInvokedWithResult: (didPop, _) async {
-                if (didPop) return;
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Exit app?'),
-                    content:
-                        const Text('Are you sure you want to exit the app?'),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel')),
-                      TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Exit')),
-                    ],
-                  ),
-                );
-                if (confirmed == true) SystemNavigator.pop();
-              },
-              child: child!,
-            ),
+              title: 'Libra Law Practice',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: ThemeMode.dark, // ✅ Always dark
+              routerConfig: AppRouter.router(auth),
+              // Only reached once go_router's own Navigator has nothing left
+              // to pop — i.e. the system/gesture back press would otherwise
+              // exit the app outright with no warning. In-app back navigation
+              // elsewhere is untouched; this never intercepts a pop that a
+              // screen further down the stack can still handle itself.
+              //
+              // An authenticated user lands here exactly when they're on their
+              // role's root dashboard (login/registration replace the whole
+              // stack via context.go(), so the dashboard sits at the bottom
+              // with nothing beneath it) — back must never exit or log them
+              // out from there, just stay put, per the "no accidental exit for
+              // a logged-in user" requirement. Logout is a separate, explicit
+              // action (see each role's own Logout confirmation), never a side
+              // effect of the back button. The pre-login "Exit app?" prompt
+              // (splash/onboarding/login/register) is unchanged.
+              builder: (context, child) => PopScope(
+                canPop: false,
+                onPopInvokedWithResult: (didPop, _) async {
+                  if (didPop) return;
+                  if (auth.isAuthenticated) return;
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Exit app?'),
+                      content:
+                          const Text('Are you sure you want to exit the app?'),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel')),
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Exit')),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) SystemNavigator.pop();
+                },
+                child: child!,
+              ),
             ),
           );
         },
