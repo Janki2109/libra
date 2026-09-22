@@ -22,8 +22,8 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
 
   Future<void> _load() async {
     try {
-      final res = await DioClient.instance
-          .get('/documents?case_id=${widget.caseId}');
+      final res =
+          await DioClient.instance.get('/documents?case_id=${widget.caseId}');
       setState(() {
         _docs = res.data['data'] ?? [];
         _loading = false;
@@ -35,25 +35,33 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
 
   IconData _icon(String t) {
     switch (t.toLowerCase()) {
-      case 'pdf': return Icons.picture_as_pdf_rounded;
+      case 'pdf':
+        return Icons.picture_as_pdf_rounded;
       case 'doc':
-      case 'docx': return Icons.description_rounded;
+      case 'docx':
+        return Icons.description_rounded;
       case 'jpg':
       case 'jpeg':
-      case 'png': return Icons.image_rounded;
-      default: return Icons.insert_drive_file_rounded;
+      case 'png':
+        return Icons.image_rounded;
+      default:
+        return Icons.insert_drive_file_rounded;
     }
   }
 
   Color _color(String t) {
     switch (t.toLowerCase()) {
-      case 'pdf': return AppColors.error;
+      case 'pdf':
+        return AppColors.error;
       case 'doc':
-      case 'docx': return AppColors.info;
+      case 'docx':
+        return AppColors.info;
       case 'jpg':
       case 'jpeg':
-      case 'png': return AppColors.success;
-      default: return AppColors.textMuted;
+      case 'png':
+        return AppColors.success;
+      default:
+        return AppColors.textMuted;
     }
   }
 
@@ -64,15 +72,13 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primaryDark,
         title: const Text('Case Documents',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
             onPressed: () => context.pop()),
         actions: [
           IconButton(
-            icon: const Icon(Icons.upload_file_rounded,
-                color: AppColors.gold),
+            icon: const Icon(Icons.upload_file_rounded, color: AppColors.gold),
             onPressed: () =>
                 context.push('/documents/upload').then((_) => _load()),
           ),
@@ -112,6 +118,7 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
                           border: Border.all(color: AppColors.border),
                         ),
                         child: ListTile(
+                          onTap: () => context.push('/documents/${d['id']}'),
                           leading: Container(
                             width: 44,
                             height: 44,
@@ -119,18 +126,33 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
                               color: _color(ft).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Icon(_icon(ft),
-                                color: _color(ft), size: 22),
+                            child: Icon(_icon(ft), color: _color(ft), size: 22),
                           ),
                           title: Text(d['file_name'] ?? '',
                               style: const TextStyle(
                                   color: AppColors.textPrimary,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13)),
-                          subtitle: Text(
-                              '${ft.toUpperCase()} • ${d['category'] ?? 'General'}',
-                              style: const TextStyle(
-                                  color: AppColors.textMuted, fontSize: 11)),
+                          subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                    '${ft.toUpperCase()} • ${d['category'] ?? 'General'}',
+                                    style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 11)),
+                                if ((d['uploader_name'] ?? '')
+                                    .toString()
+                                    .isNotEmpty)
+                                  Text(
+                                      'Uploaded by: ${d['uploader_name']}'
+                                      '${(d['uploaded_by_role'] ?? '').toString().isNotEmpty ? ' • ${(d['uploaded_by_role'] as String).replaceAll('_', ' ').toUpperCase()}' : ''}',
+                                      style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600)),
+                              ]),
                           trailing: IconButton(
                             icon: const Icon(Icons.open_in_new_rounded,
                                 color: AppColors.gold, size: 20),

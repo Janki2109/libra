@@ -36,16 +36,26 @@ func GetDocuments(c *gin.Context) {
 	// 200 MB of file bodies through the connection pool and into the response
 	// just to render a list of names. Fetch a document's bytes from
 	// GET /documents/:id when the user actually opens it.
+	// uploader_name/uploader_role come from the users/roles rows the document
+	// was actually inserted with uploaded_by pointing at (see UploadDocument),
+	// never from the request or the viewer's own session — a document
+	// uploaded before uploaded_by/uploaded_by_role existed simply has no
+	// resolvable uploader (u.id is NULL), which the frontend shows as "—"
+	// rather than guessing.
 	rows, err := config.DB.Query(`
-		SELECT id, file_name, COALESCE(file_type,''), COALESCE(category,''),
-		       COALESCE(file_url,''),
-		       COALESCE(file_size,0), COALESCE(mime_type,''),
-		       COALESCE(uploaded_by_role,''), is_archived, created_at
-		FROM documents
-		WHERE firm_id = $1::uuid AND is_archived = false
-		  AND ($4 = '' OR client_id = $4::uuid)
-		  AND ($5 = '' OR case_id = $5::uuid)
-		ORDER BY created_at DESC
+		SELECT d.id, d.file_name, COALESCE(d.file_type,''), COALESCE(d.category,''),
+		       COALESCE(d.file_url,''),
+		       COALESCE(d.file_size,0), COALESCE(d.mime_type,''),
+		       COALESCE(NULLIF(d.uploaded_by_role,''), r.name, ''),
+		       COALESCE(u.name,''),
+		       d.is_archived, d.created_at
+		FROM documents d
+		LEFT JOIN users u ON u.id = d.uploaded_by
+		LEFT JOIN roles r ON r.id = u.role_id
+		WHERE d.firm_id = $1::uuid AND d.is_archived = false
+		  AND ($4 = '' OR d.client_id = $4::uuid)
+		  AND ($5 = '' OR d.case_id = $5::uuid)
+		ORDER BY d.created_at DESC
 		LIMIT $2 OFFSET $3
 	`, firmID, page.Limit, page.Offset, clientID, caseID)
 	if err != nil {
@@ -63,6 +73,7 @@ func GetDocuments(c *gin.Context) {
 		FileSize       int       `json:"file_size"`
 		MimeType       string    `json:"mime_type"`
 		UploadedByRole string    `json:"uploaded_by_role"`
+		UploaderName   string    `json:"uploader_name"`
 		IsArchived     bool      `json:"is_archived"`
 		CreatedAt      time.Time `json:"created_at"`
 	}
@@ -71,7 +82,7 @@ func GetDocuments(c *gin.Context) {
 		var d Doc
 		if err := rows.Scan(&d.ID, &d.FileName, &d.FileType, &d.Category,
 			&d.FileURL, &d.FileSize, &d.MimeType,
-			&d.UploadedByRole, &d.IsArchived, &d.CreatedAt); err != nil {
+			&d.UploadedByRole, &d.UploaderName, &d.IsArchived, &d.CreatedAt); err != nil {
 			utils.Error(c, http.StatusInternalServerError, "Failed to read documents", err.Error())
 			return
 		}
@@ -196,22 +207,29 @@ func GetDocument(c *gin.Context) {
 		return
 	}
 	var d struct {
-		ID          string `json:"id"`
-		FileName    string `json:"file_name"`
-		FileURL     string `json:"file_url"`
-		FileContent string `json:"file_content"`
-		FileType    string `json:"file_type"`
-		Category    string `json:"category"`
-		FileSize    int    `json:"file_size"`
-		MimeType    string `json:"mime_type"`
+		ID             string `json:"id"`
+		FileName       string `json:"file_name"`
+		FileURL        string `json:"file_url"`
+		FileContent    string `json:"file_content"`
+		FileType       string `json:"file_type"`
+		Category       string `json:"category"`
+		FileSize       int    `json:"file_size"`
+		MimeType       string `json:"mime_type"`
+		UploadedByRole string `json:"uploaded_by_role"`
+		UploaderName   string `json:"uploader_name"`
 	}
 	err := config.DB.QueryRow(`
-		SELECT id, file_name, COALESCE(file_url,''),
-		COALESCE(file_content,''), COALESCE(file_type,''),
-		COALESCE(category,''), COALESCE(file_size,0), COALESCE(mime_type,'')
-		FROM documents WHERE id=$1::uuid AND firm_id=$2::uuid
+		SELECT d.id, d.file_name, COALESCE(d.file_url,''),
+		COALESCE(d.file_content,''), COALESCE(d.file_type,''),
+		COALESCE(d.category,''), COALESCE(d.file_size,0), COALESCE(d.mime_type,''),
+		COALESCE(NULLIF(d.uploaded_by_role,''), r.name, ''), COALESCE(u.name,'')
+		FROM documents d
+		LEFT JOIN users u ON u.id = d.uploaded_by
+		LEFT JOIN roles r ON r.id = u.role_id
+		WHERE d.id=$1::uuid AND d.firm_id=$2::uuid
 	`, id, firmID).Scan(&d.ID, &d.FileName, &d.FileURL, &d.FileContent,
-		&d.FileType, &d.Category, &d.FileSize, &d.MimeType)
+		&d.FileType, &d.Category, &d.FileSize, &d.MimeType,
+		&d.UploadedByRole, &d.UploaderName)
 	// A real DB/connection failure was previously reported as "Document not
 	// found" too, which told a user staring at a network blip that their
 	// file had been deleted.
@@ -921,17 +939,24 @@ func CreateStaff(c *gin.Context) {
 
 	email := normalizeEmail(req.Email)
 
-	var taken int
-	config.DB.QueryRow("SELECT COUNT(*) FROM users WHERE lower(email)=$1", email).Scan(&taken)
-	if taken > 0 {
-		utils.Error(c, http.StatusConflict, "Email already registered", "duplicate email")
-		return
-	}
-
 	var roleID sql.NullString
 	config.DB.QueryRow("SELECT id FROM roles WHERE name=$1 LIMIT 1", role).Scan(&roleID)
 	if !roleID.Valid {
 		utils.Error(c, http.StatusInternalServerError, "Unknown role", "roles table not seeded")
+		return
+	}
+
+	// Scoped to this specific role, not the email alone — the same address
+	// may already have an unrelated-role account (e.g. a CLIENT or STUDENT
+	// self-registration), which is allowed; only a second account under this
+	// exact role is a duplicate (matches migration 033's uq_users_email_role).
+	var taken int
+	config.DB.QueryRow("SELECT COUNT(*) FROM users WHERE lower(email)=$1 AND role_id=$2",
+		email, roleID).Scan(&taken)
+	if taken > 0 {
+		utils.Error(c, http.StatusConflict,
+			"An account with this email already exists for this role. Please sign in.",
+			"duplicate email+role")
 		return
 	}
 

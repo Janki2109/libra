@@ -598,7 +598,14 @@ class _LawyerCard extends StatelessWidget {
               onTap: () async {
                 if (!chatUnlocked) {
                   HapticFeedback.lightImpact();
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  // clearSnackBars (not just showSnackBar) so tapping a
+                  // second locked "Chat" button restarts the 8s timer
+                  // cleanly instead of queuing a second copy behind the
+                  // first one — ScaffoldMessenger queues by default.
+                  final messenger = ScaffoldMessenger.of(context);
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(SnackBar(
+                      duration: const Duration(seconds: 8),
                       content: const Text(
                           'Chat unlocks once you book a paid consultation with this lawyer.'),
                       backgroundColor: const Color(0xFFD4A017),

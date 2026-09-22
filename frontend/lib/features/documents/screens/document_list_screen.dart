@@ -21,17 +21,33 @@ const Map<String, List<String>> _docAllowedExtByType = {
   'Photo': ['jpg', 'jpeg', 'png', 'webp'],
   'Video': ['mp4', 'mov', 'avi', 'mkv', 'webm'],
   'Other': [
-    'pdf', 'doc', 'docx', 'txt',
-    'jpg', 'jpeg', 'png', 'webp',
-    'mp4', 'mov', 'avi', 'mkv', 'webm',
-    'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'zip',
+    'pdf',
+    'doc',
+    'docx',
+    'txt',
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+    'webm',
+    'xls',
+    'xlsx',
+    'csv',
+    'ppt',
+    'pptx',
+    'zip',
   ],
 };
 const int _docMaxUploadFileBytes = 6 * 1024 * 1024;
 const Map<String, String> _docExtToMime = {
   'pdf': 'application/pdf',
   'doc': 'application/msword',
-  'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'docx':
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'txt': 'text/plain',
   'jpg': 'image/jpeg',
   'jpeg': 'image/jpeg',
@@ -46,7 +62,8 @@ const Map<String, String> _docExtToMime = {
   'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'csv': 'text/csv',
   'ppt': 'application/vnd.ms-powerpoint',
-  'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'pptx':
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'zip': 'application/zip',
 };
 String _docExtOf(String fileName) {
@@ -54,6 +71,7 @@ String _docExtOf(String fileName) {
   if (i == -1 || i == fileName.length - 1) return '';
   return fileName.substring(i + 1).toLowerCase();
 }
+
 String _docFormatSize(int bytes) {
   if (bytes < 1024) return '$bytes B';
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -155,9 +173,12 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
         Future<void> pickFile() async {
           setS(() => picking = true);
           try {
-            final allowed = _docAllowedExtByType[selectedType] ?? const <String>[];
+            final allowed =
+                _docAllowedExtByType[selectedType] ?? const <String>[];
             final result = await FilePicker.platform.pickFiles(
-                type: FileType.custom, allowedExtensions: allowed, withData: true);
+                type: FileType.custom,
+                allowedExtensions: allowed,
+                withData: true);
             if (result == null || result.files.isEmpty) return;
             final f = result.files.single;
             final ext = _docExtOf(f.name);
@@ -179,8 +200,8 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
             if (f.bytes == null) {
               if (ctx.mounted)
                 ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                    content:
-                        Text('Could not read the selected file. Please try again.'),
+                    content: Text(
+                        'Could not read the selected file. Please try again.'),
                     backgroundColor: Color(0xFFD9534F)));
               return;
             }
@@ -232,9 +253,8 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: sel
-                                      ? _brown.withValues(alpha: 0.1)
-                                      : _bg,
+                                  color:
+                                      sel ? _brown.withValues(alpha: 0.1) : _bg,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                       color: sel ? _brown : _border,
@@ -251,8 +271,8 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                             );
                           }).toList())),
                   const SizedBox(height: 14),
-                  _sheetField(nameCtrl, 'Document Name *',
-                      Icons.description_outlined),
+                  _sheetField(
+                      nameCtrl, 'Document Name *', Icons.description_outlined),
                   const SizedBox(height: 12),
                   pickedFile == null
                       ? InkWell(
@@ -267,35 +287,38 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(color: _border, width: 1.2),
                             ),
-                            child: Column(mainAxisSize: MainAxisSize.min, children: [
-                              if (picking)
-                                const SizedBox(
-                                    width: 26,
-                                    height: 26,
-                                    child: CircularProgressIndicator(
-                                        color: _brown, strokeWidth: 2.5))
-                              else
-                                const Icon(Icons.cloud_upload_rounded,
-                                    color: _brown, size: 30),
-                              const SizedBox(height: 8),
-                              Text(
-                                  picking
-                                      ? 'Opening file picker...'
-                                      : 'Tap to select a file',
-                                  style: const TextStyle(
-                                      color: _textPri,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 4),
-                              Text(
-                                  (_docAllowedExtByType[selectedType] ?? [])
-                                      .map((e) => e.toUpperCase())
-                                      .join(', '),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                      color: _textMuted.withValues(alpha: 0.8),
-                                      fontSize: 10)),
-                            ]),
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (picking)
+                                    const SizedBox(
+                                        width: 26,
+                                        height: 26,
+                                        child: CircularProgressIndicator(
+                                            color: _brown, strokeWidth: 2.5))
+                                  else
+                                    const Icon(Icons.cloud_upload_rounded,
+                                        color: _brown, size: 30),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                      picking
+                                          ? 'Opening file picker...'
+                                          : 'Tap to select a file',
+                                      style: const TextStyle(
+                                          color: _textPri,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                      (_docAllowedExtByType[selectedType] ?? [])
+                                          .map((e) => e.toUpperCase())
+                                          .join(', '),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          color:
+                                              _textMuted.withValues(alpha: 0.8),
+                                          fontSize: 10)),
+                                ]),
                           ),
                         )
                       : Container(
@@ -344,8 +367,8 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                         ),
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                     decoration: BoxDecoration(
                         color: _bgCard,
                         borderRadius: BorderRadius.circular(12),
@@ -366,8 +389,8 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                         'Evidence',
                         'Other'
                       ]
-                          .map((c) =>
-                              DropdownMenuItem(value: c, child: Text(c)))
+                          .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)))
                           .toList(),
                       onChanged: (v) => setS(() => category = v!),
                     )),
@@ -396,8 +419,8 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                               if (file == null || file.bytes == null) {
                                 ScaffoldMessenger.of(ctx).showSnackBar(
                                     const SnackBar(
-                                        content:
-                                            Text('Please select a file to upload'),
+                                        content: Text(
+                                            'Please select a file to upload'),
                                         backgroundColor: Color(0xFFD9534F)));
                                 return;
                               }
@@ -412,20 +435,18 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                                         !title.toLowerCase().endsWith('.$ext')
                                     ? '$title.$ext'
                                     : title;
-                                await DioClient.instance.post(
-                                    '/documents/upload',
-                                    data: {
-                                      'file_name': storedName,
-                                      'file_content': base64Encode(file.bytes!),
-                                      'file_type': ext.isNotEmpty
-                                          ? ext
-                                          : selectedType.toLowerCase(),
-                                      'file_size': file.size,
-                                      'mime_type': _docExtToMime[ext] ??
-                                          'application/octet-stream',
-                                      'category': category,
-                                    },
-                                    onSendProgress: (sent, total) {
+                                await DioClient.instance
+                                    .post('/documents/upload', data: {
+                                  'file_name': storedName,
+                                  'file_content': base64Encode(file.bytes!),
+                                  'file_type': ext.isNotEmpty
+                                      ? ext
+                                      : selectedType.toLowerCase(),
+                                  'file_size': file.size,
+                                  'mime_type': _docExtToMime[ext] ??
+                                      'application/octet-stream',
+                                  'category': category,
+                                }, onSendProgress: (sent, total) {
                                   if (total > 0)
                                     setS(() => uploadProgress = sent / total);
                                 });
@@ -503,10 +524,11 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
         body: Column(children: [
           Container(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [Color(0xFF0B0726), Color(0xFF150E3D), Color(0xFF3D2C8D)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight),
+              gradient: LinearGradient(colors: [
+                Color(0xFF0B0726),
+                Color(0xFF150E3D),
+                Color(0xFF3D2C8D)
+              ], begin: Alignment.topLeft, end: Alignment.bottomRight),
             ),
             child: SafeArea(
                 bottom: false,
@@ -636,68 +658,101 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                                 context.push('/documents/${d['id']}');
                               },
                               child: Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                  color: _bgCard,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border:
-                                      Border.all(color: _border, width: 0.8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: _brown.withValues(alpha: 0.05),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2))
-                                  ]),
-                              child: Row(children: [
-                                Container(
-                                    width: 46,
-                                    height: 46,
-                                    decoration: BoxDecoration(
-                                        color: color.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                            color: color.withValues(alpha: 0.3))),
-                                    child: Icon(icon, color: color, size: 24)),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                    child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                      Text(d['file_name'] ?? '',
-                                          style: const TextStyle(
-                                              color: _textPri,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 14),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis),
-                                      if ((d['category'] ?? '').isNotEmpty)
-                                        Container(
-                                            margin:
-                                                const EdgeInsets.only(top: 4),
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                                color: _brown.withValues(alpha: 0.08),
-                                                borderRadius:
-                                                    BorderRadius.circular(4)),
-                                            child: Text(d['category'],
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                    color: _bgCard,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border:
+                                        Border.all(color: _border, width: 0.8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                          color: _brown.withValues(alpha: 0.05),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2))
+                                    ]),
+                                child: Row(children: [
+                                  Container(
+                                      width: 46,
+                                      height: 46,
+                                      decoration: BoxDecoration(
+                                          color: color.withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: color.withValues(
+                                                  alpha: 0.3))),
+                                      child:
+                                          Icon(icon, color: color, size: 24)),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                      child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                        Text(d['file_name'] ?? '',
+                                            style: const TextStyle(
+                                                color: _textPri,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis),
+                                        if ((d['category'] ?? '').isNotEmpty)
+                                          Container(
+                                              margin:
+                                                  const EdgeInsets.only(top: 4),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                              decoration: BoxDecoration(
+                                                  color: _brown.withValues(
+                                                      alpha: 0.08),
+                                                  borderRadius:
+                                                      BorderRadius.circular(4)),
+                                              child: Text(d['category'],
+                                                  style: const TextStyle(
+                                                      color: _brownLight,
+                                                      fontSize: 10))),
+                                        if ((d['uploader_name'] ?? '')
+                                            .toString()
+                                            .isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                              'Uploaded by: ${d['uploader_name']}',
+                                              style: const TextStyle(
+                                                  color: _textMuted,
+                                                  fontSize: 11),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
+                                          if ((d['uploaded_by_role'] ?? '')
+                                              .toString()
+                                              .isNotEmpty)
+                                            Text(
+                                                (d['uploaded_by_role']
+                                                        as String)
+                                                    .replaceAll('_', ' ')
+                                                    .toUpperCase(),
                                                 style: const TextStyle(
                                                     color: _brownLight,
-                                                    fontSize: 10))),
-                                    ])),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded,
-                                      color: Color(0xFFD9534F), size: 20),
-                                  onPressed: () async {
-                                    HapticFeedback.lightImpact();
-                                    await DioClient.instance
-                                        .delete('/documents/${d['id']}');
-                                    _loadDocuments();
-                                  },
-                                ),
-                              ]),
+                                                    fontSize: 10,
+                                                    fontWeight:
+                                                        FontWeight.w700)),
+                                        ],
+                                      ])),
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: Color(0xFFD9534F),
+                                        size: 20),
+                                    onPressed: () async {
+                                      HapticFeedback.lightImpact();
+                                      await DioClient.instance
+                                          .delete('/documents/${d['id']}');
+                                      _loadDocuments();
+                                    },
+                                  ),
+                                ]),
                               ),
                             );
                           },

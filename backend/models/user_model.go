@@ -24,6 +24,10 @@ type User struct {
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
+	// Role is which of the caller's same-email accounts to authenticate as
+	// (e.g. "lawyer" or "law_student") — required now that one email can
+	// back more than one role-scoped account. See Login in auth_controller.go.
+	Role string `json:"role" binding:"required"`
 }
 
 type RegisterRequest struct {

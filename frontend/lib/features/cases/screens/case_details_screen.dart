@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../../core/services/dio_client.dart';
 import '../../documents/widgets/document_upload_sheet.dart';
 import '../../hearings/utils/hearing_status.dart';
@@ -40,12 +41,27 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
     // it's hidden there and offered inline in the Notes bar instead.
     _tabController.addListener(() => setState(() {}));
     _loadCase();
+    // Silent 3s hearing-only poll via the app's single shared ticker (see
+    // AutoRefreshService) so a hearing added/updated elsewhere shows up here
+    // without the lawyer pulling to refresh, without re-triggering the
+    // full-screen loading spinner _loadCase() uses, and without a second
+    // Timer of its own.
+    AutoRefreshService.instance
+        .register('case_hearings_${widget.caseId}', _refreshHearingsSilently);
   }
 
   @override
   void dispose() {
+    AutoRefreshService.instance.unregister('case_hearings_${widget.caseId}');
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshHearingsSilently() async {
+    final res =
+        await DioClient.instance.get('/cases/${widget.caseId}/hearings');
+    if (!mounted) return;
+    setState(() => _hearings = res.data['data'] ?? []);
   }
 
   Future<void> _loadCase() async {
@@ -469,7 +485,8 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
             // first place).
             if (status != 'won')
               IconButton(
-                  icon: const Icon(Icons.edit_rounded, color: Color(0xFFFFD700)),
+                  icon:
+                      const Icon(Icons.edit_rounded, color: Color(0xFFFFD700)),
                   onPressed: () => context
                       .push('/cases/${widget.caseId}/edit')
                       .then((_) => _loadCase())),
@@ -496,7 +513,8 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+                      border:
+                          Border.all(color: statusColor.withValues(alpha: 0.5)),
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(statusIcon, color: statusColor, size: 12),
@@ -551,9 +569,8 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                   notes: _notes,
                   caseId: widget.caseId,
                   onRefresh: _loadCase,
-                  showChangeStatus: status != 'won' &&
-                      status != 'lost' &&
-                      status != 'closed',
+                  showChangeStatus:
+                      status != 'won' && status != 'lost' && status != 'closed',
                   onChangeStatus: _showStatusDialog),
             ],
           ),
@@ -562,15 +579,15 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                 status != 'lost' &&
                 status != 'closed' &&
                 _tabController.index != 3
-                ? FloatingActionButton.extended(
-                    onPressed: _showStatusDialog,
-                    backgroundColor: _brown,
-                    icon: Icon(statusIcon, color: Colors.white),
-                    label: const Text('Change Status',
-                        style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w700)),
-                  )
-                : null,
+            ? FloatingActionButton.extended(
+                onPressed: _showStatusDialog,
+                backgroundColor: _brown,
+                icon: Icon(statusIcon, color: Colors.white),
+                label: const Text('Change Status',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              )
+            : null,
       ),
     );
   }
@@ -650,8 +667,8 @@ class _DetailsTab extends StatelessWidget {
             decoration: BoxDecoration(
                 color: _bgCard,
                 borderRadius: BorderRadius.circular(14),
-                border:
-                    Border.all(color: const Color(0xFFD9534F).withValues(alpha: 0.3)),
+                border: Border.all(
+                    color: const Color(0xFFD9534F).withValues(alpha: 0.3)),
                 boxShadow: [
                   BoxShadow(
                       color: _brown.withValues(alpha: 0.05),
@@ -747,9 +764,8 @@ class _HearingsTab extends StatelessWidget {
       {required this.hearings, required this.caseId, required this.onRefresh});
 
   void _addNextHearing(BuildContext context) {
-    context
-        .push('/hearings/add', extra: {'caseId': caseId})
-        .then((_) => onRefresh());
+    context.push('/hearings/add',
+        extra: {'caseId': caseId}).then((_) => onRefresh());
   }
 
   // The hearing date can be postponed and re-added multiple times, so the
@@ -800,7 +816,8 @@ class _HearingsTab extends StatelessWidget {
             onPressed: () => _addNextHearing(context),
             icon: const Icon(Icons.add_rounded, color: Colors.white),
             label: const Text('Add Next Hearing',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w700)),
             style: ElevatedButton.styleFrom(
                 backgroundColor: _brown,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -811,93 +828,92 @@ class _HearingsTab extends StatelessWidget {
       ),
       Expanded(
         child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: hearings.length,
-              itemBuilder: (_, i) {
-                final h = hearings[i];
-                final isNext = next != null && h['id'] == next['id'];
-                final statusInfo = hearingStatusInfo(h);
-                return InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => context
-                      .push('/hearings/${h['id']}')
-                      .then((_) => onRefresh()),
-                  child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                      color: _bgCard,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: isNext ? _brown : _border,
-                          width: isNext ? 1.4 : 0.8),
-                      boxShadow: [
-                        BoxShadow(
-                            color: _brown.withValues(alpha: 0.05),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2))
-                      ]),
-                  child: Row(children: [
-                    Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                            color: const Color(0xFF4A90D9).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10)),
-                        child: const Icon(Icons.event_rounded,
-                            color: Color(0xFF4A90D9), size: 20)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Row(children: [
-                            Text(h['hearing_date'] ?? '',
-                                style: const TextStyle(
-                                    color: _brown,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14)),
-                            if (isNext) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                    color: const Color(0xFF2E8B57),
-                                    borderRadius: BorderRadius.circular(6)),
-                                child: const Text('NEXT',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w800)),
-                              ),
-                            ],
-                          ]),
-                          if ((h['court_name'] ?? '').isNotEmpty)
-                            Text(h['court_name'],
-                                style: const TextStyle(
-                                    color: _textMuted, fontSize: 12)),
-                          if ((h['purpose'] ?? '').isNotEmpty)
-                            Text(h['purpose'],
-                                style: const TextStyle(
-                                    color: _textMuted, fontSize: 12)),
-                        ])),
-                    Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.all(16),
+          itemCount: hearings.length,
+          itemBuilder: (_, i) {
+            final h = hearings[i];
+            final isNext = next != null && h['id'] == next['id'];
+            final statusInfo = hearingStatusInfo(h);
+            return InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () =>
+                  context.push('/hearings/${h['id']}').then((_) => onRefresh()),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                    color: _bgCard,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: isNext ? _brown : _border,
+                        width: isNext ? 1.4 : 0.8),
+                    boxShadow: [
+                      BoxShadow(
+                          color: _brown.withValues(alpha: 0.05),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2))
+                    ]),
+                child: Row(children: [
+                  Container(
+                      width: 42,
+                      height: 42,
                       decoration: BoxDecoration(
-                          color: statusInfo.color.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Text(statusInfo.label,
-                          style: TextStyle(
-                              color: statusInfo.color,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600)),
-                    ),
-                  ]),
+                          color: const Color(0xFF4A90D9).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.event_rounded,
+                          color: Color(0xFF4A90D9), size: 20)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Row(children: [
+                          Text(h['hearing_date'] ?? '',
+                              style: const TextStyle(
+                                  color: _brown,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14)),
+                          if (isNext) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                  color: const Color(0xFF2E8B57),
+                                  borderRadius: BorderRadius.circular(6)),
+                              child: const Text('NEXT',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800)),
+                            ),
+                          ],
+                        ]),
+                        if ((h['court_name'] ?? '').isNotEmpty)
+                          Text(h['court_name'],
+                              style: const TextStyle(
+                                  color: _textMuted, fontSize: 12)),
+                        if ((h['purpose'] ?? '').isNotEmpty)
+                          Text(h['purpose'],
+                              style: const TextStyle(
+                                  color: _textMuted, fontSize: 12)),
+                      ])),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: statusInfo.color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text(statusInfo.label,
+                        style: TextStyle(
+                            color: statusInfo.color,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600)),
                   ),
-                );
-              },
+                ]),
+              ),
+            );
+          },
         ),
       ),
     ]);
@@ -950,44 +966,64 @@ class _DocumentsTab extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                     onTap: () => context.push('/documents/${d['id']}'),
                     child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                        color: _bgCard,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: _border, width: 0.8),
-                        boxShadow: [
-                          BoxShadow(
-                              color: _brown.withValues(alpha: 0.05),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2))
-                        ]),
-                    child: Row(children: [
-                      Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                              color: const Color(0xFFD9534F).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12)),
-                          child: const Icon(Icons.description_rounded,
-                              color: Color(0xFFD9534F), size: 24)),
-                      const SizedBox(width: 14),
-                      Expanded(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                            Text(d['file_name'] ?? '',
-                                style: const TextStyle(
-                                    color: _textPri,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                            Text(d['category'] ?? '',
-                                style: const TextStyle(
-                                    color: _textMuted, fontSize: 12)),
-                          ])),
-                    ]),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                          color: _bgCard,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _border, width: 0.8),
+                          boxShadow: [
+                            BoxShadow(
+                                color: _brown.withValues(alpha: 0.05),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2))
+                          ]),
+                      child: Row(children: [
+                        Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                                color: const Color(0xFFD9534F)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12)),
+                            child: const Icon(Icons.description_rounded,
+                                color: Color(0xFFD9534F), size: 24)),
+                        const SizedBox(width: 14),
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text(d['file_name'] ?? '',
+                                  style: const TextStyle(
+                                      color: _textPri,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                              Text(d['category'] ?? '',
+                                  style: const TextStyle(
+                                      color: _textMuted, fontSize: 12)),
+                              if ((d['uploader_name'] ?? '')
+                                  .toString()
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text('Uploaded by: ${d['uploader_name']}',
+                                    style: const TextStyle(
+                                        color: _textMuted, fontSize: 11)),
+                                if ((d['uploaded_by_role'] ?? '')
+                                    .toString()
+                                    .isNotEmpty)
+                                  Text(
+                                      (d['uploaded_by_role'] as String)
+                                          .replaceAll('_', ' ')
+                                          .toUpperCase(),
+                                      style: const TextStyle(
+                                          color: _brownLight,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700)),
+                              ],
+                            ])),
+                      ]),
                     ),
                   );
                 },
@@ -1082,76 +1118,78 @@ class _NotesTabState extends State<_NotesTab> {
         SafeArea(
           top: false,
           child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-              color: _bgCard,
-              border: Border(top: BorderSide(color: _border, width: 0.8)),
-              boxShadow: [
-                BoxShadow(
-                    color: _brown.withValues(alpha: 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, -2))
-              ]),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            if (widget.showChangeStatus) ...[
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: _bgCard,
+                border: Border(top: BorderSide(color: _border, width: 0.8)),
+                boxShadow: [
+                  BoxShadow(
+                      color: _brown.withValues(alpha: 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, -2))
+                ]),
+            child:
+                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              if (widget.showChangeStatus) ...[
+                GestureDetector(
+                  onTap: widget.onChangeStatus,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _brown.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _brown.withValues(alpha: 0.3)),
+                    ),
+                    child: const Icon(Icons.sync_alt_rounded,
+                        color: _brown, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                  child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                    color: _bg,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: _border, width: 0.8)),
+                child: TextField(
+                  controller: _noteCtrl,
+                  style: const TextStyle(color: _textPri, fontSize: 14),
+                  decoration: const InputDecoration(
+                    hintText: 'Add a note...',
+                    hintStyle: TextStyle(color: _textMuted),
+                    border: InputBorder.none,
+                    filled: false,
+                    isDense: true,
+                  ),
+                ),
+              )),
+              const SizedBox(width: 8),
               GestureDetector(
-                onTap: widget.onChangeStatus,
+                onTap: _sending ? null : _addNote,
                 child: Container(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(
-                    color: _brown.withValues(alpha: 0.08),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                        colors: [Color(0xFF150E3D), Color(0xFF3D2C8D)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight),
                     shape: BoxShape.circle,
-                    border: Border.all(color: _brown.withValues(alpha: 0.3)),
                   ),
-                  child: const Icon(Icons.sync_alt_rounded,
-                      color: _brown, size: 20),
+                  child: _sending
+                      ? const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.send_rounded,
+                          color: Colors.white, size: 20),
                 ),
               ),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-                child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                  color: _bg,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: _border, width: 0.8)),
-              child: TextField(
-                controller: _noteCtrl,
-                style: const TextStyle(color: _textPri, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Add a note...',
-                  hintStyle: TextStyle(color: _textMuted),
-                  border: InputBorder.none,
-                  filled: false,
-                  isDense: true,
-                ),
-              ),
-            )),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _sending ? null : _addNote,
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                      colors: [Color(0xFF150E3D), Color(0xFF3D2C8D)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight),
-                  shape: BoxShape.circle,
-                ),
-                child: _sending
-                    ? const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.send_rounded,
-                        color: Colors.white, size: 20),
-              ),
-            ),
-          ]),
+            ]),
           ),
         ),
       ]);

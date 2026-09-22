@@ -37,7 +37,8 @@ void _logLoginFailure(String endpoint, Object error) {
     debugPrint('[auth] POST $endpoint -> ${AppConstants.baseUrl} failed: '
         'type=${error.type} status=${error.response?.statusCode}');
   } else {
-    debugPrint('[auth] POST $endpoint -> ${AppConstants.baseUrl} failed: $error');
+    debugPrint(
+        '[auth] POST $endpoint -> ${AppConstants.baseUrl} failed: $error');
   }
 }
 
@@ -81,7 +82,10 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ─── LAWYER / STUDENT LOGIN ───────────────
-  Future<bool> login(String email, String password) async {
+  // [role] is which of this email's accounts to sign into ('lawyer' or
+  // 'law_student') — the same email can now back a separate account per
+  // role, so the backend needs this to know which one, not just the email.
+  Future<bool> login(String email, String password, String role) async {
     _loading = true;
     _error = null;
     notifyListeners();
@@ -89,6 +93,7 @@ class AuthProvider extends ChangeNotifier {
       final response = await DioClient.instance.post('/auth/login', data: {
         'email': email,
         'password': password,
+        'role': role,
       });
       if (response.data['success'] == true) {
         final data = response.data['data'];
@@ -235,7 +240,8 @@ class AuthProvider extends ChangeNotifier {
     required String base64Content,
   }) async {
     try {
-      final response = await DioClient.instance.post('/documents/upload', data: {
+      final response =
+          await DioClient.instance.post('/documents/upload', data: {
         'file_name': fileName,
         'file_type': mimeType,
         'file_content': base64Content,
@@ -361,7 +367,8 @@ class AuthProvider extends ChangeNotifier {
         firmId: previous.firmId,
         avatarUrl: previous.avatarUrl,
         profilePhoto: previous.profilePhoto,
-        designation: designation.isNotEmpty ? designation : previous.designation,
+        designation:
+            designation.isNotEmpty ? designation : previous.designation,
         isActive: previous.isActive,
         createdAt: previous.createdAt,
       );

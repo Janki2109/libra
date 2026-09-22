@@ -63,13 +63,14 @@ class _LoginScreenState extends State<LoginScreen>
     HapticFeedback.lightImpact();
 
     final auth = context.read<AuthProvider>();
-    final success =
-        await auth.login(_lawyerEmailCtrl.text.trim(), _lawyerPassCtrl.text);
+    final success = await auth.login(
+        _lawyerEmailCtrl.text.trim(), _lawyerPassCtrl.text, 'lawyer');
     if (success && mounted) {
       HapticFeedback.heavyImpact();
       // A platform owner authenticates through this same call; the API's role
       // claim decides where they land.
-      context.go(auth.user?.roleName == 'super_admin' ? '/admin' : '/dashboard');
+      context
+          .go(auth.user?.roleName == 'super_admin' ? '/admin' : '/dashboard');
     } else if (mounted) {
       _showError(auth.error ?? 'Login failed. Check email & password.');
     }
@@ -101,8 +102,8 @@ class _LoginScreenState extends State<LoginScreen>
     HapticFeedback.lightImpact();
 
     final auth = context.read<AuthProvider>();
-    final success =
-        await auth.login(_studentEmailCtrl.text.trim(), _studentPassCtrl.text);
+    final success = await auth.login(
+        _studentEmailCtrl.text.trim(), _studentPassCtrl.text, 'law_student');
     if (success && mounted) {
       HapticFeedback.heavyImpact();
       context.go('/student/dashboard');
@@ -240,7 +241,8 @@ class _LoginScreenState extends State<LoginScreen>
                 registerText: 'New law firm?',
                 registerLabel: 'Create Firm Account',
                 onRegister: () => context.go('/register'),
-                buttonLabel: 'Sign In as Lawyer'),
+                buttonLabel: 'Sign In as Lawyer',
+                role: 'lawyer'),
             _buildLoginCard(
                 title: 'Client Portal',
                 subtitle: 'Access your cases & documents',
@@ -257,7 +259,8 @@ class _LoginScreenState extends State<LoginScreen>
                 onRegister: () => context.go('/client/register'),
                 buttonLabel: 'Sign In as Client',
                 buttonColor: AppColors.info,
-                buttonTextColor: Colors.white),
+                buttonTextColor: Colors.white,
+                role: 'client'),
             _buildLoginCard(
                 title: 'Law Student Portal',
                 subtitle: 'Learn, practice & grow',
@@ -274,7 +277,8 @@ class _LoginScreenState extends State<LoginScreen>
                 onRegister: () => context.go('/student/register'),
                 buttonLabel: 'Sign In as Student',
                 buttonColor: AppColors.purple,
-                buttonTextColor: Colors.white),
+                buttonTextColor: Colors.white,
+                role: 'law_student'),
           ])),
 
           const Padding(
@@ -300,6 +304,7 @@ class _LoginScreenState extends State<LoginScreen>
     required String registerLabel,
     required VoidCallback onRegister,
     required String buttonLabel,
+    required String role,
     Color? buttonColor,
     Color? buttonTextColor,
   }) {
@@ -386,7 +391,7 @@ class _LoginScreenState extends State<LoginScreen>
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              onTap: () => context.push('/forgot-password'),
+              onTap: () => context.push('/forgot-password', extra: role),
               child: const Text('Forgot Password?',
                   style: TextStyle(
                       color: AppColors.gold,

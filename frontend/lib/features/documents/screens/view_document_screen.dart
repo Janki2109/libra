@@ -130,25 +130,33 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
 
   IconData _icon(String t) {
     switch (t.toLowerCase()) {
-      case 'pdf': return Icons.picture_as_pdf_rounded;
+      case 'pdf':
+        return Icons.picture_as_pdf_rounded;
       case 'doc':
-      case 'docx': return Icons.description_rounded;
+      case 'docx':
+        return Icons.description_rounded;
       case 'jpg':
       case 'jpeg':
-      case 'png': return Icons.image_rounded;
-      default: return Icons.insert_drive_file_rounded;
+      case 'png':
+        return Icons.image_rounded;
+      default:
+        return Icons.insert_drive_file_rounded;
     }
   }
 
   Color _color(String t) {
     switch (t.toLowerCase()) {
-      case 'pdf': return AppColors.error;
+      case 'pdf':
+        return AppColors.error;
       case 'doc':
-      case 'docx': return AppColors.info;
+      case 'docx':
+        return AppColors.info;
       case 'jpg':
       case 'jpeg':
-      case 'png': return AppColors.success;
-      default: return AppColors.textMuted;
+      case 'png':
+        return AppColors.success;
+      default:
+        return AppColors.textMuted;
     }
   }
 
@@ -175,7 +183,8 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
                       height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: AppColors.gold))
-                  : const Icon(Icons.open_in_new_rounded, color: AppColors.gold),
+                  : const Icon(Icons.open_in_new_rounded,
+                      color: AppColors.gold),
               onPressed: _opening ? null : _open,
             ),
         ],
@@ -188,22 +197,22 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
                   child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.wifi_off_rounded,
-                            color: AppColors.textMuted, size: 40),
-                        const SizedBox(height: 12),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 32),
-                          child: Text(_loadError!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  color: AppColors.textMuted, fontSize: 13)),
-                        ),
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                            onPressed: _load,
-                            icon: const Icon(Icons.refresh_rounded, size: 16),
-                            label: const Text('Retry')),
-                      ]))
+                      const Icon(Icons.wifi_off_rounded,
+                          color: AppColors.textMuted, size: 40),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(_loadError!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                color: AppColors.textMuted, fontSize: 13)),
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh_rounded, size: 16),
+                          label: const Text('Retry')),
+                    ]))
               : _doc == null
                   ? const Center(
                       child: Text('Document not found',
@@ -217,7 +226,8 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
                             child: InteractiveViewer(
                               maxScale: 4,
                               child: Image.memory(_bytes!,
-                                  width: double.infinity, fit: BoxFit.contain,
+                                  width: double.infinity,
+                                  fit: BoxFit.contain,
                                   errorBuilder: (_, __, ___) => Container(
                                       padding: const EdgeInsets.all(32),
                                       alignment: Alignment.center,
@@ -259,7 +269,8 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
                               Text(
                                   '${(_doc!['file_type'] ?? '').toString().toUpperCase()} • ${_doc!['category'] ?? 'General'}',
                                   style: const TextStyle(
-                                      color: AppColors.textMuted, fontSize: 12)),
+                                      color: AppColors.textMuted,
+                                      fontSize: 12)),
                               if (_bytes == null) ...[
                                 const SizedBox(height: 12),
                                 const Text(
@@ -281,7 +292,17 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
                           child: Column(children: [
                             _Row(Icons.folder_rounded, 'Category',
                                 _doc!['category'] ?? 'General'),
-                            if ((_doc!['description'] ?? '').toString().isNotEmpty)
+                            if ((_doc!['uploader_name'] ?? '')
+                                .toString()
+                                .isNotEmpty)
+                              _Row(
+                                  Icons.person_rounded,
+                                  'Uploaded by',
+                                  '${_doc!['uploader_name']}'
+                                      '${(_doc!['uploaded_by_role'] ?? '').toString().isNotEmpty ? ' (${(_doc!['uploaded_by_role'] as String).replaceAll('_', ' ').toUpperCase()})' : ''}'),
+                            if ((_doc!['description'] ?? '')
+                                .toString()
+                                .isNotEmpty)
                               _Row(Icons.info_rounded, 'Description',
                                   _doc!['description']),
                           ]),

@@ -25,6 +25,13 @@ func normalizeEmail(e string) string {
 	return strings.ToLower(strings.TrimSpace(e))
 }
 
+// normalizeRole matches normalizeEmail's shape for the role selector the
+// login/register screens now send, so "Lawyer"/" lawyer " and "lawyer" all
+// resolve to the same roles.name row.
+func normalizeRole(r string) string {
+	return strings.ToLower(strings.TrimSpace(r))
+}
+
 // dummyBcryptHash is a valid bcrypt digest of a value nobody knows. It exists
 // only so the unknown-user path costs the same as the wrong-password path.
 const dummyBcryptHash = "$2a$14$C6UzMDM.H6dfI/f/IKcEe.7Z7lLu7NfyO5rHLQpVoHBH8oSAhc/3."
@@ -40,6 +47,13 @@ func Login(c *gin.Context) {
 	var user models.User
 	var passwordHash string
 
+	// Email is no longer unique on its own — the same address can back a
+	// separate account per role (see migration 033), so the account this
+	// login resolves to must be pinned down by email AND the role the caller
+	// selected (the Lawyer/Client/Student tab on the login screen), never by
+	// email alone. The super_admin account has no dedicated tab and signs in
+	// through the Lawyer tab (see login_screen.dart), so it's matched
+	// regardless of the selected role.
 	query := `
 		SELECT u.id, u.name, u.email, COALESCE(u.phone,''), u.password_hash,
 		       COALESCE(u.role_id::text, ''), COALESCE(r.name, ''),
@@ -48,9 +62,10 @@ func Login(c *gin.Context) {
 		FROM users u
 		LEFT JOIN roles r ON u.role_id = r.id
 		WHERE lower(u.email) = $1 AND u.is_active = true
+		  AND (r.name = $2 OR r.name = 'super_admin')
 	`
 
-	err := config.DB.QueryRow(query, normalizeEmail(req.Email)).Scan(
+	err := config.DB.QueryRow(query, normalizeEmail(req.Email), normalizeRole(req.Role)).Scan(
 		&user.ID, &user.Name, &user.Email, &user.Phone, &passwordHash,
 		&user.RoleID, &user.RoleName, &user.FirmID, &user.AvatarURL,
 		&user.IsActive,
@@ -136,10 +151,19 @@ func Register(c *gin.Context) {
 	}
 	defer tx.Rollback() // no-op once Commit succeeds
 
+	// Scoped to this role only — the same email may already have a separate
+	// CLIENT or STUDENT account, which is allowed (see migration 033); only a
+	// second LAWYER account for this email is a duplicate.
 	var exists int
-	tx.QueryRow("SELECT COUNT(*) FROM users WHERE lower(email) = $1", email).Scan(&exists)
+	tx.QueryRow(`
+		SELECT COUNT(*) FROM users u
+		LEFT JOIN roles r ON u.role_id = r.id
+		WHERE lower(u.email) = $1 AND r.name = 'lawyer'
+	`, email).Scan(&exists)
 	if exists > 0 {
-		utils.Error(c, http.StatusConflict, "Email already registered", "duplicate email")
+		utils.Error(c, http.StatusConflict,
+			"An account with this email already exists for this role. Please sign in.",
+			"duplicate email+role")
 		return
 	}
 
@@ -241,10 +265,17 @@ func ClientRegister(c *gin.Context) {
 
 	email := normalizeEmail(req.Email)
 
+	// Scoped to this role only — see the matching comment in Register.
 	var count int
-	config.DB.QueryRow("SELECT COUNT(*) FROM users WHERE lower(email)=$1", email).Scan(&count)
+	config.DB.QueryRow(`
+		SELECT COUNT(*) FROM users u
+		LEFT JOIN roles r ON u.role_id = r.id
+		WHERE lower(u.email)=$1 AND r.name = 'client'
+	`, email).Scan(&count)
 	if count > 0 {
-		utils.Error(c, http.StatusConflict, "Email already registered", "duplicate email")
+		utils.Error(c, http.StatusConflict,
+			"An account with this email already exists for this role. Please sign in.",
+			"duplicate email+role")
 		return
 	}
 
@@ -323,10 +354,17 @@ func StudentRegister(c *gin.Context) {
 
 	email := normalizeEmail(req.Email)
 
+	// Scoped to this role only — see the matching comment in Register.
 	var count int
-	config.DB.QueryRow("SELECT COUNT(*) FROM users WHERE lower(email)=$1", email).Scan(&count)
+	config.DB.QueryRow(`
+		SELECT COUNT(*) FROM users u
+		LEFT JOIN roles r ON u.role_id = r.id
+		WHERE lower(u.email)=$1 AND r.name = 'law_student'
+	`, email).Scan(&count)
 	if count > 0 {
-		utils.Error(c, http.StatusConflict, "Email already registered", "duplicate email")
+		utils.Error(c, http.StatusConflict,
+			"An account with this email already exists for this role. Please sign in.",
+			"duplicate email+role")
 		return
 	}
 
@@ -562,6 +600,11 @@ func VerifyOTP(c *gin.Context) {
 func ForgotPassword(c *gin.Context) {
 	var req struct {
 		Email string `json:"email" binding:"required,email"`
+		// Role is which of the caller's same-email accounts to reset —
+		// required now that one email can back more than one role-scoped
+		// account (see migration 033), so a reset must never land on the
+		// wrong one.
+		Role string `json:"role" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
@@ -569,15 +612,18 @@ func ForgotPassword(c *gin.Context) {
 	}
 
 	email := normalizeEmail(req.Email)
+	role := normalizeRole(req.Role)
 
 	// Identical response whether or not the address is registered — this
 	// endpoint must never let a caller enumerate accounts.
 	const genericMsg = "If an account exists for that address, a reset code has been sent."
 
 	var userID string
-	err := config.DB.QueryRow(
-		`SELECT id FROM users WHERE lower(email) = $1 AND is_active = true`, email,
-	).Scan(&userID)
+	err := config.DB.QueryRow(`
+		SELECT u.id FROM users u
+		LEFT JOIN roles r ON u.role_id = r.id
+		WHERE lower(u.email) = $1 AND u.is_active = true AND r.name = $2
+	`, email, role).Scan(&userID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			utils.Error(c, http.StatusInternalServerError, "Could not send code", err.Error())
@@ -593,14 +639,15 @@ func ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	// Retire any still-outstanding reset codes for this address first, same
-	// as the login-OTP flow — only one live code at a time per purpose.
-	config.DB.Exec(`UPDATE otps SET is_used = true WHERE email = $1 AND purpose = 'password_reset' AND is_used = false`, email)
+	// Retire any still-outstanding reset codes for this address+role first,
+	// same as the login-OTP flow — only one live code at a time per purpose,
+	// and never touching a code issued for this email's other-role account.
+	config.DB.Exec(`UPDATE otps SET is_used = true WHERE email = $1 AND role = $2 AND purpose = 'password_reset' AND is_used = false`, email, role)
 
 	_, err = config.DB.Exec(`
-		INSERT INTO otps (id, email, otp_hash, purpose, attempts, expires_at)
-		VALUES ($1, $2, $3, 'password_reset', 0, NOW() + ($4 || ' minutes')::interval)
-	`, uuid.New().String(), email, utils.HashOTP(email, otp), otpValidMinutes)
+		INSERT INTO otps (id, email, role, otp_hash, purpose, attempts, expires_at)
+		VALUES ($1, $2, $3, $4, 'password_reset', 0, NOW() + ($5 || ' minutes')::interval)
+	`, uuid.New().String(), email, role, utils.HashOTP(email, otp), otpValidMinutes)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Could not send code", err.Error())
 		return
@@ -626,14 +673,14 @@ func ForgotPassword(c *gin.Context) {
 // again immediately before actually burning the code and changing the
 // password). consume=false never marks the code used, so failing to submit
 // a new password afterward doesn't strand the user's one live code.
-func verifyPasswordResetOTP(email, otp string, consume bool) (otpID string, code int, msg string) {
+func verifyPasswordResetOTP(email, role, otp string, consume bool) (otpID string, code int, msg string) {
 	var storedHash string
 	var attempts int
 	err := config.DB.QueryRow(`
 		SELECT id, otp_hash, attempts FROM otps
-		WHERE email = $1 AND purpose = 'password_reset' AND is_used = false AND expires_at > NOW()
+		WHERE email = $1 AND role = $2 AND purpose = 'password_reset' AND is_used = false AND expires_at > NOW()
 		ORDER BY created_at DESC LIMIT 1
-	`, email).Scan(&otpID, &storedHash, &attempts)
+	`, email, role).Scan(&otpID, &storedHash, &attempts)
 	if err == sql.ErrNoRows {
 		return "", http.StatusBadRequest, "Invalid or expired code"
 	}
@@ -666,13 +713,14 @@ func verifyPasswordResetOTP(email, otp string, consume bool) (otpID string, code
 func VerifyPasswordResetOTP(c *gin.Context) {
 	var req struct {
 		Email string `json:"email" binding:"required,email"`
+		Role  string `json:"role" binding:"required"`
 		OTP   string `json:"otp" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
 		return
 	}
-	_, code, msg := verifyPasswordResetOTP(normalizeEmail(req.Email), req.OTP, false)
+	_, code, msg := verifyPasswordResetOTP(normalizeEmail(req.Email), normalizeRole(req.Role), req.OTP, false)
 	if code != 0 {
 		utils.Error(c, code, msg, "")
 		return
@@ -686,6 +734,7 @@ func VerifyPasswordResetOTP(c *gin.Context) {
 func ResetPassword(c *gin.Context) {
 	var req struct {
 		Email       string `json:"email" binding:"required,email"`
+		Role        string `json:"role" binding:"required"`
 		OTP         string `json:"otp" binding:"required"`
 		NewPassword string `json:"new_password" binding:"required,min=6"`
 	}
@@ -695,7 +744,8 @@ func ResetPassword(c *gin.Context) {
 	}
 
 	email := normalizeEmail(req.Email)
-	_, code, msg := verifyPasswordResetOTP(email, req.OTP, true)
+	role := normalizeRole(req.Role)
+	_, code, msg := verifyPasswordResetOTP(email, role, req.OTP, true)
 	if code != 0 {
 		utils.Error(c, code, msg, "")
 		return
@@ -707,9 +757,15 @@ func ResetPassword(c *gin.Context) {
 		return
 	}
 
-	res, err := config.DB.Exec(
-		`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE lower(email) = $2 AND is_active = true`,
-		hash, email)
+	// Scoped to the one role-specific account the OTP was issued for — never
+	// updates every account under this email, so a Lawyer reset can't
+	// accidentally overwrite the Client/Student password for the same
+	// address.
+	res, err := config.DB.Exec(`
+		UPDATE users u SET password_hash = $1, updated_at = NOW()
+		FROM roles r
+		WHERE u.role_id = r.id AND lower(u.email) = $2 AND r.name = $3 AND u.is_active = true
+	`, hash, email, role)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Could not reset password", err.Error())
 		return

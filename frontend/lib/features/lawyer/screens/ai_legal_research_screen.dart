@@ -624,7 +624,8 @@ class _AILegalResearchScreenState extends State<AILegalResearchScreen>
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                    color: _brown.withValues(alpha: 0.1), shape: BoxShape.circle),
+                    color: _brown.withValues(alpha: 0.1),
+                    shape: BoxShape.circle),
                 child: const Center(
                     child: Text('⚖️', style: TextStyle(fontSize: 14)))),
             const SizedBox(width: 8),

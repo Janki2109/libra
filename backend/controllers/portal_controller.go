@@ -130,6 +130,7 @@ func GetMyCases(c *gin.Context) {
 		       COALESCE(c.status,'active'), COALESCE(c.priority,'normal'),
 		       COALESCE(c.description,''), COALESCE(c.opposite_party,''),
 		       COALESCE(c.opposite_lawyer,''), COALESCE(c.cnr_number,''),
+		       COALESCE(c.closed_reason,''),
 		       c.created_at
 		FROM cases c
 		WHERE c.client_id IN (SELECT id FROM clients WHERE lower(email) = $1)
@@ -156,6 +157,7 @@ func GetMyCases(c *gin.Context) {
 		OppositeParty  string    `json:"opposite_party"`
 		OppositeLawyer string    `json:"opposite_lawyer"`
 		CNRNumber      string    `json:"cnr_number"`
+		ClosedReason   string    `json:"closed_reason"`
 		CreatedAt      time.Time `json:"created_at"`
 	}
 
@@ -167,7 +169,7 @@ func GetMyCases(c *gin.Context) {
 			&cs.CaseType, &cs.CourtName, &cs.CourtLocation,
 			&cs.JudgeName, &cs.Status, &cs.Priority,
 			&cs.Description, &cs.OppositeParty,
-			&cs.OppositeLawyer, &cs.CNRNumber, &cs.CreatedAt,
+			&cs.OppositeLawyer, &cs.CNRNumber, &cs.ClosedReason, &cs.CreatedAt,
 		)
 		cases = append(cases, cs)
 	}
@@ -256,9 +258,13 @@ func GetMyDocuments(c *gin.Context) {
 		       COALESCE(d.category,''), COALESCE(d.file_url,''),
 		       COALESCE(d.description,''),
 		       COALESCE(d.case_id::text,''),
+		       COALESCE(NULLIF(d.uploaded_by_role,''), r.name, ''),
+		       COALESCE(u.name,''),
 		       d.created_at
 		FROM documents d
 		LEFT JOIN clients cl ON d.client_id = cl.id
+		LEFT JOIN users u ON u.id = d.uploaded_by
+		LEFT JOIN roles r ON r.id = u.role_id
 		WHERE (
 		  d.uploaded_by = $1::uuid
 		  OR lower(cl.email) = $2
@@ -279,14 +285,16 @@ func GetMyDocuments(c *gin.Context) {
 	defer rows.Close()
 
 	type Doc struct {
-		ID          string    `json:"id"`
-		FileName    string    `json:"file_name"`
-		FileType    string    `json:"file_type"`
-		Category    string    `json:"category"`
-		FileURL     string    `json:"file_url"`
-		Description string    `json:"description"`
-		CaseID      string    `json:"case_id"`
-		CreatedAt   time.Time `json:"created_at"`
+		ID             string    `json:"id"`
+		FileName       string    `json:"file_name"`
+		FileType       string    `json:"file_type"`
+		Category       string    `json:"category"`
+		FileURL        string    `json:"file_url"`
+		Description    string    `json:"description"`
+		CaseID         string    `json:"case_id"`
+		UploadedByRole string    `json:"uploaded_by_role"`
+		UploaderName   string    `json:"uploader_name"`
+		CreatedAt      time.Time `json:"created_at"`
 	}
 
 	docs := []Doc{}
@@ -295,7 +303,7 @@ func GetMyDocuments(c *gin.Context) {
 		rows.Scan(
 			&d.ID, &d.FileName, &d.FileType,
 			&d.Category, &d.FileURL, &d.Description,
-			&d.CaseID, &d.CreatedAt,
+			&d.CaseID, &d.UploadedByRole, &d.UploaderName, &d.CreatedAt,
 		)
 		docs = append(docs, d)
 	}
@@ -324,22 +332,28 @@ func GetMyDocument(c *gin.Context) {
 	userID := utils.UserID(c)
 
 	var d struct {
-		ID          string `json:"id"`
-		FileName    string `json:"file_name"`
-		FileURL     string `json:"file_url"`
-		FileContent string `json:"file_content"`
-		FileType    string `json:"file_type"`
-		Category    string `json:"category"`
-		FileSize    int    `json:"file_size"`
-		MimeType    string `json:"mime_type"`
+		ID             string `json:"id"`
+		FileName       string `json:"file_name"`
+		FileURL        string `json:"file_url"`
+		FileContent    string `json:"file_content"`
+		FileType       string `json:"file_type"`
+		Category       string `json:"category"`
+		FileSize       int    `json:"file_size"`
+		MimeType       string `json:"mime_type"`
+		UploadedByRole string `json:"uploaded_by_role"`
+		UploaderName   string `json:"uploader_name"`
 	}
 	err := config.DB.QueryRow(`
 		SELECT d.id, d.file_name, COALESCE(d.file_url,''),
 		       COALESCE(d.file_content,''), COALESCE(d.file_type,''),
 		       COALESCE(d.category,''), COALESCE(d.file_size,0),
-		       COALESCE(d.mime_type,'')
+		       COALESCE(d.mime_type,''),
+		       COALESCE(NULLIF(d.uploaded_by_role,''), r.name, ''),
+		       COALESCE(u.name,'')
 		FROM documents d
 		LEFT JOIN clients cl ON d.client_id = cl.id
+		LEFT JOIN users u ON u.id = d.uploaded_by
+		LEFT JOIN roles r ON r.id = u.role_id
 		WHERE d.id = $1::uuid
 		  AND d.is_archived = false
 		  AND (
@@ -352,7 +366,8 @@ func GetMyDocument(c *gin.Context) {
 		    )
 		  )
 	`, id, userID, userEmail).Scan(&d.ID, &d.FileName, &d.FileURL, &d.FileContent,
-		&d.FileType, &d.Category, &d.FileSize, &d.MimeType)
+		&d.FileType, &d.Category, &d.FileSize, &d.MimeType,
+		&d.UploadedByRole, &d.UploaderName)
 	if err != nil {
 		utils.Error(c, http.StatusNotFound, "Document not found", err.Error())
 		return

@@ -124,7 +124,8 @@ class _PortalCaseScreenState extends State<PortalCaseScreen> {
                                     color: _green.withValues(alpha: 0.1),
                                     shape: BoxShape.circle),
                                 child: Icon(Icons.gavel_rounded,
-                                    color: _green.withValues(alpha: 0.5), size: 40)),
+                                    color: _green.withValues(alpha: 0.5),
+                                    size: 40)),
                             const SizedBox(height: 16),
                             const Text('No Cases Yet',
                                 style: TextStyle(
@@ -156,8 +157,8 @@ class _PortalCaseScreenState extends State<PortalCaseScreen> {
                                 decoration: BoxDecoration(
                                     color: _bgCard,
                                     borderRadius: BorderRadius.circular(16),
-                                    border:
-                                        Border.all(color: sc.withValues(alpha: 0.25)),
+                                    border: Border.all(
+                                        color: sc.withValues(alpha: 0.25)),
                                     boxShadow: [
                                       BoxShadow(
                                           color: _green.withValues(alpha: 0.06),
@@ -183,7 +184,8 @@ class _PortalCaseScreenState extends State<PortalCaseScreen> {
                                                 width: 44,
                                                 height: 44,
                                                 decoration: BoxDecoration(
-                                                    color: sc.withValues(alpha: 0.1),
+                                                    color: sc.withValues(
+                                                        alpha: 0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             10)),
@@ -230,15 +232,16 @@ class _PortalCaseScreenState extends State<PortalCaseScreen> {
                                                         horizontal: 10,
                                                         vertical: 4),
                                                     decoration: BoxDecoration(
-                                                        color:
-                                                            sc.withValues(alpha: 0.1),
+                                                        color: sc.withValues(
+                                                            alpha: 0.1),
                                                         borderRadius:
                                                             BorderRadius
                                                                 .circular(8),
                                                         border: Border.all(
                                                             color:
                                                                 sc.withValues(
-                                                                    alpha: 0.3))),
+                                                                    alpha:
+                                                                        0.3))),
                                                     child: Text(
                                                         status.toUpperCase(),
                                                         style: TextStyle(
@@ -284,8 +287,8 @@ class _PortalCaseScreenState extends State<PortalCaseScreen> {
                                                       horizontal: 8,
                                                       vertical: 3),
                                                   decoration: BoxDecoration(
-                                                      color: _green
-                                                          .withValues(alpha: 0.08),
+                                                      color: _green.withValues(
+                                                          alpha: 0.08),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               6)),
@@ -305,8 +308,9 @@ class _PortalCaseScreenState extends State<PortalCaseScreen> {
                                                 Text(
                                                     'Tap to view details & hearings →',
                                                     style: TextStyle(
-                                                        color: _green
-                                                            .withValues(alpha: 0.6),
+                                                        color:
+                                                            _green.withValues(
+                                                                alpha: 0.6),
                                                         fontSize: 10,
                                                         fontStyle:
                                                             FontStyle.italic)),
@@ -418,7 +422,14 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.caseData;
+    // Re-resolve from the live provider (kept current by the app's 3s
+    // auto-refresh, see PortalProvider) instead of only ever showing the
+    // static snapshot this screen was opened with — otherwise a case closed
+    // by the lawyer while this screen is already open would never show its
+    // status/closure reason without the client backing out and reopening it.
+    final liveCases = context.watch<PortalProvider>().cases;
+    final c = liveCases.firstWhere((x) => x['id'] == widget.caseData['id'],
+        orElse: () => widget.caseData);
     final sc = _statusColor(c['status'] ?? 'active');
 
     return Scaffold(
@@ -516,6 +527,37 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
                   Icons.priority_high_rounded),
             ]),
         const SizedBox(height: 12),
+
+        // Closure reason — only shown once the lawyer has actually closed
+        // the case and entered one; the exact text they saved, never a
+        // placeholder.
+        if ((c['status'] ?? '') == 'closed' &&
+            (c['closed_reason'] ?? '').toString().isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+                color: _textMuted.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _textMuted.withValues(alpha: 0.3))),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Row(children: [
+                Icon(Icons.lock_rounded, color: _textMuted, size: 16),
+                SizedBox(width: 8),
+                Text('Closure Reason',
+                    style: TextStyle(
+                        color: _textMuted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
+              ]),
+              const SizedBox(height: 8),
+              Text(c['closed_reason'],
+                  style: const TextStyle(
+                      color: _textPri, fontSize: 13, height: 1.5)),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
 
         // Court details
         _InfoCard(
@@ -830,8 +872,9 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
                       Expanded(
                           child: Container(
                               width: 2,
-                              color:
-                                  isDone ? _green.withValues(alpha: 0.4) : _border)),
+                              color: isDone
+                                  ? _green.withValues(alpha: 0.4)
+                                  : _border)),
                   ]),
                   const SizedBox(width: 14),
 
@@ -1078,7 +1121,8 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
     if (_hearings.isEmpty) {
       return Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(Icons.event_rounded, color: _green.withValues(alpha: 0.3), size: 56),
+        Icon(Icons.event_rounded,
+            color: _green.withValues(alpha: 0.3), size: 56),
         const SizedBox(height: 12),
         const Text('No hearings yet',
             style: TextStyle(color: _textMuted, fontSize: 15)),
@@ -1175,8 +1219,8 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
                             decoration: BoxDecoration(
                                 color: color.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
-                                border:
-                                    Border.all(color: color.withValues(alpha: 0.3))),
+                                border: Border.all(
+                                    color: color.withValues(alpha: 0.3))),
                             child: Text(status.toUpperCase(),
                                 style: TextStyle(
                                     color: color,
@@ -1227,8 +1271,8 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
                             decoration: BoxDecoration(
                                 color: _blue.withValues(alpha: 0.05),
                                 borderRadius: BorderRadius.circular(10),
-                                border:
-                                    Border.all(color: _blue.withValues(alpha: 0.2))),
+                                border: Border.all(
+                                    color: _blue.withValues(alpha: 0.2))),
                             child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1254,8 +1298,8 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
                             decoration: BoxDecoration(
                                 color: _gold.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
-                                border:
-                                    Border.all(color: _gold.withValues(alpha: 0.3))),
+                                border: Border.all(
+                                    color: _gold.withValues(alpha: 0.3))),
                             child: Row(children: [
                               const Icon(Icons.event_repeat_rounded,
                                   color: _gold, size: 16),

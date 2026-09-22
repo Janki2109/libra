@@ -104,7 +104,14 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
   Future<void> _startChat() async {
     if (widget.fromClientPortal && !_chatUnlocked) {
       HapticFeedback.lightImpact();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      // clearSnackBars (not just showSnackBar) so tapping the locked Chat
+      // button again restarts the 8s timer cleanly instead of queuing a
+      // second copy behind the first one — ScaffoldMessenger queues by
+      // default.
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(SnackBar(
+          duration: const Duration(seconds: 8),
           content: const Text(
               'Chat unlocks once you book a paid consultation with this lawyer.'),
           backgroundColor: const Color(0xFFD4A017),
@@ -240,22 +247,34 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                       ]),
                     ),
                     const SizedBox(height: 8),
+                    // These used to be a dark slate-gray (0xFF546E7A) — a
+                    // color meant for text on a light card background, but
+                    // this whole block sits on the dark green/blue header
+                    // gradient above, where that gray was nearly invisible
+                    // (see designation/name text right above, which already
+                    // correctly uses white). Matching that same white-on-dark
+                    // treatment here fixes the contrast without changing the
+                    // header's design.
                     if (firmName.isNotEmpty)
                       Text(firmName,
-                          style: const TextStyle(
-                              color: const Color(0xFF546E7A), fontSize: 13)),
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
                     if (location.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.location_on_rounded,
-                                color: const Color(0xFF546E7A), size: 14),
+                            Icon(Icons.location_on_rounded,
+                                color: Colors.white.withValues(alpha: 0.85),
+                                size: 14),
                             const SizedBox(width: 4),
                             Text(location,
-                                style: const TextStyle(
-                                    color: const Color(0xFF546E7A),
-                                    fontSize: 12)),
+                                style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600)),
                           ]),
                     ],
                     const SizedBox(height: 20),
@@ -271,11 +290,8 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
                               Icons.emoji_events_rounded,
                               const Color(0xFFFFD700)),
                           const SizedBox(width: 10),
-                          _StatCard(
-                              '$experience',
-                              'Yrs Exp',
-                              Icons.workspace_premium_rounded,
-                              const Color(0xFF546E7A)),
+                          _StatCard('$experience', 'Yrs Exp',
+                              Icons.workspace_premium_rounded, Colors.white),
                         ])),
                     const SizedBox(height: 20),
                     Padding(
@@ -490,6 +506,12 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen>
   }
 }
 
+// Always used on the dark green/blue header gradient above (never on a light
+// card) — the label used to be a dark slate-gray meant for light
+// backgrounds, which made it nearly invisible here regardless of which
+// accent color the value/icon used. White (softened for the label so the
+// bold colored value still stands out as the primary figure) reads clearly
+// against that dark background in every case.
 class _StatCard extends StatelessWidget {
   final String value, label;
   final IconData icon;
@@ -510,8 +532,10 @@ class _StatCard extends StatelessWidget {
               style: TextStyle(
                   color: color, fontSize: 18, fontWeight: FontWeight.w800)),
           Text(label,
-              style:
-                  const TextStyle(color: const Color(0xFF546E7A), fontSize: 9),
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600),
               textAlign: TextAlign.center),
         ]),
       ));

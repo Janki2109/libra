@@ -1005,8 +1005,9 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                 const SizedBox(height: 6),
                 Text(message,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: const Color(0xFF546E7A), fontSize: 13)),
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 13)),
                 const SizedBox(height: 16),
                 Row(
                     mainAxisAlignment: MainAxisAlignment.center,

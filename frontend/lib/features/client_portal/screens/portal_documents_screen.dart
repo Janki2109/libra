@@ -19,19 +19,36 @@ const Map<String, List<String>> _allowedExtByType = {
   'Video': ['mp4', 'mov', 'avi', 'mkv', 'webm'],
   'Excel': ['xls', 'xlsx', 'csv'],
   'Other': [
-    'pdf', 'doc', 'docx', 'txt',
-    'jpg', 'jpeg', 'png', 'webp',
-    'mp4', 'mov', 'avi', 'mkv', 'webm',
-    'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'zip',
+    'pdf',
+    'doc',
+    'docx',
+    'txt',
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+    'webm',
+    'xls',
+    'xlsx',
+    'csv',
+    'ppt',
+    'pptx',
+    'zip',
   ],
 };
 
-const int _maxUploadFileBytes = 6 * 1024 * 1024; // matches the backend's inline-storage cap
+const int _maxUploadFileBytes =
+    6 * 1024 * 1024; // matches the backend's inline-storage cap
 
 const Map<String, String> _extToMime = {
   'pdf': 'application/pdf',
   'doc': 'application/msword',
-  'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'docx':
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'txt': 'text/plain',
   'jpg': 'image/jpeg',
   'jpeg': 'image/jpeg',
@@ -46,7 +63,8 @@ const Map<String, String> _extToMime = {
   'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'csv': 'text/csv',
   'ppt': 'application/vnd.ms-powerpoint',
-  'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'pptx':
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'zip': 'application/zip',
 };
 
@@ -140,9 +158,11 @@ class _PortalDocumentsScreenState extends State<PortalDocumentsScreen>
         return ft.contains('image') ||
             _allowedExtByType['Photo']!.contains(ext);
       if (type == 'video')
-        return ft.contains('video') || _allowedExtByType['Video']!.contains(ext);
+        return ft.contains('video') ||
+            _allowedExtByType['Video']!.contains(ext);
       if (type == 'document')
-        return ft.contains('doc') || _allowedExtByType['Document']!.contains(ext);
+        return ft.contains('doc') ||
+            _allowedExtByType['Document']!.contains(ext);
       return true;
     }).toList();
   }
@@ -457,6 +477,15 @@ class _DocCard extends StatelessWidget {
             const SizedBox(width: 8),
             Text(date, style: const TextStyle(color: _textMuted, fontSize: 11)),
           ]),
+          if ((doc['uploader_name'] ?? '').toString().isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+                'Uploaded by: ${doc['uploader_name']}'
+                '${(doc['uploaded_by_role'] ?? '').toString().isNotEmpty ? ' • ${(doc['uploaded_by_role'] as String).replaceAll('_', ' ').toUpperCase()}' : ''}',
+                style: const TextStyle(color: _textMuted, fontSize: 10.5),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ],
         ])),
         GestureDetector(
           onTap: () => _showDocOptions(context, doc, name, color, icon),
@@ -472,8 +501,8 @@ class _DocCard extends StatelessWidget {
     );
   }
 
-  void _showDocOptions(
-      BuildContext context, dynamic doc, String name, Color color, IconData icon) {
+  void _showDocOptions(BuildContext context, dynamic doc, String name,
+      Color color, IconData icon) {
     showModalBottomSheet(
       context: context,
       backgroundColor: _bgCard,
@@ -549,18 +578,20 @@ class _DocCard extends StatelessWidget {
   String _mimeTypeOf(dynamic doc, Map<String, dynamic>? data) {
     final fromServer = (data?['mime_type'] ?? '').toString();
     if (fromServer.isNotEmpty) return fromServer;
-    return _extToMime[_extOf(doc['file_name'] ?? '')] ?? 'application/octet-stream';
+    return _extToMime[_extOf(doc['file_name'] ?? '')] ??
+        'application/octet-stream';
   }
 
   Future<void> _openDocument(BuildContext context, dynamic doc) async {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(
-          child: CircularProgressIndicator(color: _green)),
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: _green)),
     );
     try {
-      final res = await DioClient.instance.get('/portal/documents/${doc['id']}');
+      final res =
+          await DioClient.instance.get('/portal/documents/${doc['id']}');
       final data = res.data['data'] as Map<String, dynamic>?;
       final content = (data?['file_content'] ?? '').toString();
       if (context.mounted) Navigator.pop(context); // close loading dialog
@@ -581,7 +612,8 @@ class _DocCard extends StatelessWidget {
       );
       if (!result.success && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result.message ?? 'Could not open this file on your device'),
+            content: Text(
+                result.message ?? 'Could not open this file on your device'),
             backgroundColor: const Color(0xFFD9534F)));
       }
     } catch (e) {
@@ -603,10 +635,12 @@ class _DocCard extends StatelessWidget {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator(color: _green)),
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: _green)),
     );
     try {
-      final res = await DioClient.instance.get('/portal/documents/${doc['id']}');
+      final res =
+          await DioClient.instance.get('/portal/documents/${doc['id']}');
       final data = res.data['data'] as Map<String, dynamic>?;
       final content = (data?['file_content'] ?? '').toString();
       if (context.mounted) Navigator.pop(context);
@@ -787,24 +821,23 @@ class _UploadSheetState extends State<_UploadSheet> {
       // never typed it) so downstream type detection — icons, the type
       // filter chips, and opening the file later — has something real to
       // key off, instead of only the free-text title the user entered.
-      final storedName = ext.isNotEmpty && !title.toLowerCase().endsWith('.$ext')
-          ? '$title.$ext'
-          : title;
-      await DioClient.instance.post('/portal/documents/upload',
-          data: {
-            'file_name': storedName,
-            'file_content': base64Encode(file.bytes!),
-            'file_type': ext.isNotEmpty ? ext : _selectedType.toLowerCase(),
-            'file_size': file.size,
-            'mime_type': _extToMime[ext] ?? 'application/octet-stream',
-            'category': _selectedCategory,
-            'description': 'Uploaded by client',
-          },
-          onSendProgress: (sent, total) {
-            if (total > 0 && mounted) {
-              setState(() => _uploadProgress = sent / total);
-            }
-          });
+      final storedName =
+          ext.isNotEmpty && !title.toLowerCase().endsWith('.$ext')
+              ? '$title.$ext'
+              : title;
+      await DioClient.instance.post('/portal/documents/upload', data: {
+        'file_name': storedName,
+        'file_content': base64Encode(file.bytes!),
+        'file_type': ext.isNotEmpty ? ext : _selectedType.toLowerCase(),
+        'file_size': file.size,
+        'mime_type': _extToMime[ext] ?? 'application/octet-stream',
+        'category': _selectedCategory,
+        'description': 'Uploaded by client',
+      }, onSendProgress: (sent, total) {
+        if (total > 0 && mounted) {
+          setState(() => _uploadProgress = sent / total);
+        }
+      });
       if (mounted) {
         Navigator.pop(context);
         widget.onUploaded();
@@ -817,15 +850,15 @@ class _UploadSheetState extends State<_UploadSheet> {
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
-      padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20),
-      child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Center(
                   child: Container(
                       width: 40,
@@ -1059,7 +1092,9 @@ class _PickFileButton extends StatelessWidget {
             const SizedBox(height: 8),
             Text(loading ? 'Opening file picker...' : 'Tap to select a file',
                 style: const TextStyle(
-                    color: _textPri, fontSize: 13, fontWeight: FontWeight.w600)),
+                    color: _textPri,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text(allowedExt.map((e) => e.toUpperCase()).join(', '),
                 textAlign: TextAlign.center,
@@ -1087,8 +1122,8 @@ class _PickedFilePreview extends StatelessWidget {
     if (isImage && file.bytes != null) {
       thumb = ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Image.memory(file.bytes!,
-            width: 52, height: 52, fit: BoxFit.cover),
+        child:
+            Image.memory(file.bytes!, width: 52, height: 52, fit: BoxFit.cover),
       );
     } else {
       final icon = isVideo
@@ -1203,7 +1238,8 @@ class _StatPill extends StatelessWidget {
                   color: color, fontWeight: FontWeight.w800, fontSize: 13)),
           const SizedBox(width: 4),
           Text(label,
-              style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 10)),
+              style:
+                  TextStyle(color: color.withValues(alpha: 0.8), fontSize: 10)),
         ]),
       );
 }

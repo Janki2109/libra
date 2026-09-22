@@ -2772,7 +2772,7 @@ class _QuickBtn extends StatelessWidget {
           onTap();
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
           decoration: BoxDecoration(
               color: _bgCard,
               borderRadius: BorderRadius.circular(14),
@@ -2784,10 +2784,14 @@ class _QuickBtn extends StatelessWidget {
                     offset: const Offset(0, 2))
               ]),
           child: Stack(clipBehavior: Clip.none, children: [
-            Column(children: [
+            Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(icon, color: color, size: 22),
               const SizedBox(height: 4),
               Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                       color: color, fontSize: 10, fontWeight: FontWeight.w700)),
             ]),

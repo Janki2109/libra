@@ -34,6 +34,7 @@ String documentUploadExtOf(String fileName) {
   if (i == -1 || i == fileName.length - 1) return '';
   return fileName.substring(i + 1).toLowerCase();
 }
+
 String documentUploadFormatSize(int bytes) {
   if (bytes < 1024) return '$bytes B';
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -82,6 +83,7 @@ void showDocumentUploadSheet(
   PlatformFile? pickedFile;
   bool picking = false;
   bool loading = false;
+  bool nameError = false;
 
   showModalBottomSheet(
     context: context,
@@ -96,7 +98,9 @@ void showDocumentUploadSheet(
           final allowed =
               documentUploadAllowedExtByType[selectedType] ?? const <String>[];
           final result = await FilePicker.platform.pickFiles(
-              type: FileType.custom, allowedExtensions: allowed, withData: true);
+              type: FileType.custom,
+              allowedExtensions: allowed,
+              withData: true);
           if (result == null || result.files.isEmpty) return;
           final f = result.files.single;
           final ext = documentUploadExtOf(f.name);
@@ -118,8 +122,8 @@ void showDocumentUploadSheet(
           if (f.bytes == null) {
             if (ctx.mounted)
               ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                  content:
-                      Text('Could not read the selected file. Please try again.'),
+                  content: Text(
+                      'Could not read the selected file. Please try again.'),
                   backgroundColor: Color(0xFFD9534F)));
             return;
           }
@@ -162,8 +166,9 @@ void showDocumentUploadSheet(
                         .expand((t) => [
                               _FileTypeChip(
                                 label: t,
-                                color:
-                                    selectedType == t ? _brown : const Color(0xFF3D2C8D),
+                                color: selectedType == t
+                                    ? _brown
+                                    : const Color(0xFF3D2C8D),
                                 onTap: () => setS(() {
                                   selectedType = t;
                                   pickedFile = null;
@@ -177,8 +182,21 @@ void showDocumentUploadSheet(
                 TextField(
                     controller: nameCtrl,
                     style: const TextStyle(color: _textPri),
+                    onChanged: (v) {
+                      if (nameError && v.trim().isNotEmpty) {
+                        setS(() => nameError = false);
+                      }
+                    },
                     decoration: _inputDeco(
                         'Document Name *', Icons.description_outlined)),
+                if (nameError) ...[
+                  const SizedBox(height: 6),
+                  const Text('You need to name your document',
+                      style: TextStyle(
+                          color: Color(0xFFD9534F),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
+                ],
                 const SizedBox(height: 12),
                 pickedFile == null
                     ? InkWell(
@@ -193,7 +211,8 @@ void showDocumentUploadSheet(
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: _border, width: 1.2),
                           ),
-                          child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
                             if (picking)
                               const SizedBox(
                                   width: 26,
@@ -214,7 +233,8 @@ void showDocumentUploadSheet(
                                     fontWeight: FontWeight.w600)),
                             const SizedBox(height: 4),
                             Text(
-                                (documentUploadAllowedExtByType[selectedType] ?? [])
+                                (documentUploadAllowedExtByType[selectedType] ??
+                                        [])
                                     .map((e) => e.toUpperCase())
                                     .join(', '),
                                 textAlign: TextAlign.center,
@@ -269,8 +289,8 @@ void showDocumentUploadSheet(
                       ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                   decoration: BoxDecoration(
                       color: _bg,
                       borderRadius: BorderRadius.circular(12),
@@ -292,8 +312,7 @@ void showDocumentUploadSheet(
                       'Affidavit',
                       'Other'
                     ]
-                        .map((c) =>
-                            DropdownMenuItem(value: c, child: Text(c)))
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                         .toList(),
                     onChanged: (v) => setS(() => category = v!),
                   )),
@@ -306,13 +325,16 @@ void showDocumentUploadSheet(
                     onPressed: loading
                         ? null
                         : () async {
-                            if (nameCtrl.text.trim().isEmpty) return;
+                            if (nameCtrl.text.trim().isEmpty) {
+                              setS(() => nameError = true);
+                              return;
+                            }
                             final file = pickedFile;
                             if (file == null || file.bytes == null) {
                               ScaffoldMessenger.of(ctx).showSnackBar(
                                   const SnackBar(
-                                      content:
-                                          Text('Please select a file to upload'),
+                                      content: Text(
+                                          'Please select a file to upload'),
                                       backgroundColor: Color(0xFFD9534F)));
                               return;
                             }
@@ -342,8 +364,8 @@ void showDocumentUploadSheet(
                                   backgroundColor: Color(0xFF2E8B57),
                                   behavior: SnackBarBehavior.floating,
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.all(Radius.circular(12))),
+                                      borderRadius: BorderRadius.all(
+                                          Radius.circular(12))),
                                 ));
                             } catch (e) {
                               setS(() => loading = false);

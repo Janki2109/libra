@@ -191,7 +191,8 @@ class AppRouter {
         GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
         GoRoute(
             path: '/forgot-password',
-            builder: (_, __) => const ForgotPasswordScreen()),
+            builder: (_, state) =>
+                ForgotPasswordScreen(role: state.extra as String?)),
         GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
         GoRoute(
             path: '/client/register',
