@@ -534,3 +534,36 @@ func AdminGetLawyerActivity(c *gin.Context) {
 
 	utils.Success(c, http.StatusOK, "Activity fetched", out)
 }
+
+// AdminGetLawyerBankDetails - GET /admin/lawyers/:id/bank-details
+//
+// Super Admin only (see the admin group's RoleMiddleware in routes.go) —
+// the one reader besides the lawyer themself allowed to see the full
+// account number, since Super Admin is who actually has to key it into the
+// payout/settlement mechanism. Never wired into any client-facing route.
+func AdminGetLawyerBankDetails(c *gin.Context) {
+	id := c.Param("id")
+	if !isUUID(id) {
+		utils.Error(c, http.StatusBadRequest, "Invalid id", "")
+		return
+	}
+
+	var d struct {
+		AccountHolderName string `json:"bank_account_holder_name"`
+		BankName          string `json:"bank_name"`
+		AccountNumber     string `json:"bank_account_number"`
+		IFSC              string `json:"bank_ifsc"`
+		PassbookDocID     string `json:"bank_passbook_document_id"`
+	}
+	err := config.DB.QueryRow(`
+		SELECT COALESCE(bank_account_holder_name,''), COALESCE(bank_name,''),
+		       COALESCE(bank_account_number,''), COALESCE(bank_ifsc,''),
+		       COALESCE(bank_passbook_document_id::text,'')
+		FROM users WHERE id=$1::uuid
+	`, id).Scan(&d.AccountHolderName, &d.BankName, &d.AccountNumber, &d.IFSC, &d.PassbookDocID)
+	if err != nil {
+		utils.Error(c, http.StatusNotFound, "Lawyer not found", err.Error())
+		return
+	}
+	utils.Success(c, http.StatusOK, "Bank details fetched", d)
+}

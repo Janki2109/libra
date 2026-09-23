@@ -199,6 +199,19 @@ func VerifyRazorpayPayment(c *gin.Context) {
 
 	amount := float64(amountPaise) / 100
 
+	// Snapshot the invoice's own GST/platform-fee/subtotal breakdown onto the
+	// payment row at the moment it clears, so a receipt (client/lawyer/Super
+	// Admin) never has to reconstruct "what was retained vs. payable to the
+	// lawyer" from the invoice's current state, which could since have
+	// changed. The lawyer's payable share is the service subtotal — GST and
+	// the platform fee are what the platform retains.
+	var gstAmount, platformFee, subtotal float64
+	config.DB.QueryRow(`
+		SELECT COALESCE(tax_amount,0), COALESCE(platform_fee,0), COALESCE(subtotal,0)
+		FROM invoices WHERE id=$1::uuid AND firm_id=$2::uuid
+	`, invoiceID, firmID).Scan(&gstAmount, &platformFee, &subtotal)
+	lawyerPayable := subtotal
+
 	paymentMethod := req.PaymentMethod
 	if paymentMethod == "" {
 		paymentMethod = "razorpay"
@@ -220,12 +233,15 @@ func VerifyRazorpayPayment(c *gin.Context) {
 	res, err := tx.Exec(`
 		INSERT INTO payments (id, firm_id, invoice_id, amount,
 		payment_date, payment_method, transaction_id, notes, created_by,
-		verification_status, verified_at)
-		VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9::uuid, 'verified', NOW())
+		verification_status, verified_at,
+		razorpay_order_id, gst_amount, platform_fee, lawyer_payable_amount)
+		VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9::uuid, 'verified', NOW(),
+		$10, $11, $12, $13)
 		ON CONFLICT (firm_id, transaction_id) DO NOTHING
 	`, payID, firmID, invoiceID, amount, today,
 		paymentMethod, req.RazorpayPaymentID,
-		"Online payment via Razorpay", uID)
+		"Online payment via Razorpay", uID,
+		req.RazorpayOrderID, gstAmount, platformFee, lawyerPayable)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to record payment", err.Error())
 		return

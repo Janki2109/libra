@@ -471,6 +471,8 @@ func GetMyInvoice(c *gin.Context) {
 		BankAccountNumber string  `json:"bank_account_number"`
 		BankIFSC          string  `json:"bank_ifsc"`
 		BankName          string  `json:"bank_name"`
+		RazorpayPaymentID string  `json:"razorpay_payment_id"`
+		PaidAt            string  `json:"paid_at"`
 	}
 	err := config.DB.QueryRow(`
 		SELECT i.id, i.invoice_number,
@@ -482,10 +484,17 @@ func GetMyInvoice(c *gin.Context) {
 		       COALESCE(i.bank_account_name, f.bank_account_name, ''),
 		       COALESCE(i.bank_account_number, f.bank_account_number, ''),
 		       COALESCE(i.bank_ifsc, f.bank_ifsc, ''),
-		       COALESCE(i.bank_name, f.bank_name, '')
+		       COALESCE(i.bank_name, f.bank_name, ''),
+		       COALESCE(p.transaction_id,''), COALESCE(p.verified_at::text,'')
 		FROM invoices i
 		LEFT JOIN clients cl ON i.client_id = cl.id
 		LEFT JOIN firms f ON i.firm_id = f.id
+		LEFT JOIN LATERAL (
+		  SELECT transaction_id, verified_at
+		  FROM payments
+		  WHERE invoice_id = i.id AND payment_method = 'razorpay'
+		  ORDER BY created_at DESC LIMIT 1
+		) p ON true
 		WHERE i.id = $1::uuid
 		  AND i.client_id IN (SELECT id FROM clients WHERE lower(email) = $2)
 	`, id, userEmail).Scan(
@@ -493,7 +502,7 @@ func GetMyInvoice(c *gin.Context) {
 		&inv.PlatformFee, &inv.TotalAmount, &inv.PaidAmount,
 		&inv.Status, &inv.IssueDate, &inv.DueDate, &inv.Notes, &inv.ClientName,
 		&inv.UPIID, &inv.BankAccountName, &inv.BankAccountNumber,
-		&inv.BankIFSC, &inv.BankName)
+		&inv.BankIFSC, &inv.BankName, &inv.RazorpayPaymentID, &inv.PaidAt)
 	if err != nil {
 		utils.Error(c, http.StatusNotFound, "Invoice not found", err.Error())
 		return

@@ -428,6 +428,9 @@ func GetInvoice(c *gin.Context) {
 		BankName          string  `json:"bank_name"`
 		TransactionID     string  `json:"transaction_id"`
 		PaymentSlipURL    string  `json:"payment_slip_url"`
+		RazorpayPaymentID string  `json:"razorpay_payment_id"`
+		LawyerPayable     float64 `json:"lawyer_payable_amount"`
+		PaidAt            string  `json:"paid_at"`
 	}
 	err := config.DB.QueryRow(`
 		SELECT i.id, i.invoice_number,
@@ -441,17 +444,26 @@ func GetInvoice(c *gin.Context) {
 		       COALESCE(i.bank_ifsc, f.bank_ifsc, ''),
 		       COALESCE(i.bank_name, f.bank_name, ''),
 		       COALESCE(i.transaction_id,''),
-		       COALESCE(i.payment_slip_url,'')
+		       COALESCE(i.payment_slip_url,''),
+		       COALESCE(p.transaction_id,''), COALESCE(p.lawyer_payable_amount,0),
+		       COALESCE(p.verified_at::text,'')
 		FROM invoices i
 		LEFT JOIN clients cl ON i.client_id = cl.id
 		LEFT JOIN firms f ON i.firm_id = f.id
+		LEFT JOIN LATERAL (
+		  SELECT transaction_id, lawyer_payable_amount, verified_at
+		  FROM payments
+		  WHERE invoice_id = i.id AND payment_method = 'razorpay'
+		  ORDER BY created_at DESC LIMIT 1
+		) p ON true
 		WHERE i.id = $1::uuid AND i.firm_id = $2::uuid
 	`, id, firmID).Scan(
 		&inv.ID, &inv.InvoiceNumber, &inv.Subtotal, &inv.GSTRate, &inv.GSTAmount,
 		&inv.PlatformFee, &inv.TotalAmount, &inv.PaidAmount,
 		&inv.Status, &inv.IssueDate, &inv.DueDate, &inv.Notes, &inv.ClientName,
 		&inv.UPIID, &inv.BankAccountName, &inv.BankAccountNumber,
-		&inv.BankIFSC, &inv.BankName, &inv.TransactionID, &inv.PaymentSlipURL)
+		&inv.BankIFSC, &inv.BankName, &inv.TransactionID, &inv.PaymentSlipURL,
+		&inv.RazorpayPaymentID, &inv.LawyerPayable, &inv.PaidAt)
 	if err != nil {
 		utils.Error(c, http.StatusNotFound, "Invoice not found", err.Error())
 		return
@@ -1277,6 +1289,94 @@ func UpdateFirmBankDetails(c *gin.Context) {
 		VALUES (gen_random_uuid(), $1::uuid, $2::uuid, 'bank_details_updated', 'firm', $3)
 	`, firmID, utils.UserID(c), c.ClientIP())
 
+	utils.Success(c, http.StatusOK, "Bank details saved!", nil)
+}
+
+// ─── LAWYER PAYOUT BANK DETAILS ───────────────
+//
+// Separate from firm bank-details above: those decide where a CLIENT's
+// manual/offline payment lands (shown to the client on the invoice). These
+// decide where the PLATFORM settles a LAWYER's own payout and are never
+// returned to a client — no client-facing route reads this table/column
+// set at all, which is what actually enforces "never shown to the client
+// as a payment destination", not just masking in the response shape here.
+
+func GetMyBankDetails(c *gin.Context) {
+	if utils.Role(c) != "lawyer" {
+		utils.Error(c, http.StatusForbidden, "Only a lawyer account has payout bank details", "")
+		return
+	}
+	userID := utils.UserID(c)
+
+	var details struct {
+		AccountHolderName string `json:"bank_account_holder_name"`
+		BankName          string `json:"bank_name"`
+		AccountNumber     string `json:"bank_account_number"`
+		IFSC              string `json:"bank_ifsc"`
+		PassbookDocID     string `json:"bank_passbook_document_id"`
+	}
+	err := config.DB.QueryRow(`
+		SELECT COALESCE(bank_account_holder_name,''), COALESCE(bank_name,''),
+		       COALESCE(bank_account_number,''), COALESCE(bank_ifsc,''),
+		       COALESCE(bank_passbook_document_id::text,'')
+		FROM users WHERE id=$1::uuid
+	`, userID).Scan(&details.AccountHolderName, &details.BankName,
+		&details.AccountNumber, &details.IFSC, &details.PassbookDocID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to fetch bank details", err.Error())
+		return
+	}
+	utils.Success(c, http.StatusOK, "Bank details fetched", details)
+}
+
+// UpdateMyBankDetails saves the lawyer's own payout account. The passbook
+// itself is uploaded separately through the existing document-upload
+// endpoint (POST /documents/upload, category "lawyer_bank_passbook") —
+// this only stores the resulting document id, reusing that upload/storage
+// mechanism instead of adding a second one.
+func UpdateMyBankDetails(c *gin.Context) {
+	if utils.Role(c) != "lawyer" {
+		utils.Error(c, http.StatusForbidden, "Only a lawyer account has payout bank details", "")
+		return
+	}
+	userID := utils.UserID(c)
+
+	var req struct {
+		AccountHolderName string `json:"bank_account_holder_name" binding:"required"`
+		BankName          string `json:"bank_name" binding:"required"`
+		AccountNumber     string `json:"bank_account_number" binding:"required"`
+		IFSC              string `json:"bank_ifsc" binding:"required"`
+		PassbookDocID     string `json:"bank_passbook_document_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	// The uploaded passbook must actually belong to this lawyer — otherwise
+	// any document id could be attached to someone else's bank details.
+	if req.PassbookDocID != "" {
+		var owner sql.NullString
+		config.DB.QueryRow(`SELECT uploaded_by::text FROM documents WHERE id=$1::uuid`,
+			req.PassbookDocID).Scan(&owner)
+		if !owner.Valid || owner.String != userID {
+			utils.Error(c, http.StatusBadRequest, "Invalid passbook document",
+				"document does not belong to this account")
+			return
+		}
+	}
+
+	_, err := config.DB.Exec(`
+		UPDATE users SET
+		bank_account_holder_name=$1, bank_name=$2, bank_account_number=$3,
+		bank_ifsc=$4, bank_passbook_document_id=$5, updated_at=NOW()
+		WHERE id=$6::uuid
+	`, req.AccountHolderName, req.BankName, req.AccountNumber, req.IFSC,
+		nullIfEmpty(req.PassbookDocID), userID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to save bank details", err.Error())
+		return
+	}
 	utils.Success(c, http.StatusOK, "Bank details saved!", nil)
 }
 

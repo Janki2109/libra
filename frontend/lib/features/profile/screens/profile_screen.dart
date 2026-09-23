@@ -124,7 +124,8 @@ class ProfileScreen extends StatelessWidget {
                   // Email
                   Text(user?.email ?? '',
                       style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.65), fontSize: 13)),
+                          color: Colors.white.withValues(alpha: 0.65),
+                          fontSize: 13)),
                   const SizedBox(height: 20),
 
                   // Stats row
@@ -135,8 +136,8 @@ class ProfileScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(16),
-                        border:
-                            Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.2)),
                       ),
                       child: Row(children: [
                         _StatTile(
@@ -193,6 +194,14 @@ class ProfileScreen extends StatelessWidget {
                   subtitle: 'Update your password',
                   color: const Color(0xFF4A90D9),
                   onTap: () => context.push('/settings'),
+                ),
+                const SizedBox(height: 8),
+                _SettingTile(
+                  icon: Icons.account_balance_outlined,
+                  label: 'Payout Bank Details',
+                  subtitle: 'Bank account & passbook for your earnings',
+                  color: const Color(0xFF2E8B57),
+                  onTap: () => context.push('/lawyer/bank-details'),
                 ),
                 const SizedBox(height: 8),
                 _SettingTile(
@@ -289,8 +298,8 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _vDivider() =>
-      Container(width: 1, height: 30, color: Colors.white.withValues(alpha: 0.2));
+  Widget _vDivider() => Container(
+      width: 1, height: 30, color: Colors.white.withValues(alpha: 0.2));
 
   void _confirmLogout(BuildContext context, AuthProvider auth) {
     showDialog(
@@ -407,7 +416,8 @@ class ProfileScreen extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Close',
-                style: TextStyle(color: _textMuted, fontWeight: FontWeight.w700)),
+                style:
+                    TextStyle(color: _textMuted, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -550,8 +560,8 @@ class _ProfilePhotoWidget extends StatelessWidget {
     final synced = await context.read<AuthProvider>().updateProfilePhoto('');
     if (!synced && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'Photo removed on this device, but could not sync yet.'),
+          content:
+              Text('Photo removed on this device, but could not sync yet.'),
           backgroundColor: Color(0xFFD4A017)));
     }
   }
@@ -583,7 +593,8 @@ class _ProfilePhotoWidget extends StatelessWidget {
           ),
           if (hasPhoto)
             ListTile(
-              leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+              leading:
+                  const Icon(Icons.delete_outline_rounded, color: Colors.red),
               title: const Text('Remove Profile Photo',
                   style: TextStyle(color: Colors.red)),
               onTap: () => Navigator.pop(sheetContext, 'remove'),
@@ -599,7 +610,8 @@ class _ProfilePhotoWidget extends StatelessWidget {
       return;
     }
 
-    final source = action == 'camera' ? ImageSource.camera : ImageSource.gallery;
+    final source =
+        action == 'camera' ? ImageSource.camera : ImageSource.gallery;
     final picker = ImagePicker();
     final picked =
         await picker.pickImage(source: source, imageQuality: 70, maxWidth: 600);
@@ -631,8 +643,8 @@ class _ProfilePhotoWidget extends StatelessWidget {
           height: 132,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border:
-                Border.all(color: Colors.white.withValues(alpha: 0.7), width: 2.5),
+            border: Border.all(
+                color: Colors.white.withValues(alpha: 0.7), width: 2.5),
             color: Colors.white.withValues(alpha: 0.15),
             boxShadow: [
               BoxShadow(
@@ -781,7 +793,8 @@ class _SettingTile extends StatelessWidget {
       required this.label,
       required this.subtitle,
       required this.color,
-      required this.onTap}) : showBadge = false;
+      required this.onTap})
+      : showBadge = false;
 
   @override
   Widget build(BuildContext context) => GestureDetector(

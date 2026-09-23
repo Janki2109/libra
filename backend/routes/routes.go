@@ -306,6 +306,14 @@ func SetupRoutes() *gin.Engine {
 			staffOnly.PUT("/staff/:id", controllers.UpdateStaffMember)
 		}
 
+		// ── Lawyer payout bank details ──────────
+		// Scoped to the calling lawyer's own account, same as notifications
+		// below — deliberately outside staffOnly/the paywall (a lawyer must be
+		// able to set up payout details even before/without an active
+		// subscription), and never exposed on any client-facing route.
+		protected.GET("/lawyer/bank-details", controllers.GetMyBankDetails)
+		protected.PUT("/lawyer/bank-details", controllers.UpdateMyBankDetails)
+
 		// ── Notifications ──────────────────────
 		// Scoped to the caller's own user id, so every role may use these.
 		protected.GET("/notifications", controllers.GetNotifications)
@@ -442,6 +450,7 @@ func SetupRoutes() *gin.Engine {
 			admin.GET("/lawyers/:id/cases", controllers.AdminGetLawyerCases)
 			admin.GET("/lawyers/:id/reviews", controllers.AdminGetLawyerReviews)
 			admin.GET("/lawyers/:id/activity", controllers.AdminGetLawyerActivity)
+			admin.GET("/lawyers/:id/bank-details", controllers.AdminGetLawyerBankDetails)
 
 			// ✅ Students & Clients
 			admin.GET("/students", controllers.AdminGetStudents)

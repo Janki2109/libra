@@ -36,6 +36,7 @@ import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
 import '../../features/staff/screens/staff_list_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
+import '../../features/lawyer/screens/lawyer_bank_details_screen.dart';
 import '../../features/profile/screens/settings_screen.dart';
 import '../../features/admin/screens/admin_dashboard_screen.dart';
 import '../../features/admin/screens/admin_analytics_screen.dart';
@@ -471,6 +472,9 @@ class AppRouter {
         GoRoute(
             path: '/profile/edit',
             builder: (_, __) => const EditProfileScreen()),
+        GoRoute(
+            path: '/lawyer/bank-details',
+            builder: (_, __) => const LawyerBankDetailsScreen()),
         GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
         GoRoute(
             path: '/profile/change-password',

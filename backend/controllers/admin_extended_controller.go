@@ -685,10 +685,18 @@ func AdminGetInvoices(c *gin.Context) {
 		       COALESCE(i.tax_amount,0), COALESCE(i.platform_fee,0), i.total_amount,
 		       COALESCE(i.paid_amount,0), i.status,
 		       COALESCE(cl.name,''), COALESCE(law.name,''),
-		       i.issue_date::text, COALESCE(i.due_date::text,''), i.created_at::text
+		       i.issue_date::text, COALESCE(i.due_date::text,''), i.created_at::text,
+		       COALESCE(p.transaction_id,''), COALESCE(p.razorpay_order_id,''),
+		       COALESCE(p.lawyer_payable_amount,0), COALESCE(p.verified_at::text,'')
 		FROM invoices i
 		LEFT JOIN clients cl ON i.client_id = cl.id
 		LEFT JOIN users law ON law.id = i.created_by
+		LEFT JOIN LATERAL (
+		  SELECT transaction_id, razorpay_order_id, lawyer_payable_amount, verified_at
+		  FROM payments
+		  WHERE invoice_id = i.id AND payment_method = 'razorpay'
+		  ORDER BY created_at DESC LIMIT 1
+		) p ON true
 		WHERE 1=1`
 	args := []interface{}{}
 	if status != "" {
@@ -711,27 +719,32 @@ func AdminGetInvoices(c *gin.Context) {
 	defer rows.Close()
 
 	type Row struct {
-		ID            string  `json:"id"`
-		InvoiceNumber string  `json:"invoice_number"`
-		Subtotal      float64 `json:"subtotal"`
-		GSTRate       float64 `json:"gst_rate"`
-		GSTAmount     float64 `json:"gst_amount"`
-		PlatformFee   float64 `json:"platform_fee"`
-		TotalAmount   float64 `json:"total_amount"`
-		PaidAmount    float64 `json:"paid_amount"`
-		Status        string  `json:"status"`
-		ClientName    string  `json:"client_name"`
-		LawyerName    string  `json:"lawyer_name"`
-		IssueDate     string  `json:"issue_date"`
-		DueDate       string  `json:"due_date"`
-		CreatedAt     string  `json:"created_at"`
+		ID                string  `json:"id"`
+		InvoiceNumber     string  `json:"invoice_number"`
+		Subtotal          float64 `json:"subtotal"`
+		GSTRate           float64 `json:"gst_rate"`
+		GSTAmount         float64 `json:"gst_amount"`
+		PlatformFee       float64 `json:"platform_fee"`
+		TotalAmount       float64 `json:"total_amount"`
+		PaidAmount        float64 `json:"paid_amount"`
+		Status            string  `json:"status"`
+		ClientName        string  `json:"client_name"`
+		LawyerName        string  `json:"lawyer_name"`
+		IssueDate         string  `json:"issue_date"`
+		DueDate           string  `json:"due_date"`
+		CreatedAt         string  `json:"created_at"`
+		RazorpayPaymentID string  `json:"razorpay_payment_id"`
+		RazorpayOrderID   string  `json:"razorpay_order_id"`
+		LawyerPayable     float64 `json:"lawyer_payable_amount"`
+		PaidAt            string  `json:"paid_at"`
 	}
 	out := []Row{}
 	for rows.Next() {
 		var r Row
 		rows.Scan(&r.ID, &r.InvoiceNumber, &r.Subtotal, &r.GSTRate, &r.GSTAmount, &r.PlatformFee,
 			&r.TotalAmount, &r.PaidAmount, &r.Status, &r.ClientName, &r.LawyerName,
-			&r.IssueDate, &r.DueDate, &r.CreatedAt)
+			&r.IssueDate, &r.DueDate, &r.CreatedAt,
+			&r.RazorpayPaymentID, &r.RazorpayOrderID, &r.LawyerPayable, &r.PaidAt)
 		out = append(out, r)
 	}
 	utils.SuccessWithMeta(c, http.StatusOK, "Invoices fetched", out, page.Meta(len(out)))

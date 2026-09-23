@@ -29,8 +29,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
       // The API path is /invoices/:id. '/billing/...' is the app's own route
       // name, and calling it as an endpoint 404'd every time — this screen
       // could never load an invoice.
-      final res =
-          await DioClient.instance.get('/invoices/${widget.invoiceId}');
+      final res = await DioClient.instance.get('/invoices/${widget.invoiceId}');
       setState(() {
         _invoice = res.data['data'];
         _loading = false;
@@ -81,8 +80,8 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
     if (_printing) return;
     setState(() => _printing = true);
     try {
-      final res = await DioClient.instance
-          .get('/invoices/${widget.invoiceId}/pdf');
+      final res =
+          await DioClient.instance.get('/invoices/${widget.invoiceId}/pdf');
       final data = res.data['data'];
       final b64 = data?['file_base64'] as String?;
       final fileName = data?['file_name'] as String? ?? 'invoice.pdf';
@@ -99,7 +98,8 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Could not generate the invoice PDF: ${DioClient.describeError(e)}'),
+            content: Text(
+                'Could not generate the invoice PDF: ${DioClient.describeError(e)}'),
             backgroundColor: AppColors.error));
       }
     } finally {
@@ -115,8 +115,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primaryDark,
         title: const Text('Invoice Details',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
             onPressed: () => context.pop()),
@@ -161,7 +160,9 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                                       color: AppColors.primary,
                                       fontSize: 20,
                                       fontWeight: FontWeight.w800)),
-                              if ((inv['client_name'] ?? '').toString().isNotEmpty) ...[
+                              if ((inv['client_name'] ?? '')
+                                  .toString()
+                                  .isNotEmpty) ...[
                                 const SizedBox(height: 2),
                                 Text(inv['client_name'],
                                     style: const TextStyle(
@@ -170,8 +171,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                                         fontWeight: FontWeight.w600)),
                               ],
                               const SizedBox(height: 4),
-                              Text(
-                                  'Issued: ${_safe(inv['issue_date'])}',
+                              Text('Issued: ${_safe(inv['issue_date'])}',
                                   style: const TextStyle(
                                       color: AppColors.primaryDark,
                                       fontSize: 12)),
@@ -201,25 +201,28 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                     ),
                     const SizedBox(height: 16),
                     _Card(children: [
-                      _AmountRow('Service Amount',
+                      _AmountRow(
+                          'Service Amount',
                           '₹${_amount(inv['subtotal'])}',
                           AppColors.textSecondary),
                       _AmountRow(
                           'GST (${_amount(inv['gst_rate']).toStringAsFixed(0)}%)',
                           '₹${_amount(inv['gst_amount'])}',
                           AppColors.textSecondary),
-                      _AmountRow('Platform Fee',
+                      _AmountRow(
+                          'Platform Fee',
                           '₹${_amount(inv['platform_fee'])}',
                           AppColors.textSecondary),
                       const Divider(color: AppColors.border),
-                      _AmountRow('Total Payable',
+                      _AmountRow(
+                          'Total Payable',
                           '₹${_amount(inv['total_amount'])}',
                           AppColors.textPrimary),
                       const Divider(color: AppColors.border),
                       _AmountRow('Amount Paid',
-                          '₹${_amount(inv['paid_amount'])}',
-                          AppColors.success),
-                      _AmountRow('Pending',
+                          '₹${_amount(inv['paid_amount'])}', AppColors.success),
+                      _AmountRow(
+                          'Pending',
                           '₹${(_amount(inv['total_amount']) - _amount(inv['paid_amount'])).toStringAsFixed(2)}',
                           inv['status'] == 'paid'
                               ? AppColors.textMuted
@@ -253,8 +256,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                         const SizedBox(height: 8),
                         Text(inv['description'],
                             style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13)),
+                                color: AppColors.textSecondary, fontSize: 13)),
                       ]),
                     ],
                     // "Pay Now" is a Client-only action — a Lawyer never pays
@@ -263,14 +265,44 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                     // uploaded payment proof, when the client has submitted
                     // one (already returned by GetInvoice, just never shown
                     // here before).
+                    // Online Razorpay payment reference — separate from the
+                    // manual-proof transaction_id/payment_slip_url above,
+                    // since a Razorpay-paid invoice never asks for those.
+                    if ((inv['razorpay_payment_id'] ?? '')
+                        .toString()
+                        .isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      _Card(children: [
+                        _AmountRow(
+                            'Razorpay Payment ID',
+                            inv['razorpay_payment_id'].toString(),
+                            AppColors.textSecondary),
+                        if ((inv['paid_at'] ?? '').toString().isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _AmountRow('Paid On', _safe(inv['paid_at']),
+                              AppColors.textSecondary),
+                        ],
+                        if (_amount(inv['lawyer_payable_amount']) > 0) ...[
+                          const SizedBox(height: 8),
+                          _AmountRow(
+                              'Your Payable Amount',
+                              '₹${_amount(inv['lawyer_payable_amount'])}',
+                              AppColors.success),
+                        ],
+                      ]),
+                    ],
                     if ((inv['transaction_id'] ?? '').toString().isNotEmpty ||
-                        (inv['payment_slip_url'] ?? '').toString().isNotEmpty) ...[
+                        (inv['payment_slip_url'] ?? '')
+                            .toString()
+                            .isNotEmpty) ...[
                       const SizedBox(height: 10),
                       _Card(children: [
                         if ((inv['transaction_id'] ?? '').toString().isNotEmpty)
                           _AmountRow('Transaction ID', inv['transaction_id'],
                               AppColors.textSecondary),
-                        if ((inv['payment_slip_url'] ?? '').toString().isNotEmpty) ...[
+                        if ((inv['payment_slip_url'] ?? '')
+                            .toString()
+                            .isNotEmpty) ...[
                           const SizedBox(height: 10),
                           SizedBox(
                             width: double.infinity,
@@ -331,15 +363,13 @@ class _AmountRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        child:
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(label,
-              style: const TextStyle(
-                  color: AppColors.textMuted, fontSize: 13)),
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
           Text(value,
               style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15)),
+                  color: color, fontWeight: FontWeight.w700, fontSize: 15)),
         ]),
       );
 }
