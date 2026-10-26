@@ -116,6 +116,68 @@ func (s *ConsultationSweeper) Sweep(ctx context.Context) {
 			"booking_expired", e.id, "consultation")
 	}
 	log.Printf("[consultations] %d booking(s) expired", len(list))
+
+	s.sweepAbandonedCheckouts(ctx)
+}
+
+// sweepAbandonedCheckouts cancels a checkout the client started (see
+// CreateConsultationCheckout, which inserts the row as status='pending',
+// payment_status='pending' before Razorpay is ever involved) but never
+// finished paying for. Without this, that row sat as 'pending' forever —
+// never touched by the sweep above, which only ever looks at
+// status='confirmed' — and uq_consultations_active_slot (migration 024)
+// only excludes 'rejected'/'cancelled' from its uniqueness check, so an
+// abandoned checkout permanently squatted on that lawyer/date/time slot,
+// invisible to the lawyer and unbookable by anyone else. Moving it to
+// 'cancelled' (not 'expired', which the index does not exclude) is what
+// actually frees the slot.
+func (s *ConsultationSweeper) sweepAbandonedCheckouts(ctx context.Context) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id::text, lawyer_id::text, client_id::text, consultation_type,
+		       consultation_date::text, consultation_time
+		FROM consultations
+		WHERE status = 'pending'
+		  AND payment_status IN ('pending', 'failed')
+		  AND created_at + $1::interval < NOW()
+	`, s.graceInterval())
+	if err != nil {
+		log.Printf("[consultations] abandoned-checkout sweep query failed: %v", err)
+		return
+	}
+	type abandoned struct {
+		id, lawyerID, clientID, consultType, date, timeStr string
+	}
+	var list []abandoned
+	for rows.Next() {
+		var a abandoned
+		if rows.Scan(&a.id, &a.lawyerID, &a.clientID, &a.consultType, &a.date, &a.timeStr) == nil {
+			list = append(list, a)
+		}
+	}
+	rows.Close()
+	if len(list) == 0 {
+		return
+	}
+
+	for _, a := range list {
+		res, err := s.db.ExecContext(ctx, `
+			UPDATE consultations
+			SET status='cancelled', updated_at=NOW()
+			WHERE id=$1::uuid AND status='pending' AND payment_status IN ('pending', 'failed')
+		`, a.id)
+		if err != nil {
+			log.Printf("[consultations] failed to cancel abandoned checkout %s: %v", a.id, err)
+			continue
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			continue
+		}
+		utils.NotifyWithRef(a.clientID, "", "Booking slot released",
+			fmt.Sprintf("Your unpaid %s booking on %s at %s was not completed in time and the slot was released.",
+				a.consultType, a.date, a.timeStr),
+			"booking_expired", a.id, "consultation")
+	}
+	log.Printf("[consultations] %d abandoned checkout(s) cancelled", len(list))
 }
 
 func (s *ConsultationSweeper) graceInterval() string {

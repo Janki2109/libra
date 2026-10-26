@@ -91,8 +91,19 @@ class LibraApp extends StatelessWidget {
                 onPopInvokedWithResult: (didPop, _) async {
                   if (didPop) return;
                   if (auth.isAuthenticated) return;
+                  // `context` here is the MaterialApp.router builder's own
+                  // context, which sits ABOVE go_router's Navigator (child
+                  // wraps it, not the other way around) — it has no
+                  // Navigator ancestor, so showDialog(context: context)
+                  // throws "Navigator operation requested with a context
+                  // that does not include a Navigator." The router's own
+                  // navigatorKey always points at a context that is the
+                  // Navigator itself, which showDialog can always find.
+                  final dialogContext = AppRouter
+                      .current?.routerDelegate.navigatorKey.currentContext;
+                  if (dialogContext == null) return;
                   final confirmed = await showDialog<bool>(
-                    context: context,
+                    context: dialogContext,
                     builder: (ctx) => AlertDialog(
                       title: const Text('Exit app?'),
                       content:

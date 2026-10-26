@@ -35,6 +35,7 @@ const payoutLawyerBase = `
 	FROM users u
 	JOIN roles r ON u.role_id = r.id
 	LEFT JOIN consultations co ON co.lawyer_id = u.id AND co.payment_status = 'paid'
+		AND co.status NOT IN ('cancelled','rejected','expired')
 	LEFT JOIN lawyer_payout_items lpi ON lpi.consultation_id = co.id
 	WHERE r.name = 'lawyer'`
 
@@ -64,7 +65,7 @@ func AdminGetPayoutStats(c *gin.Context) {
 		CompletedSettlements   int     `json:"completed_settlements"`
 	}
 
-	config.DB.QueryRow(`SELECT COALESCE(SUM(amount_paise),0)/100.0 FROM consultations WHERE payment_status='paid'`).
+	config.DB.QueryRow(`SELECT COALESCE(SUM(amount_paise),0)/100.0 FROM consultations WHERE payment_status='paid' AND status NOT IN ('cancelled','rejected','expired')`).
 		Scan(&out.TotalLawyerEarnings)
 
 	// No commission/GST calculation exists for consultation earnings — see
@@ -77,7 +78,7 @@ func AdminGetPayoutStats(c *gin.Context) {
 		SELECT COALESCE(SUM(co.amount_paise),0)/100.0
 		FROM consultations co
 		LEFT JOIN lawyer_payout_items lpi ON lpi.consultation_id = co.id
-		WHERE co.payment_status = 'paid' AND lpi.id IS NULL
+		WHERE co.payment_status = 'paid' AND co.status NOT IN ('cancelled','rejected','expired') AND lpi.id IS NULL
 	`).Scan(&out.PendingPayout)
 
 	config.DB.QueryRow(`SELECT COALESCE(SUM(net_amount),0) FROM lawyer_payouts WHERE status='paid'`).Scan(&out.PaidPayout)
@@ -86,7 +87,7 @@ func AdminGetPayoutStats(c *gin.Context) {
 		SELECT COUNT(DISTINCT co.lawyer_id)
 		FROM consultations co
 		LEFT JOIN lawyer_payout_items lpi ON lpi.consultation_id = co.id
-		WHERE co.payment_status = 'paid' AND lpi.id IS NULL
+		WHERE co.payment_status = 'paid' AND co.status NOT IN ('cancelled','rejected','expired') AND lpi.id IS NULL
 	`).Scan(&out.LawyersAwaitingPayout)
 
 	config.DB.QueryRow(`SELECT COUNT(*) FROM lawyer_payouts WHERE status='paid'`).Scan(&out.CompletedSettlements)
@@ -214,6 +215,7 @@ func AdminGetLawyerPayoutDetail(c *gin.Context) {
 		FROM consultations co
 		LEFT JOIN lawyer_payout_items lpi ON lpi.consultation_id = co.id
 		WHERE co.lawyer_id = $1 AND co.payment_status = 'paid'
+		  AND co.status NOT IN ('cancelled','rejected','expired')
 	`, id).Scan(&summary.TotalConsultations, &summary.GrossEarnings, &summary.TotalPaid, &summary.TotalPending)
 	summary.NetEarnings = summary.GrossEarnings
 
@@ -227,6 +229,7 @@ func AdminGetLawyerPayoutDetail(c *gin.Context) {
 		LEFT JOIN lawyer_payout_items lpi ON lpi.consultation_id = co.id
 		LEFT JOIN lawyer_payouts lp ON lp.id = lpi.payout_id
 		WHERE co.lawyer_id = $1 AND co.payment_status = 'paid'
+		  AND co.status NOT IN ('cancelled','rejected','expired')
 		ORDER BY co.paid_at DESC NULLS LAST
 		LIMIT $2 OFFSET $3
 	`, id, page.Limit, page.Offset)
@@ -299,6 +302,7 @@ func AdminGetPendingPayouts(c *gin.Context) {
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
 		JOIN consultations co ON co.lawyer_id = u.id AND co.payment_status = 'paid'
+			AND co.status NOT IN ('cancelled','rejected','expired')
 		LEFT JOIN lawyer_payout_items lpi ON lpi.consultation_id = co.id
 		WHERE r.name = 'lawyer' AND lpi.id IS NULL`
 	args := []interface{}{}
@@ -622,7 +626,7 @@ func AdminCreateSettlement(c *gin.Context) {
 		SELECT co.id, co.amount_paise
 		FROM consultations co
 		LEFT JOIN lawyer_payout_items lpi ON lpi.consultation_id = co.id
-		WHERE co.lawyer_id = $1 AND co.payment_status = 'paid' AND lpi.id IS NULL
+		WHERE co.lawyer_id = $1 AND co.payment_status = 'paid' AND co.status NOT IN ('cancelled','rejected','expired') AND lpi.id IS NULL
 		FOR UPDATE OF co
 	`, req.LawyerID)
 	if err != nil {
@@ -747,10 +751,10 @@ func AdminGetPayoutTrends(c *gin.Context) {
 	to := c.Query("to")
 
 	utils.Success(c, http.StatusOK, "Payout trends fetched", gin.H{
-		"lawyer_earnings": dailySeriesEnding(`SELECT paid_at::date, COALESCE(SUM(amount_paise),0)/100.0 FROM consultations WHERE payment_status='paid' AND paid_at IS NOT NULL`, days, to),
+		"lawyer_earnings": dailySeriesEnding(`SELECT paid_at::date, COALESCE(SUM(amount_paise),0)/100.0 FROM consultations WHERE payment_status='paid' AND status NOT IN ('cancelled','rejected','expired') AND paid_at IS NOT NULL`, days, to),
 		"platform_commission": dailySeriesEnding(`SELECT NULL::date, 0 WHERE false`, days, to),
 		"gst":                 dailySeriesEnding(`SELECT NULL::date, 0 WHERE false`, days, to),
-		"net_lawyer_payouts":  dailySeriesEnding(`SELECT paid_at::date, COALESCE(SUM(amount_paise),0)/100.0 FROM consultations WHERE payment_status='paid' AND paid_at IS NOT NULL`, days, to),
+		"net_lawyer_payouts":  dailySeriesEnding(`SELECT paid_at::date, COALESCE(SUM(amount_paise),0)/100.0 FROM consultations WHERE payment_status='paid' AND status NOT IN ('cancelled','rejected','expired') AND paid_at IS NOT NULL`, days, to),
 		"paid_payouts":        dailySeriesEnding(`SELECT payout_date::date, COALESCE(SUM(net_amount),0) FROM lawyer_payouts WHERE status='paid' AND payout_date IS NOT NULL`, days, to),
 	})
 }
@@ -775,7 +779,7 @@ func AdminGetPayoutTransactions(c *gin.Context) {
 		LEFT JOIN users cl ON cl.id = co.client_id
 		LEFT JOIN lawyer_payout_items lpi ON lpi.consultation_id = co.id
 		LEFT JOIN lawyer_payouts lp ON lp.id = lpi.payout_id
-		WHERE co.payment_status = 'paid'`
+		WHERE co.payment_status = 'paid' AND co.status NOT IN ('cancelled','rejected','expired')`
 	args := []interface{}{}
 	if search != "" {
 		args = append(args, "%"+search+"%")

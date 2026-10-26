@@ -338,7 +338,8 @@ func SubmitChallenge(c *gin.Context) {
 	config.DB.Exec(`
 		UPDATE case_challenges SET
 		status='completed', score=$1, xp_earned=$2, stars_earned=$3,
-		accuracy=$4, answers=$5, completed_at=NOW()
+		accuracy=$4, answers=$5, completed_at=NOW(),
+		is_submitted=true, submitted_at=NOW()
 		WHERE id=$6::uuid
 	`, totalScore, xpEarned, stars, accuracy, answersJSON, challengeID)
 

@@ -146,6 +146,34 @@ func UploadDocument(c *gin.Context) {
 		return
 	}
 
+	// belongsToFirm only proves the case/client are in the SAME FIRM as the
+	// caller — for a client-role caller that is not enough: any client of a
+	// firm could set client_id/case_id to another client's own id (same
+	// firm, so belongsToFirm passed) and upload a document straight into
+	// that other client's case. A client may only upload against their own
+	// client record.
+	if role == "client" {
+		var ownClientID string
+		config.DB.QueryRow(`
+			SELECT cl.id::text FROM clients cl
+			JOIN users u ON lower(u.email) = lower(cl.email)
+			WHERE u.id = $1::uuid AND cl.firm_id = $2::uuid
+		`, userID, fID).Scan(&ownClientID)
+		if ownClientID == "" || req.ClientID == "" || ownClientID != req.ClientID {
+			utils.Error(c, http.StatusForbidden, "You can only upload documents for your own case", "")
+			return
+		}
+		if req.CaseID != "" {
+			var caseClientID string
+			config.DB.QueryRow(`SELECT client_id::text FROM cases WHERE id=$1::uuid`, req.CaseID).
+				Scan(&caseClientID)
+			if caseClientID != ownClientID {
+				utils.Error(c, http.StatusForbidden, "You can only upload documents for your own case", "")
+				return
+			}
+		}
+	}
+
 	// uploaded_by_role is taken from the verified JWT claim, not from the
 	// request body. A client could previously claim to be a "lawyer" upload
 	// and vice versa simply by setting the field.
@@ -271,9 +299,17 @@ func GetInvoices(c *gin.Context) {
 	page := ParsePagination(c)
 	status := c.Query("status")
 
+	// billing_list_screen.dart (the only caller of this list endpoint) also
+	// reads tax_amount/tax_percent/due_date/notes off each invoice for its
+	// GST total and card details — none of those were ever selected here,
+	// so they silently read as 0/blank on every invoice in the list (the
+	// per-invoice GET /invoices/:id endpoint already selects them correctly;
+	// this list endpoint just never matched it).
 	rows, err := config.DB.Query(`
 		SELECT i.id, i.invoice_number, i.total_amount, COALESCE(i.paid_amount,0),
-		       i.status, i.issue_date::text, COALESCE(cl.name,'')
+		       i.status, i.issue_date::text, COALESCE(cl.name,''),
+		       COALESCE(i.tax_amount,0), COALESCE(i.tax_percent,0),
+		       COALESCE(i.due_date::text,''), COALESCE(i.notes,'')
 		FROM invoices i
 		LEFT JOIN clients cl ON i.client_id = cl.id
 		WHERE i.firm_id = $1::uuid
@@ -295,12 +331,17 @@ func GetInvoices(c *gin.Context) {
 		Status        string  `json:"status"`
 		IssueDate     string  `json:"issue_date"`
 		ClientName    string  `json:"client_name"`
+		TaxAmount     float64 `json:"tax_amount"`
+		TaxPercent    float64 `json:"tax_percent"`
+		DueDate       string  `json:"due_date"`
+		Notes         string  `json:"notes"`
 	}
 	invoices := []Invoice{}
 	for rows.Next() {
 		var inv Invoice
 		rows.Scan(&inv.ID, &inv.InvoiceNumber, &inv.TotalAmount,
-			&inv.PaidAmount, &inv.Status, &inv.IssueDate, &inv.ClientName)
+			&inv.PaidAmount, &inv.Status, &inv.IssueDate, &inv.ClientName,
+			&inv.TaxAmount, &inv.TaxPercent, &inv.DueDate, &inv.Notes)
 		invoices = append(invoices, inv)
 	}
 	utils.SuccessWithMeta(c, http.StatusOK, "Invoices fetched", invoices, page.Meta(len(invoices)))
@@ -577,10 +618,6 @@ func GetPayments(c *gin.Context) {
 }
 
 func CreatePayment(c *gin.Context) {
-	firmID, ok := utils.RequireFirm(c)
-	if !ok {
-		return
-	}
 	userID := utils.UserID(c)
 
 	var req struct {
@@ -598,7 +635,34 @@ func CreatePayment(c *gin.Context) {
 		return
 	}
 
-	fID := firmID
+	// A self-registered client (ClientRegister) carries no firm_id on their
+	// token at all, so it can't be required unconditionally the way it used
+	// to be — that 403'd every client before they could ever submit a
+	// payment claim. Firm staff still must have one (tenant isolation);
+	// a client's own firm instead comes from their own clients row, matched
+	// by email — the same fallback UploadDocument already uses.
+	var fID string
+	if firmStaffRole(utils.Role(c)) {
+		firmID, ok := utils.RequireFirm(c)
+		if !ok {
+			return
+		}
+		fID = firmID
+	} else {
+		callerEmail, ok := portalClientEmail(c)
+		if !ok {
+			utils.Error(c, http.StatusForbidden, "Not authorized", "")
+			return
+		}
+		var ownClientID string
+		config.DB.QueryRow(`
+			SELECT id::text, firm_id::text FROM clients WHERE lower(email) = $1 AND id = $2::uuid
+		`, callerEmail, req.ClientID).Scan(&ownClientID, &fID)
+		if ownClientID == "" || ownClientID != req.ClientID || fID == "" {
+			utils.Error(c, http.StatusForbidden, "You can only submit payment for your own invoice", "")
+			return
+		}
+	}
 
 	// Attaching a payment to another firm's invoice used to be possible, which
 	// would have marked their invoice paid.
@@ -609,26 +673,6 @@ func CreatePayment(c *gin.Context) {
 	if !belongsToFirm(tblClients, req.ClientID, fID) {
 		utils.Error(c, http.StatusBadRequest, "Unknown client", "client not in caller's firm")
 		return
-	}
-
-	// This endpoint is now reachable by the client themselves, not just firm
-	// staff (see routes.go) — so a client-role caller must be restricted to
-	// their own client record, or one client could submit a payment claim
-	// against any other client's invoice in the same firm.
-	if !firmStaffRole(utils.Role(c)) {
-		callerEmail, ok := portalClientEmail(c)
-		if !ok {
-			utils.Error(c, http.StatusForbidden, "Not authorized", "")
-			return
-		}
-		var ownClientID string
-		config.DB.QueryRow(`
-			SELECT id::text FROM clients WHERE lower(email) = $1 AND firm_id = $2::uuid
-		`, callerEmail, fID).Scan(&ownClientID)
-		if ownClientID == "" || ownClientID != req.ClientID {
-			utils.Error(c, http.StatusForbidden, "You can only submit payment for your own invoice", "")
-			return
-		}
 	}
 
 	// The claimed amount used to be trusted outright and credited to the
@@ -687,6 +731,15 @@ func CreatePayment(c *gin.Context) {
 				  updated_at = NOW()
 				WHERE id=$2::uuid AND firm_id=$3::uuid
 			`, req.Amount, req.InvoiceID, fID)
+
+			// Money is already credited above, so this payment row must never
+			// be picked up by VerifyPayment's 'pending' queue later and have
+			// its amount added to the invoice a second time — mark it settled
+			// immediately, same as if a lawyer had reviewed and approved it.
+			config.DB.Exec(`
+				UPDATE payments SET verification_status='verified', verified_by=$1::uuid, verified_at=NOW()
+				WHERE id=$2::uuid
+			`, userID, id)
 		} else {
 			// A client is only ever submitting an unverified claim (a UTR they
 			// typed in, a screenshot) — this used to credit paid_amount and
@@ -1555,31 +1608,38 @@ func VerifyPayment(c *gin.Context) {
 	tx.QueryRow(`SELECT invoice_id::text, amount FROM payments WHERE id=$1::uuid`,
 		paymentID).Scan(&invoiceID, &amount)
 
-	// A rejected payment must not keep counting toward the invoice balance.
+	// A payment reaching this point is always a client's unverified claim
+	// (CreatePayment never leaves a staff-recorded payment in 'pending' — see
+	// the verification_status update right after that credit). paid_amount
+	// was therefore never incremented for this claim when it was filed; it
+	// only moved the invoice to 'pending_verification'. So 'verified' must
+	// credit paid_amount here for the first time, and 'rejected' must leave
+	// paid_amount untouched — subtracting an amount that was never added
+	// would wipe out unrelated, already-verified money on the same invoice.
 	if invoiceID.Valid && invoiceID.String != "" {
 		if req.Status == "rejected" {
-			tx.Exec(`
-				UPDATE invoices SET
-				  paid_amount = GREATEST(COALESCE(paid_amount,0) - $1, 0),
-				  status = CASE
-				    WHEN GREATEST(COALESCE(paid_amount,0) - $1, 0) >= total_amount THEN 'paid'
-				    WHEN GREATEST(COALESCE(paid_amount,0) - $1, 0) > 0 THEN 'partial'
-				    ELSE 'unpaid'
-				  END,
-				  updated_at = NOW()
-				WHERE id=$2::uuid AND firm_id=$3::uuid
-			`, amount, invoiceID.String, firmID)
-		} else {
 			tx.Exec(`
 				UPDATE invoices SET
 				  status = CASE
 				    WHEN COALESCE(paid_amount,0) >= total_amount THEN 'paid'
 				    WHEN COALESCE(paid_amount,0) > 0 THEN 'partial'
-				    ELSE status
+				    ELSE 'unpaid'
 				  END,
 				  updated_at = NOW()
 				WHERE id=$1::uuid AND firm_id=$2::uuid
 			`, invoiceID.String, firmID)
+		} else {
+			tx.Exec(`
+				UPDATE invoices SET
+				  paid_amount = LEAST(COALESCE(paid_amount,0) + $1, total_amount),
+				  status = CASE
+				    WHEN COALESCE(paid_amount,0) + $1 >= total_amount THEN 'paid'
+				    WHEN COALESCE(paid_amount,0) + $1 > 0 THEN 'partial'
+				    ELSE status
+				  END,
+				  updated_at = NOW()
+				WHERE id=$2::uuid AND firm_id=$3::uuid
+			`, amount, invoiceID.String, firmID)
 		}
 	}
 

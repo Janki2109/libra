@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class AppConstants {
   // ─── API ─────────────────────────────────
   //
@@ -11,10 +13,34 @@ class AppConstants {
   // This used to be a hardcoded constant with four commented-out alternatives
   // above it, so switching environments meant editing and rebuilding — and the
   // production URL was whichever line happened to be uncommented at the time.
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://libra-caox.onrender.com/api/v1',
-  );
+  //
+  // When no --dart-define is passed at all, a DEBUG run used to silently
+  // fall back to the production Render URL — so "flutter run" with no flags
+  // talked to production, not the local backend, and every "localhost isn't
+  // working" report was actually "the local backend was never being talked
+  // to in the first place." A release build with nothing passed still falls
+  // back to production exactly as before (kReleaseMode below), which is what
+  // keeps Render/production builds working unchanged; only an un-overridden
+  // *debug* run now defaults to a platform-correct local address instead:
+  //   - Chrome/web            -> localhost (the browser's own host)
+  //   - Android emulator      -> 10.0.2.2 (the emulator's alias for the host)
+  //   - iOS simulator/desktop -> localhost
+  // A physical device on the LAN has no auto-detectable host address (the
+  // dev machine's IP isn't knowable from the device), so that case still
+  // requires passing --dart-define=API_BASE_URL=http://<LAN-IP>:8080/api/v1
+  // explicitly — never hardcoded here.
+  static String get baseUrl {
+    const override = String.fromEnvironment('API_BASE_URL');
+    if (override.isNotEmpty) return override;
+    if (kReleaseMode) return _prodUrl;
+    if (kIsWeb) return 'http://localhost:8080/api/v1';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8080/api/v1';
+    }
+    return 'http://localhost:8080/api/v1';
+  }
+
+  static const String _prodUrl = 'https://libra-caox.onrender.com/api/v1';
 
   /// Whether the app is talking to a plaintext endpoint. Used to warn during
   /// development and to fail loudly in a release build.

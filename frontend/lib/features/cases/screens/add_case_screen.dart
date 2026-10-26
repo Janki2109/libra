@@ -28,6 +28,7 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
   final _courtNameCtrl = TextEditingController();
   final _courtLocationCtrl = TextEditingController();
   final _judgeNameCtrl = TextEditingController();
+  final _cnrNumberCtrl = TextEditingController();
   final _oppositePartyCtrl = TextEditingController();
   final _oppLawyerCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -68,6 +69,7 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
     _courtNameCtrl.dispose();
     _courtLocationCtrl.dispose();
     _judgeNameCtrl.dispose();
+    _cnrNumberCtrl.dispose();
     _oppositePartyCtrl.dispose();
     _oppLawyerCtrl.dispose();
     _descCtrl.dispose();
@@ -81,7 +83,8 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
         content: Text('Please choose a client for this case'),
         backgroundColor: Color(0xFFD9534F),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12))),
       ));
       return;
     }
@@ -96,6 +99,7 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
         'court_name': _courtNameCtrl.text.trim(),
         'court_location': _courtLocationCtrl.text.trim(),
         'judge_name': _judgeNameCtrl.text.trim(),
+        'cnr_number': _cnrNumberCtrl.text.trim(),
         'opposite_party': _oppositePartyCtrl.text.trim(),
         'opposite_lawyer': _oppLawyerCtrl.text.trim(),
         'priority': _priority.toLowerCase(),
@@ -297,7 +301,8 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
                       color: const Color(0xFF2E8B57).withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: const Color(0xFF2E8B57).withValues(alpha: 0.3)),
+                          color:
+                              const Color(0xFF2E8B57).withValues(alpha: 0.3)),
                     ),
                     child: Row(children: [
                       const Icon(Icons.check_circle_rounded,
@@ -316,9 +321,11 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
                     title: 'Case Details', icon: Icons.gavel_rounded),
                 const SizedBox(height: 12),
                 _buildField(_titleCtrl, 'Case Title *', Icons.title_rounded,
-                    validator: (v) => v!.trim().isEmpty ? 'Title required' : null),
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'Title required' : null),
                 const SizedBox(height: 10),
-                _buildField(_caseNumCtrl, 'Case Number *', Icons.numbers_rounded,
+                _buildField(
+                    _caseNumCtrl, 'Case Number *', Icons.numbers_rounded,
                     validator: (v) =>
                         v!.trim().isEmpty ? 'Case number required' : null),
                 const SizedBox(height: 10),
@@ -351,14 +358,16 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
                 const SizedBox(height: 10),
                 _buildField(_courtLocationCtrl, 'Court Location *',
                     Icons.location_on_outlined,
-                    validator: (v) => v!.trim().isEmpty
-                        ? 'Court location required'
-                        : null),
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'Court location required' : null),
                 const SizedBox(height: 10),
                 _buildField(
                     _judgeNameCtrl, 'Judge Name *', Icons.person_outlined,
                     validator: (v) =>
                         v!.trim().isEmpty ? 'Judge name required' : null),
+                const SizedBox(height: 10),
+                _buildField(_cnrNumberCtrl, 'CNR Number (optional)',
+                    Icons.qr_code_rounded),
                 const SizedBox(height: 20),
 
                 _SectionHeader(
@@ -372,9 +381,8 @@ class _AddCaseScreenState extends State<AddCaseScreen> {
                 const SizedBox(height: 10),
                 _buildField(
                     _oppLawyerCtrl, 'Opposite Lawyer *', Icons.gavel_rounded,
-                    validator: (v) => v!.trim().isEmpty
-                        ? 'Opposite lawyer required'
-                        : null),
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'Opposite lawyer required' : null),
                 const SizedBox(height: 20),
 
                 _SectionHeader(

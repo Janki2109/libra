@@ -515,11 +515,16 @@ func VerifyOTP(c *gin.Context) {
 
 	email := normalizeEmail(req.Email)
 
+	// purpose = 'login' is required here: without it, a password-reset code
+	// (purpose = 'password_reset', same otps table — see ForgotPassword) was
+	// accepted by this endpoint too, letting anyone who intercepted or
+	// guessed a reset code log straight in as that user without ever
+	// touching the account's actual password.
 	var otpID, storedHash string
 	var attempts int
 	err := config.DB.QueryRow(`
 		SELECT id, otp_hash, attempts FROM otps
-		WHERE email = $1 AND is_used = false AND expires_at > NOW()
+		WHERE email = $1 AND purpose = 'login' AND is_used = false AND expires_at > NOW()
 		ORDER BY created_at DESC LIMIT 1
 	`, email).Scan(&otpID, &storedHash, &attempts)
 

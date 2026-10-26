@@ -616,6 +616,7 @@ class _DetailsTab extends StatelessWidget {
               _InfoRow('Court Name', caseData['court_name'] ?? '-'),
               _InfoRow('Court Location', caseData['court_location'] ?? '-'),
               _InfoRow('Judge Name', caseData['judge_name'] ?? '-'),
+              _InfoRow('CNR Number', caseData['cnr_number'] ?? '-'),
             ]),
         const SizedBox(height: 12),
         _InfoCard(title: 'Opposite Party', icon: Icons.people_rounded, items: [

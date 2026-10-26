@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 
 const _channel = MethodChannel('com.libra.law/downloads');

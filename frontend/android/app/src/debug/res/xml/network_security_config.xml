@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-build-only override of src/main/res/xml/network_security_config.xml.
+  Android's resource merging picks this file over the main one automatically
+  for any debug build (flutter run, flutter build apk, debug mode) — a release
+  build still only ever sees the strict, TLS-only main config, unchanged.
+
+  The main config used to hardcode one specific LAN IP
+  (e.g. 192.168.1.6) as the only non-loopback host allowed over plain HTTP —
+  which goes stale the moment the dev machine's Wi-Fi reconnects and gets a
+  new DHCP lease (confirmed stale: this machine's actual current IP is
+  192.168.1.7, not .6), and required editing + rebuilding every time it
+  changed. A developer's own machine on a private LAN during local
+  development is not the untrusted-network scenario cleartext-blocking
+  exists to protect against, so debug builds simply allow cleartext to any
+  host — no IP to hardcode, no file to edit when Wi-Fi/the IP changes.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

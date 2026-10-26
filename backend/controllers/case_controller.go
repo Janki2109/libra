@@ -30,6 +30,13 @@ func GetCases(c *gin.Context) {
 	status := c.Query("status")
 	search := c.Query("q")
 	clientID := c.Query("client_id")
+	// ecourts_screen.dart's CNR search sent this param, but it was never
+	// read here at all — the query ignored it and always returned the
+	// firm's most recent cases regardless of CNR, so cases.first on the
+	// client silently showed the lawyer an unrelated case as if it had
+	// matched. cnr_number is matched exactly (CNRs are a fixed-format
+	// court-issued identifier, not free text to fuzzy-search).
+	cnr := c.Query("cnr")
 
 	rows, err := config.DB.Query(`
 		SELECT c.id, COALESCE(c.case_number,''), c.case_title,
@@ -44,9 +51,10 @@ func GetCases(c *gin.Context) {
 		  AND ($3 = '' OR c.case_title ILIKE '%' || $3 || '%'
 		               OR c.case_number ILIKE '%' || $3 || '%')
 		  AND ($6 = '' OR c.client_id = $6::uuid)
+		  AND ($7 = '' OR c.cnr_number = $7)
 		ORDER BY c.created_at DESC
 		LIMIT $4 OFFSET $5
-	`, firmID, status, search, page.Limit, page.Offset, clientID)
+	`, firmID, status, search, page.Limit, page.Offset, clientID, cnr)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to fetch cases", err.Error())
 		return
@@ -102,6 +110,7 @@ func CreateCase(c *gin.Context) {
 		OppLawyer        string `json:"opposite_lawyer"`
 		Priority         string `json:"priority"`
 		Description      string `json:"description"`
+		CNRNumber        string `json:"cnr_number"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
@@ -127,15 +136,15 @@ func CreateCase(c *gin.Context) {
 	_, err := config.DB.Exec(`
 		INSERT INTO cases (id, firm_id, client_id, assigned_lawyer_id, case_number,
 		case_title, case_type, court_name, court_location, judge_name,
-		opposite_party, opposite_lawyer, priority, description, created_by)
-		VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::uuid)
+		opposite_party, opposite_lawyer, priority, description, created_by, cnr_number)
+		VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::uuid, $16)
 	`, id, fID,
 		nullIfEmpty(req.ClientID),
 		nullIfEmpty(req.AssignedLawyerID),
 		req.CaseNumber, req.CaseTitle, req.CaseType,
 		req.CourtName, req.CourtLocation, req.JudgeName,
 		req.OppositeParty, req.OppLawyer, req.Priority,
-		req.Description, uID)
+		req.Description, uID, nullIfEmpty(req.CNRNumber))
 
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to create case", err.Error())
@@ -199,6 +208,7 @@ func GetCase(c *gin.Context) {
 		WonFeedback   string    `json:"won_feedback"`
 		LostReason    string    `json:"lost_reason"`
 		ClosedReason  string    `json:"closed_reason"`
+		CNRNumber     string    `json:"cnr_number"`
 		CreatedAt     time.Time `json:"created_at"`
 	}
 	err := config.DB.QueryRow(`
@@ -210,7 +220,7 @@ func GetCase(c *gin.Context) {
 		       COALESCE(c.description,''), COALESCE(cl.name,''),
 		       COALESCE(u.name,''),
 		       COALESCE(c.won_feedback,''), COALESCE(c.lost_reason,''),
-		       COALESCE(c.closed_reason,''), c.created_at
+		       COALESCE(c.closed_reason,''), COALESCE(c.cnr_number,''), c.created_at
 		FROM cases c
 		LEFT JOIN clients cl ON c.client_id = cl.id
 		LEFT JOIN users u ON c.assigned_lawyer_id = u.id
@@ -222,7 +232,7 @@ func GetCase(c *gin.Context) {
 		&cs.Status, &cs.Priority, &cs.Description,
 		&cs.ClientName, &cs.LawyerName,
 		&cs.WonFeedback, &cs.LostReason, &cs.ClosedReason,
-		&cs.CreatedAt)
+		&cs.CNRNumber, &cs.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		utils.Error(c, http.StatusNotFound, "Case not found", "")
@@ -265,6 +275,7 @@ func UpdateCase(c *gin.Context) {
 		CourtName    string `json:"court_name"`
 		Priority     string `json:"priority"`
 		Description  string `json:"description"`
+		CNRNumber    string `json:"cnr_number"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -313,11 +324,12 @@ func UpdateCase(c *gin.Context) {
 			court_name = CASE WHEN $3::text != '' THEN $3::text ELSE court_name END,
 			priority = CASE WHEN $4::text != '' THEN $4::text ELSE priority END,
 			description = CASE WHEN $5::text != '' THEN $5::text ELSE description END,
+			cnr_number = CASE WHEN $6::text != '' THEN $6::text ELSE cnr_number END,
 			last_activity_at = NOW(),
 			updated_at = NOW()
-			WHERE id = $6::uuid AND firm_id = $7::uuid
+			WHERE id = $7::uuid AND firm_id = $8::uuid
 		`, req.CaseTitle, req.CaseType, req.CourtName,
-			req.Priority, req.Description, id, firmID)
+			req.Priority, req.Description, req.CNRNumber, id, firmID)
 	}
 
 	if err != nil {

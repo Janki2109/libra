@@ -18,9 +18,21 @@ import (
 // ─── CREATE RAZORPAY ORDER ───────────────────
 // POST /payments/razorpay/order
 func CreateRazorpayOrder(c *gin.Context) {
-	firmID, ok := utils.RequireFirm(c)
-	if !ok {
-		return
+	// A self-registered client (ClientRegister) carries no firm_id on their
+	// token at all — see the identical fallback in UploadDocument — so
+	// requiring it unconditionally 403'd every client before they could ever
+	// reach Pay Now, regardless of which invoice they owned. Firm staff still
+	// go through RequireFirm exactly as before, which is what enforces tenant
+	// isolation for them (see the firm-match check below); a client's
+	// authorization instead comes entirely from callerOwnsInvoice's
+	// email-to-invoice match.
+	var callerFirmID string
+	if firmStaffRole(utils.Role(c)) {
+		fid, ok := utils.RequireFirm(c)
+		if !ok {
+			return
+		}
+		callerFirmID = fid
 	}
 
 	var req struct {
@@ -37,32 +49,39 @@ func CreateRazorpayOrder(c *gin.Context) {
 		req.Currency = "INR"
 	}
 
-	// This route now sits outside RequireFirmStaff() (a client paying their
-	// own invoice is not firm staff), so — same rule CreatePayment already
-	// enforces for the manual/offline flow — a non-staff caller may only pay
-	// their own invoice.
-	if !callerOwnsInvoice(c, firmID, req.InvoiceID) {
-		utils.Error(c, http.StatusForbidden, "You can only pay your own invoice", "")
-		return
-	}
-
 	// The amount is read from the invoice, never taken from the request.
 	// The handler used to accept an `amount` field from the client, so a
 	// caller could open a ₹1 order against a ₹100,000 invoice and — since the
 	// verify step also trusted the client's amount — have it recorded as paid
 	// in full.
 	var total, paid float64
-	var invoiceNumber string
+	var invoiceNumber, invoiceFirmID string
 	err := config.DB.QueryRow(`
-		SELECT total_amount, COALESCE(paid_amount,0), invoice_number
-		FROM invoices WHERE id=$1::uuid AND firm_id=$2::uuid
-	`, req.InvoiceID, firmID).Scan(&total, &paid, &invoiceNumber)
+		SELECT total_amount, COALESCE(paid_amount,0), invoice_number, firm_id::text
+		FROM invoices WHERE id=$1::uuid
+	`, req.InvoiceID).Scan(&total, &paid, &invoiceNumber, &invoiceFirmID)
 	if err == sql.ErrNoRows {
 		utils.Error(c, http.StatusNotFound, "Invoice not found", "")
 		return
 	}
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to read invoice", err.Error())
+		return
+	}
+	// Firm staff may only ever touch an invoice in their own firm — same
+	// tenant boundary the old WHERE firm_id=$2 enforced.
+	if callerFirmID != "" && callerFirmID != invoiceFirmID {
+		utils.Error(c, http.StatusNotFound, "Invoice not found", "")
+		return
+	}
+	firmID := invoiceFirmID
+
+	// This route now sits outside RequireFirmStaff() (a client paying their
+	// own invoice is not firm staff), so — same rule CreatePayment already
+	// enforces for the manual/offline flow — a non-staff caller may only pay
+	// their own invoice.
+	if !callerOwnsInvoice(c, firmID, req.InvoiceID) {
+		utils.Error(c, http.StatusForbidden, "You can only pay your own invoice", "")
 		return
 	}
 
@@ -134,9 +153,15 @@ func CreateRazorpayOrder(c *gin.Context) {
 // ─── VERIFY RAZORPAY PAYMENT ─────────────────
 // POST /payments/razorpay/verify
 func VerifyRazorpayPayment(c *gin.Context) {
-	firmID, ok := utils.RequireFirm(c)
-	if !ok {
-		return
+	// Same reasoning as CreateRazorpayOrder: a self-registered client has no
+	// firm_id claim, so it can't be required unconditionally here either.
+	var callerFirmID string
+	if firmStaffRole(utils.Role(c)) {
+		fid, ok := utils.RequireFirm(c)
+		if !ok {
+			return
+		}
+		callerFirmID = fid
 	}
 	// The old code did `firmID.(string)` unchecked, panicking on any token
 	// without the claim.
@@ -169,24 +194,31 @@ func VerifyRazorpayPayment(c *gin.Context) {
 		return
 	}
 
-	// Resolve the invoice and the amount from the order we recorded at
-	// creation time.
-	var invoiceID string
+	// Resolve the invoice, the amount, and the order's own firm from the
+	// order we recorded at creation time — not from the caller's claim,
+	// which a client-role caller may not have at all.
+	var invoiceID, orderFirmID string
 	var amountPaise int64
 	var orderStatus string
 	err := config.DB.QueryRow(`
-		SELECT invoice_id::text, amount_paise, status
+		SELECT invoice_id::text, amount_paise, status, firm_id::text
 		FROM payment_orders
-		WHERE order_id=$1 AND firm_id=$2::uuid
-	`, req.RazorpayOrderID, firmID).Scan(&invoiceID, &amountPaise, &orderStatus)
+		WHERE order_id=$1
+	`, req.RazorpayOrderID).Scan(&invoiceID, &amountPaise, &orderStatus, &orderFirmID)
 	if err == sql.ErrNoRows {
-		utils.Error(c, http.StatusBadRequest, "Unknown order", "no matching order for this firm")
+		utils.Error(c, http.StatusBadRequest, "Unknown order", "no matching order")
 		return
 	}
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to verify", err.Error())
 		return
 	}
+	// Same tenant boundary the old WHERE firm_id=$2 enforced for firm staff.
+	if callerFirmID != "" && callerFirmID != orderFirmID {
+		utils.Error(c, http.StatusBadRequest, "Unknown order", "no matching order for this firm")
+		return
+	}
+	firmID := orderFirmID
 	if orderStatus == "paid" {
 		utils.Error(c, http.StatusConflict, "Order already settled", "duplicate verification")
 		return

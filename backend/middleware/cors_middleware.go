@@ -32,10 +32,22 @@ func CorsMiddleware() gin.HandlerFunc {
 		log.Println("[cors] CORS_ORIGINS is empty — browser cross-origin requests will be refused")
 	}
 
+	isProd := config.GetEnv("APP_ENV", "development") == "production"
+
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
 
-		if origin != "" && allowed[origin] {
+		// `flutter run -d chrome` picks a random dev-server port on every
+		// launch unless --web-port is pinned, so a fixed CORS_ORIGINS entry
+		// (e.g. http://localhost:5000) only matches by luck. Never relaxed in
+		// production — only localhost/127.0.0.1, and only when APP_ENV isn't
+		// "production" — so this can't be used to bypass the allowlist for
+		// any real deployment.
+		isLocalDevOrigin := !isProd &&
+			(strings.HasPrefix(origin, "http://localhost:") ||
+				strings.HasPrefix(origin, "http://127.0.0.1:"))
+
+		if origin != "" && (allowed[origin] || isLocalDevOrigin) {
 			h := c.Writer.Header()
 			h.Set("Access-Control-Allow-Origin", origin)
 			h.Set("Access-Control-Allow-Credentials", "true")

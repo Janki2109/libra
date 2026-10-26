@@ -681,12 +681,17 @@ func GetLawyerEarnings(c *gin.Context) {
 	summary := gin.H{}
 	var totalPaise, pendingPaise, refundedPaise sql.NullInt64
 	var paidCount, pendingCount, refundedCount, totalCount int
+	// The 'paid' bucket additionally excludes cancelled/rejected/expired
+	// bookings: the client's money is still marked payment_status='paid'
+	// there (cancelling never reverts it — see CancelConsultation), but a
+	// session that never happened is not earned income. pending/refunded are
+	// already their own distinct buckets and are untouched.
 	err := config.DB.QueryRow(`
 		SELECT
-			COALESCE(SUM(amount_paise) FILTER (WHERE payment_status='paid'), 0),
+			COALESCE(SUM(amount_paise) FILTER (WHERE payment_status='paid' AND status NOT IN ('cancelled','rejected','expired')), 0),
 			COALESCE(SUM(amount_paise) FILTER (WHERE payment_status='pending'), 0),
 			COALESCE(SUM(amount_paise) FILTER (WHERE payment_status='refunded'), 0),
-			COUNT(*) FILTER (WHERE payment_status='paid'),
+			COUNT(*) FILTER (WHERE payment_status='paid' AND status NOT IN ('cancelled','rejected','expired')),
 			COUNT(*) FILTER (WHERE payment_status='pending'),
 			COUNT(*) FILTER (WHERE payment_status='refunded'),
 			COUNT(*)

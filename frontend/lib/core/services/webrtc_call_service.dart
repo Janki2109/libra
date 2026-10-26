@@ -32,6 +32,17 @@ class WebRTCCallSession extends ChangeNotifier {
   bool _isCaller = false;
   bool _madeOffer = false;
   bool _closed = false;
+  // Separate from _closed: _closed means "the call has ended" (set by
+  // hangup(), which itself still needs to notifyListeners once more to show
+  // the ended state). _disposed means "this ChangeNotifier itself is gone".
+  // call_screen.dart's dispose() calls hangup() without awaiting it (dispose
+  // can't be async) and then immediately calls this.dispose() — so hangup()'s
+  // still-pending async teardown (closing the peer connection/socket) can
+  // resume and call notifyListeners() after super.dispose() already ran,
+  // which throws "used after being disposed". Guarding every notifyListeners
+  // call through _safeNotify (instead of calling it directly) is what
+  // actually prevents that, regardless of which order the async work lands in.
+  bool _disposed = false;
   String? _error;
   DateTime? _connectedAt;
   bool isSpeakerOn = false;
@@ -118,7 +129,7 @@ class WebRTCCallSession extends ChangeNotifier {
             isSpeakerOn = true;
             Helper.setSpeakerphoneOn(true);
           }
-          notifyListeners();
+          _safeNotify();
         }
       };
 
@@ -136,10 +147,10 @@ class WebRTCCallSession extends ChangeNotifier {
         if (_closed) return;
         if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
           state = CallState.failed;
-          notifyListeners();
+          _safeNotify();
         } else if (s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
           state = CallState.ended;
-          notifyListeners();
+          _safeNotify();
         }
       };
 
@@ -147,7 +158,7 @@ class WebRTCCallSession extends ChangeNotifier {
     } catch (e) {
       _error = 'Could not access camera/microphone. Please check permissions.';
       state = CallState.failed;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -161,27 +172,27 @@ class WebRTCCallSession extends ChangeNotifier {
     try {
       _channel = WebSocketChannel.connect(uri);
       state = CallState.ringing;
-      notifyListeners();
+      _safeNotify();
       _wsSub = _channel!.stream.listen(
         _onSignal,
         onDone: () {
           if (!_closed) {
             state = CallState.ended;
-            notifyListeners();
+            _safeNotify();
           }
         },
         onError: (_) {
           if (!_closed) {
             _error = 'Connection lost. Please try again.';
             state = CallState.failed;
-            notifyListeners();
+            _safeNotify();
           }
         },
       );
     } catch (_) {
       _error = 'Unable to connect. Please try again.';
       state = CallState.failed;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -227,8 +238,8 @@ class WebRTCCallSession extends ChangeNotifier {
         _send({'type': 'answer', 'sdp': answer.sdp});
         break;
       case 'answer':
-        await _pc!.setRemoteDescription(
-            RTCSessionDescription(data['sdp'], 'answer'));
+        await _pc!
+            .setRemoteDescription(RTCSessionDescription(data['sdp'], 'answer'));
         break;
       case 'ice-candidate':
         if (data['candidate'] != null) {
@@ -240,7 +251,7 @@ class WebRTCCallSession extends ChangeNotifier {
       case 'hangup':
         if (!_closed) {
           state = CallState.ended;
-          notifyListeners();
+          _safeNotify();
         }
         break;
     }
@@ -251,7 +262,7 @@ class WebRTCCallSession extends ChangeNotifier {
     for (final t in tracks) {
       t.enabled = !t.enabled;
     }
-    notifyListeners();
+    _safeNotify();
   }
 
   void toggleCamera() {
@@ -259,19 +270,20 @@ class WebRTCCallSession extends ChangeNotifier {
     for (final t in tracks) {
       t.enabled = !t.enabled;
     }
-    notifyListeners();
+    _safeNotify();
   }
 
   void toggleSpeaker() {
     isSpeakerOn = !isSpeakerOn;
     Helper.setSpeakerphoneOn(isSpeakerOn);
-    notifyListeners();
+    _safeNotify();
   }
 
   /// Seconds spent actually connected — 0 before the peer ever joined, still
   /// counting up live once connected (the UI timer reads this every second).
-  int get elapsedSeconds =>
-      _connectedAt == null ? 0 : DateTime.now().difference(_connectedAt!).inSeconds;
+  int get elapsedSeconds => _connectedAt == null
+      ? 0
+      : DateTime.now().difference(_connectedAt!).inSeconds;
 
   /// Persists the connected duration against the consultation once the call
   /// ends, so consultation history has a real number to show instead of
@@ -306,11 +318,17 @@ class WebRTCCallSession extends ChangeNotifier {
     await localStream?.dispose();
     await remoteStream?.dispose();
     state = CallState.ended;
+    _safeNotify();
+  }
+
+  void _safeNotify() {
+    if (_disposed) return;
     notifyListeners();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     localRenderer.dispose();
     remoteRenderer.dispose();
     super.dispose();

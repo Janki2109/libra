@@ -462,9 +462,18 @@ class _HomeTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeCases = cases.where((c) => c['status'] == 'active').length;
     final wonCases = cases.where((c) => c['status'] == 'won').length;
+    // Invoices are never actually set to status 'pending' anywhere in the
+    // backend (see migration 006/the CreateInvoice/VerifyPayment flows) —
+    // an unpaid bill is 'unpaid' or 'partial', and one awaiting the lawyer's
+    // manual-payment review is 'pending_verification'. Checking for
+    // 'pending' alone matched nothing, so this count (and the dashboard
+    // sections below reading it) silently excluded every ordinary unpaid
+    // invoice and only ever caught ones already mid-verification.
     final pendingInvoices = invoices
         .where((i) =>
-            i['status'] == 'pending' || i['status'] == 'pending_verification')
+            i['status'] == 'unpaid' ||
+            i['status'] == 'partial' ||
+            i['status'] == 'pending_verification')
         .length;
     final upcomingHearings =
         hearings.where((h) => h['status'] == 'scheduled').length;
@@ -665,12 +674,18 @@ class _HomeTab extends StatelessWidget {
                     caseData: c, onTap: () => context.push('/portal/cases'))),
                 const SizedBox(height: 20),
               ],
-              if (invoices.any((i) => i['status'] == 'pending')) ...[
+              if (invoices.any((i) =>
+                  i['status'] == 'unpaid' ||
+                  i['status'] == 'partial' ||
+                  i['status'] == 'pending_verification')) ...[
                 _SectionHeader('💰 Pending Bills',
                     onSeeAll: () => onTabChange(3)),
                 const SizedBox(height: 10),
                 ...invoices
-                    .where((i) => i['status'] == 'pending')
+                    .where((i) =>
+                        i['status'] == 'unpaid' ||
+                        i['status'] == 'partial' ||
+                        i['status'] == 'pending_verification')
                     .take(2)
                     .map((inv) => _InvoiceCard(invoice: inv)),
               ],
@@ -1468,7 +1483,10 @@ class _BillingTab extends StatelessWidget {
   const _BillingTab({required this.invoices});
 
   double get _totalPending => invoices
-      .where((i) => i['status'] == 'pending')
+      .where((i) =>
+          i['status'] == 'unpaid' ||
+          i['status'] == 'partial' ||
+          i['status'] == 'pending_verification')
       .fold(0.0, (s, i) => s + ((i['total_amount'] ?? 0.0) as num).toDouble());
   double get _totalPaid => invoices
       .where((i) => i['status'] == 'paid')

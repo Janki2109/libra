@@ -36,12 +36,16 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      // Backend's CreateStaff binds JSON keys name/email/phone/role (role
+      // required-free but name is binding:"required") — full_name/role_name
+      // never matched, so `name` arrived empty and ShouldBindJSON rejected
+      // every request with a 400, meaning Add Staff never actually worked.
       await context.read<StaffProvider>().addStaff({
-        'full_name': _nameCtrl.text.trim(),
+        'name': _nameCtrl.text.trim(),
         'email': _emailCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
         'password': _passwordCtrl.text,
-        'role_name': _role,
+        'role': _role,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -55,8 +59,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Failed: $e'),
-              backgroundColor: AppColors.error),
+              content: Text('Failed: $e'), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -71,8 +74,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primaryDark,
         title: const Text('Add Staff Member',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
             onPressed: () => context.pop()),
@@ -82,14 +84,20 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
         child: Form(
           key: _formKey,
           child: Column(children: [
-            _Field(ctrl: _nameCtrl, label: 'Full Name',
+            _Field(
+                ctrl: _nameCtrl,
+                label: 'Full Name',
                 validator: (v) => (v ?? '').isEmpty ? 'Required' : null),
             const SizedBox(height: 14),
-            _Field(ctrl: _emailCtrl, label: 'Email',
+            _Field(
+                ctrl: _emailCtrl,
+                label: 'Email',
                 keyboardType: TextInputType.emailAddress,
                 validator: (v) => (v ?? '').isEmpty ? 'Required' : null),
             const SizedBox(height: 14),
-            _Field(ctrl: _phoneCtrl, label: 'Phone',
+            _Field(
+                ctrl: _phoneCtrl,
+                label: 'Phone',
                 keyboardType: TextInputType.phone,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -97,7 +105,9 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                 ],
                 validator: (v) => Validators.phone(v, required: false)),
             const SizedBox(height: 14),
-            _Field(ctrl: _passwordCtrl, label: 'Password',
+            _Field(
+                ctrl: _passwordCtrl,
+                label: 'Password',
                 obscure: true,
                 validator: (v) =>
                     (v ?? '').length < 6 ? 'Min 6 characters' : null),
@@ -112,8 +122,8 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(12),
@@ -132,8 +142,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                               child: Text(r[0].toUpperCase() +
                                   r.substring(1).replaceAll('_', ' '))))
                           .toList(),
-                      onChanged: (v) =>
-                          setState(() => _role = v ?? 'staff'),
+                      onChanged: (v) => setState(() => _role = v ?? 'staff'),
                     ),
                   ),
                 ),

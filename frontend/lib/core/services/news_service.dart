@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 import 'package:xml/xml.dart';
 
 class NewsService {
@@ -147,30 +148,33 @@ class NewsService {
     }
   }
 
-  static String _parseDate(String dateStr) {
+  // Every RSS feed's <pubDate> is RFC 2822 ("Mon, 02 Jan 2006 15:04:05
+  // +0000"), which DateTime.parse can never understand — it only accepts
+  // ISO 8601. The old code tried DateTime.parse first and silently fell
+  // back to "now" on every single article when it (always) failed, so every
+  // article's date/time-ago was simply wrong, never the article's real
+  // publish time. DateFormat with an explicit RFC 2822 pattern is what
+  // actually parses it; DateTime.parse remains first since some feeds do
+  // use ISO 8601 instead.
+  static DateTime? _tryParsePubDate(String dateStr) {
+    final iso = DateTime.tryParse(dateStr);
+    if (iso != null) return iso;
     try {
-      // RFC 2822 format: "Mon, 02 Jan 2006 15:04:05 +0000"
-      return DateTime.parse(dateStr).toIso8601String();
+      return DateFormat('EEE, dd MMM yyyy HH:mm:ss Z', 'en_US').parse(dateStr);
     } catch (_) {
-      return DateTime.now().toIso8601String();
+      return null;
     }
   }
 
+  static String _parseDate(String dateStr) {
+    return (_tryParsePubDate(dateStr) ?? DateTime.now()).toIso8601String();
+  }
+
   static String _getTimeAgo(String dateStr) {
-    try {
-      DateTime date;
-      try {
-        date = DateTime.parse(dateStr);
-      } catch (_) {
-        // Try RFC 2822
-        date = DateTime.now();
-      }
-      final diff = DateTime.now().difference(date);
-      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 24) return '${diff.inHours}h ago';
-      return '${diff.inDays}d ago';
-    } catch (_) {
-      return 'Recently';
-    }
+    final date = _tryParsePubDate(dateStr) ?? DateTime.now();
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 }
