@@ -39,9 +39,35 @@ func GetEnvAny(defaultValue string, keys ...string) string {
 }
 
 // IsProduction reports whether production hardening is on.
+//
+// Render's deployment logs showed "Database ping failed: dial tcp
+// 127.0.0.1:5435" in production — ConnectDatabase (database.go) already
+// prefers DATABASE_URL and Validate below already refuses to start if
+// DB_HOST/DATABASE_URL points at localhost in production, but both of those
+// only run when IsProduction() is true, which previously depended entirely
+// on APP_ENV being set by hand in Render's dashboard. This is a
+// dashboard-only deployment (no render.yaml), so that's exactly the kind of
+// step that's easy to forget — and when it is, every production-only check
+// here silently no-ops instead of firing, which is how a deploy with
+// leftover local-dev DB_HOST=127.0.0.1/DB_PORT=5435 values (apparently
+// copied from the local .env into Render's env var dashboard instead of
+// Render's actual managed Postgres connection details) got past startup and
+// reached the raw, unhelpful driver-level ping error instead of refusing to
+// start.
+//
+// RENDER is a variable Render itself injects into every one of its own
+// services unconditionally (documented in Render's own env var reference) —
+// unlike APP_ENV, it can't be forgotten in the dashboard, and it is never
+// set on a local dev machine. Treating it as an additional production
+// signal makes the existing checks fire reliably on Render specifically,
+// without changing what "production" means anywhere else (a non-Render
+// deployment still relies on APP_ENV exactly as before).
 func IsProduction() bool {
 	env := strings.ToLower(GetEnv("APP_ENV", GetEnv("ENV", "development")))
-	return env == "production" || env == "prod"
+	if env == "production" || env == "prod" {
+		return true
+	}
+	return GetEnv("RENDER", "") != ""
 }
 
 // Validate refuses to start a production process that is misconfigured in a way

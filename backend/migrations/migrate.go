@@ -7,6 +7,7 @@
 package migrations
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 )
 
 //go:embed *.sql
@@ -21,12 +23,22 @@ var migrationFS embed.FS
 
 // Run applies every unapplied migration in filename order, each in its own
 // transaction, and records what ran in schema_migrations.
+//
+// This runs synchronously in main() before the server starts listening, so a
+// stalled query here (lock contention, a network blip to the database) used
+// to block the process forever with nothing ever binding the port — a
+// container in that state looks, from outside, exactly like a hung API. Every
+// statement below now carries a bounded context so a stall fails fast with a
+// clear error instead of hanging indefinitely.
 func Run(db *sql.DB) error {
 	if db == nil {
 		return fmt.Errorf("database is not connected")
 	}
 
-	if _, err := db.Exec(`
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version     TEXT PRIMARY KEY,
 			applied_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -36,7 +48,7 @@ func Run(db *sql.DB) error {
 	}
 
 	applied := map[string]bool{}
-	rows, err := db.Query(`SELECT version FROM schema_migrations`)
+	rows, err := db.QueryContext(ctx, `SELECT version FROM schema_migrations`)
 	if err != nil {
 		return fmt.Errorf("read schema_migrations: %w", err)
 	}
@@ -79,15 +91,15 @@ func Run(db *sql.DB) error {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 
-		tx, err := db.Begin()
+		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("begin %s: %w", name, err)
 		}
-		if _, err := tx.Exec(string(body)); err != nil {
+		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("apply %s: %w", name, err)
 		}
-		if _, err := tx.Exec(
+		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO schema_migrations (version) VALUES ($1)`, name); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("record %s: %w", name, err)
