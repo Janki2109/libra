@@ -10,35 +10,46 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/services/trial_service.dart';
 import '../models/auth_model.dart';
 
-/// Turns a login failure into the right message for the right cause, instead
-/// of the previous blanket "Login failed. Check credentials." for every
-/// DioException — which made a release build pointed at an unreachable API
-/// (e.g. still compiled with the default localhost base URL) look exactly
-/// like a wrong password, with nothing in the UI to tell them apart.
+/// Turns an auth failure (login OR registration) into the right message for
+/// the right cause, instead of a blanket "Login/Registration failed" for
+/// every DioException — which made a release build pointed at an unreachable
+/// API (e.g. still compiled with the default localhost base URL) look exactly
+/// like a wrong password or a duplicate account, with nothing in the UI to
+/// tell them apart.
 ///
-/// Only a real 401/400 response with a credentials-shaped message is shown
-/// as a credentials error; every network-level failure (no connection, DNS,
-/// timeout, TLS, 5xx) gets its own distinct, honest message instead.
-String _describeLoginError(DioException e) {
+/// Only a real response body with a server-written message (wrong
+/// credentials, duplicate email, validation failure, 5xx) is shown as-is;
+/// every network-level failure (no connection, DNS, timeout, TLS) gets its
+/// own distinct, honest message instead via [DioClient.describeError].
+String _describeAuthError(DioException e) {
   final data = e.response?.data;
   if (data is Map && data['message'] is String) {
-    // The backend actually answered — this is a real auth/validation
-    // rejection, not a connectivity problem.
+    // The backend actually answered — this is a real rejection (bad
+    // credentials, duplicate account, validation error), not connectivity.
     return data['message'] as String;
   }
   return DioClient.describeError(e);
 }
 
-void _logLoginFailure(String endpoint, Object error) {
-  // Never logs email/password — only the target URL and what Dio/the server
-  // said, so a "works locally, fails in the APK" report can be diagnosed
-  // from `adb logcat` without needing repro access to the failing device.
+/// Safe diagnostic logging for every auth request: endpoint, duration and
+/// outcome category only. Never logs request/response bodies, so an email,
+/// password, OTP or token can never end up here even by accident — unlike
+/// request/response-body logging, which would.
+void _logAuthRequest(String endpoint, Stopwatch stopwatch,
+    {int? statusCode, Object? error}) {
+  final ms = stopwatch.elapsedMilliseconds;
+  if (error == null) {
+    debugPrint('[auth] POST $endpoint -> ${AppConstants.baseUrl} '
+        'ok status=$statusCode duration=${ms}ms');
+    return;
+  }
   if (error is DioException) {
     debugPrint('[auth] POST $endpoint -> ${AppConstants.baseUrl} failed: '
-        'type=${error.type} status=${error.response?.statusCode}');
+        'type=${error.type} status=${error.response?.statusCode} '
+        'duration=${ms}ms');
   } else {
-    debugPrint(
-        '[auth] POST $endpoint -> ${AppConstants.baseUrl} failed: $error');
+    debugPrint('[auth] POST $endpoint -> ${AppConstants.baseUrl} failed: '
+        '${error.runtimeType} duration=${ms}ms');
   }
 }
 
@@ -89,12 +100,15 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     _error = null;
     notifyListeners();
+    final sw = Stopwatch()..start();
     try {
       final response = await DioClient.instance.post('/auth/login', data: {
         'email': email,
         'password': password,
         'role': role,
       });
+      _logAuthRequest('/auth/login', sw,
+          statusCode: response.statusCode);
       if (response.data['success'] == true) {
         final data = response.data['data'];
         _token = data['token']?.toString() ?? '';
@@ -110,10 +124,10 @@ class AuthProvider extends ChangeNotifier {
         _error = response.data['message'] ?? 'Login failed';
       }
     } on DioException catch (e) {
-      _logLoginFailure('/auth/login', e);
-      _error = _describeLoginError(e);
+      _logAuthRequest('/auth/login', sw, error: e);
+      _error = _describeAuthError(e);
     } catch (e) {
-      _logLoginFailure('/auth/login', e);
+      _logAuthRequest('/auth/login', sw, error: e);
       _error = 'Connection failed. Check internet & backend.';
     }
     _loading = false;
@@ -127,11 +141,14 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     _error = null;
     notifyListeners();
+    final sw = Stopwatch()..start();
     try {
       final response = await DioClient.instance.post('/portal/login', data: {
         'email': email,
         'password': password,
       });
+      _logAuthRequest('/portal/login', sw,
+          statusCode: response.statusCode);
       if (response.data['success'] == true) {
         final data = response.data['data'];
         _token = data['token']?.toString() ?? '';
@@ -147,10 +164,10 @@ class AuthProvider extends ChangeNotifier {
         _error = response.data['message'] ?? 'Login failed';
       }
     } on DioException catch (e) {
-      _logLoginFailure('/portal/login', e);
-      _error = _describeLoginError(e);
+      _logAuthRequest('/portal/login', sw, error: e);
+      _error = _describeAuthError(e);
     } catch (e) {
-      _logLoginFailure('/portal/login', e);
+      _logAuthRequest('/portal/login', sw, error: e);
       _error = 'Connection failed. Check internet & backend.';
     }
     _loading = false;
@@ -175,6 +192,7 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     _error = null;
     notifyListeners();
+    final sw = Stopwatch()..start();
     try {
       final response = await DioClient.instance.post('/auth/register', data: {
         'firm_name': firmName,
@@ -188,6 +206,7 @@ class AuthProvider extends ChangeNotifier {
         'plan': plan,
         'designation': designation,
       });
+      _logAuthRequest('/auth/register', sw, statusCode: response.statusCode);
 
       if (response.data['success'] == true) {
         final data = response.data['data'];
@@ -222,9 +241,11 @@ class AuthProvider extends ChangeNotifier {
         _error = response.data['message'] ?? 'Registration failed';
       }
     } on DioException catch (e) {
-      _error = e.response?.data['message'] ?? 'Registration failed';
+      _logAuthRequest('/auth/register', sw, error: e);
+      _error = _describeAuthError(e);
     } catch (e) {
-      _error = e.toString();
+      _logAuthRequest('/auth/register', sw, error: e);
+      _error = 'Connection failed. Check internet & backend.';
     }
     _loading = false;
     notifyListeners();
@@ -265,6 +286,7 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     _error = null;
     notifyListeners();
+    final sw = Stopwatch()..start();
     try {
       final response =
           await DioClient.instance.post('/auth/client/register', data: {
@@ -273,6 +295,8 @@ class AuthProvider extends ChangeNotifier {
         'phone': phone,
         'password': password,
       });
+      _logAuthRequest('/auth/client/register', sw,
+          statusCode: response.statusCode);
       if (response.data['success'] == true) {
         final data = response.data['data'];
         _token = data['token']?.toString() ?? '';
@@ -288,9 +312,11 @@ class AuthProvider extends ChangeNotifier {
         _error = response.data['message'] ?? 'Registration failed';
       }
     } on DioException catch (e) {
-      _error = e.response?.data['message'] ?? 'Registration failed';
+      _logAuthRequest('/auth/client/register', sw, error: e);
+      _error = _describeAuthError(e);
     } catch (e) {
-      _error = e.toString();
+      _logAuthRequest('/auth/client/register', sw, error: e);
+      _error = 'Connection failed. Check internet & backend.';
     }
     _loading = false;
     notifyListeners();
@@ -309,6 +335,7 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     _error = null;
     notifyListeners();
+    final sw = Stopwatch()..start();
     try {
       final response =
           await DioClient.instance.post('/auth/student/register', data: {
@@ -319,6 +346,8 @@ class AuthProvider extends ChangeNotifier {
         'college_name': collegeName,
         'year': year,
       });
+      _logAuthRequest('/auth/student/register', sw,
+          statusCode: response.statusCode);
       if (response.data['success'] == true) {
         final data = response.data['data'];
         _token = data['token']?.toString() ?? '';
@@ -334,9 +363,11 @@ class AuthProvider extends ChangeNotifier {
         _error = response.data['message'] ?? 'Registration failed';
       }
     } on DioException catch (e) {
-      _error = e.response?.data['message'] ?? 'Registration failed';
+      _logAuthRequest('/auth/student/register', sw, error: e);
+      _error = _describeAuthError(e);
     } catch (e) {
-      _error = e.toString();
+      _logAuthRequest('/auth/student/register', sw, error: e);
+      _error = 'Connection failed. Check internet & backend.';
     }
     _loading = false;
     notifyListeners();

@@ -40,7 +40,20 @@ class AppConstants {
     return 'http://localhost:8080/api/v1';
   }
 
-  static const String _prodUrl = 'https://libra-caox.onrender.com/api/v1';
+  // This was 'https://libra-caox.onrender.com/api/v1' — a hostname with no
+  // live service behind it (every request to it times out at the TCP/TLS
+  // layer with no response at all, which is why login/registration spun
+  // forever in a release build). Render's own deploy logs show the actual
+  // live service at 'https://libra-y678.onrender.com' ("Available at your
+  // primary URL" / "Your service is live"); verified directly — /health
+  // returns 200 and /api/v1/auth/login returns a real 401 for bad
+  // credentials. Render assigns this `<name>-<random-suffix>.onrender.com`
+  // hostname itself and it changes if the service is ever renamed or
+  // recreated, so if this goes stale again, Render's dashboard (Settings ->
+  // the service's own page header) or these same deploy logs are the source
+  // of truth — never guess or hardcode a new one without confirming it
+  // responds first.
+  static const String _prodUrl = 'https://libra-y678.onrender.com/api/v1';
 
   /// Whether the app is talking to a plaintext endpoint. Used to warn during
   /// development and to fail loudly in a release build.
