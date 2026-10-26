@@ -153,11 +153,21 @@ func Validate() error {
 				"subscriptions would not activate when a user closes the app mid-checkout")
 	}
 
+	// Email is optional, not required to start: unlike JWT_SECRET or the
+	// database, nothing here is a security hole if unset, and refusing to boot
+	// over it meant the whole API was down — including login for users who
+	// never needed email — until someone supplied real SMTP credentials. The
+	// mailer itself (services/mailer.go Configured/Send) already refuses to
+	// pretend delivery succeeded when it isn't configured, and every caller
+	// (SendOTP, forgot-password, invitation emails) already turns that refusal
+	// into a clear "could not send" response or a dev-only console fallback —
+	// so a missing SMTP_USER just means those specific features degrade
+	// loudly, not that the process can't run at all.
 	smtpUser := GetEnvAny("", "SMTP_USER", "SMTP_USERNAME")
 	if smtpUser == "" || strings.Contains(smtpUser, "your_email") {
-		problems = append(problems,
-			"SMTP_USER/SMTP_USERNAME and SMTP_PASS/SMTP_PASSWORD are unset or still placeholders — "+
-				"verification codes and portal invitations cannot be delivered")
+		log.Println("[config] warning: SMTP_USER/SMTP_USERNAME and SMTP_PASS/SMTP_PASSWORD are " +
+			"unset or still placeholders — verification codes and portal invitations cannot be " +
+			"delivered until real SMTP credentials are set")
 	}
 
 	if len(problems) == 0 {

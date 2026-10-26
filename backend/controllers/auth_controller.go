@@ -495,6 +495,10 @@ func SendOTP(c *gin.Context) {
 			utils.Success(c, http.StatusOK, genericMsg, nil)
 			return
 		}
+		if errors.Is(err, services.ErrMailNotConfigured) {
+			utils.Error(c, http.StatusServiceUnavailable, "Email service is not configured.", "")
+			return
+		}
 		utils.Error(c, http.StatusInternalServerError, "Could not send code", err.Error())
 		return
 	}
@@ -664,6 +668,10 @@ func ForgotPassword(c *gin.Context) {
 		if errors.Is(err, services.ErrMailNotConfigured) && !utils.IsProduction() {
 			log.Printf("[dev] password reset code for %s is %s", email, otp)
 			utils.Success(c, http.StatusOK, genericMsg, nil)
+			return
+		}
+		if errors.Is(err, services.ErrMailNotConfigured) {
+			utils.Error(c, http.StatusServiceUnavailable, "Email service is not configured.", "")
 			return
 		}
 		utils.Error(c, http.StatusInternalServerError, "Could not send code", err.Error())
