@@ -461,17 +461,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<Uint8List?> _fetchAttachment(String messageId) async {
     if (_fileCache.containsKey(messageId)) return _fileCache[messageId];
-    try {
-      final res =
-          await DioClient.instance.get('/chat/messages/$messageId/file');
-      final b64 = res.data['data']?['file_content'] as String?;
-      if (b64 == null) return null;
-      final bytes = base64Decode(b64);
-      _fileCache[messageId] = bytes;
-      return bytes;
-    } catch (_) {
-      return null;
-    }
+    final res = await DioClient.instance.get('/chat/messages/$messageId/file');
+    final b64 = res.data['data']?['file_content'] as String?;
+    if (b64 == null) return null;
+    final bytes = base64Decode(b64);
+    _fileCache[messageId] = bytes;
+    return bytes;
   }
 
   Future<void> _openAttachment(Map message) async {
@@ -485,10 +480,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         duration: const Duration(seconds: 1),
         backgroundColor: _brown,
         behavior: SnackBarBehavior.floating));
-    final bytes = await _fetchAttachment(id);
+    Uint8List? bytes;
+    try {
+      bytes = await _fetchAttachment(id);
+    } catch (e) {
+      if (!mounted) return;
+      // This used to collapse every failure — a real network/timeout issue,
+      // the server saying the attachment is gone, or the caller lacking
+      // access to the chat room (e.g. a client/clients.email mismatch) —
+      // into one unhelpful "Could not load this attachment.", making it
+      // impossible to tell a temporary network blip from a permission
+      // problem that will never resolve on retry.
+      _showError(DioClient.describeError(e));
+      return;
+    }
     if (!mounted) return;
     if (bytes == null) {
-      _showError('Could not load this attachment.');
+      _showError('This message has no attachment.');
       return;
     }
     final result = await openDocumentBytes(

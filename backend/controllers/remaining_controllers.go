@@ -137,21 +137,20 @@ func UploadDocument(c *gin.Context) {
 		return
 	}
 
-	if !belongsToFirm(tblCases, req.CaseID, fID) {
-		utils.Error(c, http.StatusBadRequest, "Unknown case", "case not in caller's firm")
-		return
-	}
-	if !belongsToFirm(tblClients, req.ClientID, fID) {
-		utils.Error(c, http.StatusBadRequest, "Unknown client", "client not in caller's firm")
-		return
-	}
-
 	// belongsToFirm only proves the case/client are in the SAME FIRM as the
 	// caller — for a client-role caller that is not enough: any client of a
 	// firm could set client_id/case_id to another client's own id (same
 	// firm, so belongsToFirm passed) and upload a document straight into
 	// that other client's case. A client may only upload against their own
 	// client record.
+	//
+	// The client-portal upload screen has no case/client picker and has no
+	// way of knowing its own client_id, so it never sent one — which used to
+	// 403 every single client-portal upload outright ("req.ClientID == ''"
+	// could never equal a real id). A client-role caller's own client_id is
+	// unambiguous (one clients row per firm per email) and already being
+	// looked up for the ownership check below, so default to it instead of
+	// requiring the caller to supply what the server already knows.
 	if role == "client" {
 		var ownClientID string
 		config.DB.QueryRow(`
@@ -159,7 +158,13 @@ func UploadDocument(c *gin.Context) {
 			JOIN users u ON lower(u.email) = lower(cl.email)
 			WHERE u.id = $1::uuid AND cl.firm_id = $2::uuid
 		`, userID, fID).Scan(&ownClientID)
-		if ownClientID == "" || req.ClientID == "" || ownClientID != req.ClientID {
+		if ownClientID == "" {
+			utils.Error(c, http.StatusForbidden, "You can only upload documents for your own case", "")
+			return
+		}
+		if req.ClientID == "" {
+			req.ClientID = ownClientID
+		} else if req.ClientID != ownClientID {
 			utils.Error(c, http.StatusForbidden, "You can only upload documents for your own case", "")
 			return
 		}
@@ -172,6 +177,15 @@ func UploadDocument(c *gin.Context) {
 				return
 			}
 		}
+	}
+
+	if !belongsToFirm(tblCases, req.CaseID, fID) {
+		utils.Error(c, http.StatusBadRequest, "Unknown case", "case not in caller's firm")
+		return
+	}
+	if !belongsToFirm(tblClients, req.ClientID, fID) {
+		utils.Error(c, http.StatusBadRequest, "Unknown client", "client not in caller's firm")
+		return
 	}
 
 	// uploaded_by_role is taken from the verified JWT claim, not from the

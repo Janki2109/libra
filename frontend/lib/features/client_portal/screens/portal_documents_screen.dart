@@ -844,7 +844,10 @@ class _UploadSheetState extends State<_UploadSheet> {
       }
     } catch (e) {
       setState(() => _loading = false);
-      _showError('Upload failed. Please try again.');
+      // A blanket "Upload failed" here used to hide exactly why — a 403
+      // (not your case), a 413 (file too large), or a real network/timeout
+      // failure all looked identical, so there was nothing to act on.
+      _showError(DioClient.describeError(e));
     }
   }
 

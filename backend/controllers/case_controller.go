@@ -490,7 +490,8 @@ func GetCaseHearings(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT id, hearing_date::text, COALESCE(hearing_time::text,''),
 		COALESCE(court_name,''), COALESCE(purpose,''), status,
-		COALESCE(next_date::text,''), COALESCE(order_summary,''), COALESCE(remarks,'')
+		COALESCE(next_date::text,''), COALESCE(order_summary,''), COALESCE(remarks,''),
+		visible_to_client
 		FROM hearings WHERE case_id=$1::uuid ORDER BY hearing_date DESC
 	`, caseID)
 	if err != nil {
@@ -500,21 +501,23 @@ func GetCaseHearings(c *gin.Context) {
 	defer rows.Close()
 
 	type H struct {
-		ID           string `json:"id"`
-		HearingDate  string `json:"hearing_date"`
-		HearingTime  string `json:"hearing_time"`
-		CourtName    string `json:"court_name"`
-		Purpose      string `json:"purpose"`
-		Status       string `json:"status"`
-		NextDate     string `json:"next_date"`
-		OrderSummary string `json:"order_summary"`
-		Remarks      string `json:"remarks"`
+		ID              string `json:"id"`
+		HearingDate     string `json:"hearing_date"`
+		HearingTime     string `json:"hearing_time"`
+		CourtName       string `json:"court_name"`
+		Purpose         string `json:"purpose"`
+		Status          string `json:"status"`
+		NextDate        string `json:"next_date"`
+		OrderSummary    string `json:"order_summary"`
+		Remarks         string `json:"remarks"`
+		VisibleToClient bool   `json:"visible_to_client"`
 	}
 	hearings := []H{}
 	for rows.Next() {
 		var h H
 		if err := rows.Scan(&h.ID, &h.HearingDate, &h.HearingTime, &h.CourtName,
-			&h.Purpose, &h.Status, &h.NextDate, &h.OrderSummary, &h.Remarks); err != nil {
+			&h.Purpose, &h.Status, &h.NextDate, &h.OrderSummary, &h.Remarks,
+			&h.VisibleToClient); err != nil {
 			utils.Error(c, http.StatusInternalServerError, "Failed to read hearings", err.Error())
 			return
 		}

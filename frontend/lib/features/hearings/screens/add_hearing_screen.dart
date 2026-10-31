@@ -30,6 +30,10 @@ class _AddHearingScreenState extends State<AddHearingScreen> {
   DateTime _hearingDate = DateTime.now().add(const Duration(days: 1));
   TimeOfDay? _hearingTime;
   bool _loading = false;
+  // Every hearing used to be shown to the client automatically the moment a
+  // case was linked, with no way to keep an internal/unconfirmed hearing off
+  // their portal — this is the opt-out.
+  bool _visibleToClient = true;
 
   @override
   void initState() {
@@ -129,11 +133,12 @@ class _AddHearingScreenState extends State<AddHearingScreen> {
         'judge_name': _judgeNameCtrl.text.trim(),
         'purpose': _purposeCtrl.text.trim(),
         'notes': _notesCtrl.text.trim(),
+        'visible_to_client': _visibleToClient,
       });
       if (mounted) {
         HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_selectedCaseId != null
+          content: Text(_selectedCaseId != null && _visibleToClient
               ? 'Hearing scheduled! Client notified automatically!'
               : 'Hearing scheduled successfully!'),
           backgroundColor: const Color(0xFF2E8B57),
@@ -292,18 +297,42 @@ class _AddHearingScreenState extends State<AddHearingScreen> {
             if (_selectedCaseId != null) ...[
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                    color: const Color(0xFF2E8B57).withValues(alpha: 0.07),
+                    color: (_visibleToClient
+                            ? const Color(0xFF2E8B57)
+                            : const Color(0xFF7B7594))
+                        .withValues(alpha: 0.07),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: const Color(0xFF2E8B57).withValues(alpha: 0.3))),
-                child: const Row(children: [
-                  Icon(Icons.check_circle_rounded,
-                      color: Color(0xFF2E8B57), size: 15),
-                  SizedBox(width: 8),
-                  Text('Client will see this hearing in their portal!',
-                      style: TextStyle(color: Color(0xFF2E8B57), fontSize: 11)),
+                        color: (_visibleToClient
+                                ? const Color(0xFF2E8B57)
+                                : const Color(0xFF7B7594))
+                            .withValues(alpha: 0.3))),
+                child: Row(children: [
+                  Icon(
+                      _visibleToClient
+                          ? Icons.check_circle_rounded
+                          : Icons.visibility_off_rounded,
+                      color: _visibleToClient
+                          ? const Color(0xFF2E8B57)
+                          : const Color(0xFF7B7594),
+                      size: 15),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(
+                          _visibleToClient
+                              ? 'Client will see this hearing in their portal'
+                              : 'Hidden from client — visible to you only',
+                          style: TextStyle(
+                              color: _visibleToClient
+                                  ? const Color(0xFF2E8B57)
+                                  : const Color(0xFF7B7594),
+                              fontSize: 11))),
+                  Switch(
+                      value: _visibleToClient,
+                      activeThumbColor: const Color(0xFF2E8B57),
+                      onChanged: (v) => setState(() => _visibleToClient = v)),
                 ]),
               ),
             ],

@@ -51,6 +51,7 @@ func TestAllMigrationsAreEmbedded(t *testing.T) {
 		"033_email_role_unique.sql",
 		"034_lawyer_bank_payment_details.sql",
 		"035_student_challenge_schema_fix.sql",
+		"036_hearing_client_visibility.sql",
 	}
 
 	if len(names) != len(want) {

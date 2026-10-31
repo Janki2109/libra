@@ -201,6 +201,7 @@ func GetMyHearings(c *gin.Context) {
 		FROM hearings h
 		LEFT JOIN cases cs ON h.case_id = cs.id
 		WHERE cs.client_id IN (SELECT id FROM clients WHERE lower(email) = $1)
+		  AND h.visible_to_client = true
 		ORDER BY h.hearing_date ASC
 	`, userEmail)
 

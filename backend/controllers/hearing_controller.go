@@ -143,10 +143,18 @@ func CreateHearing(c *gin.Context) {
 		JudgeName   string `json:"judge_name"`
 		Purpose     string `json:"purpose"`
 		Notes       string `json:"notes"`
+		// A pointer so "the client omitted this field" (old app builds,
+		// defaults to visible — unchanged behavior) is distinguishable from
+		// "the lawyer explicitly chose false".
+		VisibleToClient *bool `json:"visible_to_client"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
 		return
+	}
+	visibleToClient := true
+	if req.VisibleToClient != nil {
+		visibleToClient = *req.VisibleToClient
 	}
 
 	// A hearing could previously be attached to another firm's case.
@@ -158,11 +166,11 @@ func CreateHearing(c *gin.Context) {
 	id := uuid.New().String()
 	_, err := config.DB.Exec(`
 		INSERT INTO hearings (id, case_id, firm_id, hearing_date, hearing_time,
-		court_name, court_room, judge_name, purpose, notes, created_by)
-		VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11::uuid)
+		court_name, court_room, judge_name, purpose, notes, created_by, visible_to_client)
+		VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11::uuid, $12)
 	`, id, nullIfEmpty(req.CaseID), firmID, req.HearingDate, nullIfEmpty(req.HearingTime),
 		req.CourtName, req.CourtRoom, req.JudgeName,
-		req.Purpose, req.Notes, uID)
+		req.Purpose, req.Notes, uID, visibleToClient)
 
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to create hearing", err.Error())
@@ -179,22 +187,23 @@ func GetHearing(c *gin.Context) {
 	}
 
 	var h struct {
-		ID           string `json:"id"`
-		CaseID       string `json:"case_id"`
-		CaseTitle    string `json:"case_title"`
-		CaseNumber   string `json:"case_number"`
-		ClientName   string `json:"client_name"`
-		HearingDate  string `json:"hearing_date"`
-		HearingTime  string `json:"hearing_time"`
-		CourtName    string `json:"court_name"`
-		CourtRoom    string `json:"court_room"`
-		JudgeName    string `json:"judge_name"`
-		Purpose      string `json:"purpose"`
-		Notes        string `json:"notes"`
-		Status       string `json:"status"`
-		NextDate     string `json:"next_date"`
-		OrderSummary string `json:"order_summary"`
-		Remarks      string `json:"remarks"`
+		ID              string `json:"id"`
+		CaseID          string `json:"case_id"`
+		CaseTitle       string `json:"case_title"`
+		CaseNumber      string `json:"case_number"`
+		ClientName      string `json:"client_name"`
+		HearingDate     string `json:"hearing_date"`
+		HearingTime     string `json:"hearing_time"`
+		CourtName       string `json:"court_name"`
+		CourtRoom       string `json:"court_room"`
+		JudgeName       string `json:"judge_name"`
+		Purpose         string `json:"purpose"`
+		Notes           string `json:"notes"`
+		Status          string `json:"status"`
+		NextDate        string `json:"next_date"`
+		OrderSummary    string `json:"order_summary"`
+		Remarks         string `json:"remarks"`
+		VisibleToClient bool   `json:"visible_to_client"`
 	}
 	// order_summary/remarks were previously left out here even though the
 	// "Update After Hearing" sheet collects them — a saved value would never
@@ -207,7 +216,8 @@ func GetHearing(c *gin.Context) {
 		       COALESCE(h.court_name,''), COALESCE(h.court_room,''),
 		       COALESCE(h.judge_name,''), COALESCE(h.purpose,''),
 		       COALESCE(h.notes,''), h.status, COALESCE(h.next_date::text,''),
-		       COALESCE(h.order_summary,''), COALESCE(h.remarks,'')
+		       COALESCE(h.order_summary,''), COALESCE(h.remarks,''),
+		       h.visible_to_client
 		FROM hearings h
 		LEFT JOIN cases cs ON h.case_id = cs.id
 		LEFT JOIN clients cl ON cs.client_id = cl.id
@@ -216,7 +226,7 @@ func GetHearing(c *gin.Context) {
 		&h.HearingDate, &h.HearingTime,
 		&h.CourtName, &h.CourtRoom, &h.JudgeName,
 		&h.Purpose, &h.Notes, &h.Status, &h.NextDate,
-		&h.OrderSummary, &h.Remarks)
+		&h.OrderSummary, &h.Remarks, &h.VisibleToClient)
 
 	if err == sql.ErrNoRows {
 		utils.Error(c, http.StatusNotFound, "Hearing not found", "")
@@ -239,12 +249,13 @@ func UpdateHearing(c *gin.Context) {
 	}
 
 	var req struct {
-		Status       string `json:"status"`
-		Notes        string `json:"notes"`
-		NextDate     string `json:"next_date"`
-		Purpose      string `json:"purpose"`
-		OrderSummary string `json:"order_summary"`
-		Remarks      string `json:"remarks"`
+		Status          string `json:"status"`
+		Notes           string `json:"notes"`
+		NextDate        string `json:"next_date"`
+		Purpose         string `json:"purpose"`
+		OrderSummary    string `json:"order_summary"`
+		Remarks         string `json:"remarks"`
+		VisibleToClient *bool  `json:"visible_to_client"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
@@ -267,16 +278,17 @@ func UpdateHearing(c *gin.Context) {
 	// UpdateCase in production with "inconsistent types deduced".
 	_, err := config.DB.Exec(`
 		UPDATE hearings SET
-		  status        = CASE WHEN $1::text != '' THEN $1::text ELSE status END,
-		  notes         = CASE WHEN $2::text != '' THEN $2::text ELSE notes END,
-		  next_date     = COALESCE($3::date, next_date),
-		  purpose       = CASE WHEN $4::text != '' THEN $4::text ELSE purpose END,
-		  order_summary = CASE WHEN $5::text != '' THEN $5::text ELSE order_summary END,
-		  remarks       = CASE WHEN $6::text != '' THEN $6::text ELSE remarks END,
-		  updated_at    = NOW()
-		WHERE id=$7::uuid AND firm_id=$8::uuid
+		  status            = CASE WHEN $1::text != '' THEN $1::text ELSE status END,
+		  notes             = CASE WHEN $2::text != '' THEN $2::text ELSE notes END,
+		  next_date         = COALESCE($3::date, next_date),
+		  purpose           = CASE WHEN $4::text != '' THEN $4::text ELSE purpose END,
+		  order_summary     = CASE WHEN $5::text != '' THEN $5::text ELSE order_summary END,
+		  remarks           = CASE WHEN $6::text != '' THEN $6::text ELSE remarks END,
+		  visible_to_client = COALESCE($7::boolean, visible_to_client),
+		  updated_at        = NOW()
+		WHERE id=$8::uuid AND firm_id=$9::uuid
 	`, req.Status, req.Notes, nullIfEmpty(req.NextDate), req.Purpose,
-		req.OrderSummary, req.Remarks, id, firmID)
+		req.OrderSummary, req.Remarks, req.VisibleToClient, id, firmID)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to update hearing", err.Error())
 		return

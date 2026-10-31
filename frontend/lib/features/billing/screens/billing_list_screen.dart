@@ -102,6 +102,18 @@ class _BillingListScreenState extends State<BillingListScreen>
                                 color: Colors.white,
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700))),
+                    // Payment Verification was previously reachable only
+                    // from the dashboard's quick-actions grid, not from
+                    // Billing itself — a lawyer looking for it among
+                    // invoices/payments (the more natural place) wouldn't
+                    // find it here at all.
+                    IconButton(
+                      icon: const Icon(Icons.verified_rounded,
+                          color: Color(0xFF2E8B57), size: 24),
+                      tooltip: 'Verify Payments',
+                      onPressed: () =>
+                          context.push('/billing/verify').then((_) => _load()),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.add_rounded,
                           color: Color(0xFFFFD700), size: 28),

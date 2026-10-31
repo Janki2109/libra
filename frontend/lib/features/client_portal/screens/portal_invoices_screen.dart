@@ -255,6 +255,46 @@ class _PortalInvoicesScreenState extends State<PortalInvoicesScreen> {
                                         ),
                                       ),
                                     ),
+                                    const SizedBox(height: 8),
+                                    // The online checkout above requires
+                                    // Razorpay. A client who already paid by
+                                    // UPI/bank transfer outside the app — or
+                                    // whose lawyer prefers that — needs a way
+                                    // to submit that proof directly instead
+                                    // of only finding it buried inside the
+                                    // Razorpay screen as a small fallback
+                                    // link.
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () => context
+                                            .push(
+                                                '/billing/pay-manual/${inv['id']}?amount=${pending.toStringAsFixed(2)}&invoice=${inv['invoice_number']}')
+                                            .then((_) => context
+                                                .read<PortalProvider>()
+                                                .refreshInvoices()),
+                                        icon: const Icon(
+                                            Icons.account_balance_rounded,
+                                            size: 16,
+                                            color: _green),
+                                        label: const Text(
+                                            'Already Paid? Submit UPI / Bank Transfer Proof',
+                                            style: TextStyle(
+                                                color: _green,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600)),
+                                        style: OutlinedButton.styleFrom(
+                                          side: BorderSide(
+                                              color:
+                                                  _green.withValues(alpha: 0.5)),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 9),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10)),
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ]),
                               ),
