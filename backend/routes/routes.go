@@ -168,6 +168,9 @@ func SetupRoutes() *gin.Engine {
 			portal.POST("/book-consultation/verify", controllers.VerifyConsultationPayment)
 			// 404s unless ALLOW_TEST_PAYMENT_BYPASS=true — see the handler's doc comment.
 			portal.POST("/book-consultation/test-mark-paid", controllers.TestMarkConsultationPaid)
+			// Razorpay checkout is turned off for clients for now — see the
+			// handler's doc comment.
+			portal.POST("/book-consultation/confirm", controllers.BookConsultationWithoutPayment)
 			portal.GET("/lawyers/:id/booked-slots", controllers.GetLawyerBookedSlots)
 			portal.GET("/my-consultations", controllers.GetMyConsultations)
 			portal.GET("/my-consultations/:id", controllers.GetConsultation)

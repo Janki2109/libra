@@ -301,6 +301,74 @@ func CreateConsultationCheckout(c *gin.Context) {
 	})
 }
 
+// BookConsultationWithoutPayment creates (or retries) a consultation booking
+// exactly like CreateConsultationCheckout does, except it never opens a
+// Razorpay order and marks the booking paid immediately — the real payment
+// gateway integration is turned off on the client side for now, so this is
+// the only booking path currently wired up. It still goes through the same
+// lawyer-accept/reject flow afterward (status stays 'pending'), and fires the
+// exact same "New booking request" notification to the lawyer that a real
+// paid booking would.
+//
+// TODO: once Razorpay checkout is reinstated for clients, retire this route
+// (or gate it the same way TestMarkConsultationPaid is gated) rather than
+// leaving two live ways to "pay" for a booking.
+func BookConsultationWithoutPayment(c *gin.Context) {
+	userID := utils.UserID(c)
+
+	var req struct {
+		LawyerID         string `json:"lawyer_id" binding:"required"`
+		ConsultationType string `json:"consultation_type" binding:"required"`
+		ConsultationDate string `json:"consultation_date" binding:"required"`
+		ConsultationTime string `json:"consultation_time" binding:"required"`
+		Notes            string `json:"notes"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	if !isUUID(req.LawyerID) {
+		utils.Error(c, http.StatusBadRequest, "Invalid lawyer_id", "not a uuid")
+		return
+	}
+
+	var lawyerName string
+	if err := config.DB.QueryRow(`
+		SELECT u.name FROM users u JOIN roles r ON u.role_id = r.id
+		WHERE u.id=$1::uuid AND u.is_active=true AND r.name = 'lawyer'
+	`, req.LawyerID).Scan(&lawyerName); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Unknown lawyer", "no such active lawyer")
+		return
+	}
+
+	consultationID := uuid.New().String()
+	amountPaise := consultationPricePaise(req.LawyerID, req.ConsultationType)
+
+	if _, err := config.DB.Exec(`
+		INSERT INTO consultations (
+			id, client_id, lawyer_id, consultation_type,
+			consultation_date, consultation_time, notes, status,
+			payment_status, amount_paise, paid_at, created_at
+		) VALUES ($1, $2::uuid, $3::uuid, $4, $5::date, $6, $7, 'pending',
+			'paid', $8, NOW(), NOW())
+	`, consultationID, userID, req.LawyerID, req.ConsultationType, req.ConsultationDate,
+		req.ConsultationTime, req.Notes, amountPaise); err != nil {
+		if isSlotTaken(err) {
+			utils.Error(c, http.StatusConflict,
+				"This slot has just been booked by someone else. Please choose another time.",
+				"active booking already exists for this lawyer/date/time")
+			return
+		}
+		utils.Error(c, http.StatusInternalServerError, "Failed to create booking", err.Error())
+		return
+	}
+
+	notifyConsultationPaid(consultationID, amountPaise)
+
+	utils.Success(c, http.StatusCreated, "Booking confirmed — lawyer notified",
+		fetchConsultationSummary(consultationID))
+}
+
 var (
 	errConsultationOrderNotFound = errors.New("no matching consultation order")
 	errNotYourConsultation       = errors.New("not your booking")

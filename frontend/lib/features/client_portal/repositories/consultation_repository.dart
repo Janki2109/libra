@@ -128,6 +128,31 @@ class ConsultationRepository {
     }
   }
 
+  /// Creates a booking and marks it paid immediately, with no payment
+  /// gateway involved — Razorpay checkout is turned off for clients for now.
+  /// The lawyer is notified exactly as if a real payment had gone through,
+  /// and still has to accept/reject it like any other booking.
+  Future<Map<String, dynamic>> bookWithoutPayment({
+    required String lawyerId,
+    required String consultationType,
+    required String consultationDate,
+    required String consultationTime,
+    String notes = '',
+  }) async {
+    try {
+      final res = await DioClient.instance.post('/portal/book-consultation/confirm', data: {
+        'lawyer_id': lawyerId,
+        'consultation_type': consultationType,
+        'consultation_date': consultationDate,
+        'consultation_time': consultationTime,
+        'notes': notes,
+      });
+      return (res.data['data'] as Map<String, dynamic>?) ?? const {};
+    } on DioException catch (e) {
+      throw ConsultationPaymentException(DioClient.describeError(e));
+    }
+  }
+
   /// Settles a booking's payment the same way [verifyPayment] does — same
   /// confirmation, same lawyer notification — without a real Razorpay
   /// signature. Only works when the backend has
