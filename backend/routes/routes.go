@@ -119,6 +119,8 @@ func SetupRoutes() *gin.Engine {
 		protected.GET("/subscription/usage", controllers.GetPlanUsage)
 		protected.POST("/subscription/checkout", controllers.CreateSubscriptionCheckout)
 		protected.POST("/subscription/activate", controllers.ActivateSubscription)
+		// 404s unless ALLOW_TEST_PAYMENT_BYPASS=true — see the handler's doc comment.
+		protected.POST("/subscription/test-activate", controllers.TestActivateSubscription)
 		protected.POST("/subscription/cancel", controllers.CancelSubscription)
 
 		// The app's change-password screen has always posted here; nothing
@@ -164,6 +166,8 @@ func SetupRoutes() *gin.Engine {
 			// there is exactly one path to an actual confirmed, paid booking.
 			portal.POST("/book-consultation/checkout", controllers.CreateConsultationCheckout)
 			portal.POST("/book-consultation/verify", controllers.VerifyConsultationPayment)
+			// 404s unless ALLOW_TEST_PAYMENT_BYPASS=true — see the handler's doc comment.
+			portal.POST("/book-consultation/test-mark-paid", controllers.TestMarkConsultationPaid)
 			portal.GET("/lawyers/:id/booked-slots", controllers.GetLawyerBookedSlots)
 			portal.GET("/my-consultations", controllers.GetMyConsultations)
 			portal.GET("/my-consultations/:id", controllers.GetConsultation)

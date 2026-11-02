@@ -101,6 +101,28 @@ class _SubscriptionCheckoutScreenState
       ..loadHtmlString(_checkoutHtml(), baseUrl: 'https://checkout.razorpay.com');
   }
 
+  /// Settles this checkout's order without Razorpay — same activation path
+  /// as a real payment (subscription_payments insert, subscriptions/
+  /// firms.plan_id update, admin notification), just without a signature.
+  /// Only works when the backend has ALLOW_TEST_PAYMENT_BYPASS=true set; the
+  /// server 404s this otherwise, and that failure is shown as-is.
+  Future<void> _testMarkPaid() async {
+    if (_finished) return;
+    _finished = true;
+    setState(() => _settling = true);
+    try {
+      await _repo.testActivate();
+      if (mounted) Navigator.pop(context, CheckoutOutcome.paid);
+    } on BillingException catch (e) {
+      if (!mounted) return;
+      _finished = false;
+      setState(() {
+        _settling = false;
+        _error = e.message;
+      });
+    }
+  }
+
   /// The page posts a single JSON message back through the channel.
   Future<void> _onCheckoutMessage(String raw) async {
     if (_finished) return;
@@ -258,6 +280,21 @@ class _SubscriptionCheckoutScreenState
                 ? null
                 : () => Navigator.pop(context, CheckoutOutcome.cancelled),
           ),
+          actions: [
+            // Server-gated: 404s unless ALLOW_TEST_PAYMENT_BYPASS=true, so
+            // this button is harmless noise in any real deployment, not a
+            // real bypass risk. Always visible here (not just on _error)
+            // since the real checkout WebView may never surface an error to
+            // test against.
+            if (!_settling)
+              TextButton.icon(
+                onPressed: _testMarkPaid,
+                icon: const Icon(Icons.science_outlined,
+                    size: 16, color: Colors.white70),
+                label: const Text('TEST',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ),
+          ],
         ),
         body: Stack(children: [
           if (_error != null)

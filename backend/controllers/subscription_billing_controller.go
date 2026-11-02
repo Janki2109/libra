@@ -11,9 +11,11 @@ import (
 	"libra/utils"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // gracePeriod is how long a firm keeps access after a renewal fails.
@@ -183,6 +185,52 @@ func ActivateSubscription(c *gin.Context) {
 	}
 
 	utils.Success(c, http.StatusOK, "Subscription active", status)
+}
+
+// TestActivateSubscription settles a firm's latest subscription checkout
+// exactly like ActivateSubscription does — same activateFromOrder call, same
+// subscription_payments/subscriptions/firms.plan_id updates, same admin
+// notification — but skips Razorpay's signature check. Exists purely so
+// plan-gated features can be tested without a working payment gateway.
+//
+// Gated behind ALLOW_TEST_PAYMENT_BYPASS, same as TestMarkConsultationPaid in
+// consultation_controller.go — unset in any real deployment, this 404s as if
+// the route never existed. Never enable this where real firms are billed.
+func TestActivateSubscription(c *gin.Context) {
+	if !strings.EqualFold(config.GetEnv("ALLOW_TEST_PAYMENT_BYPASS", ""), "true") {
+		utils.Error(c, http.StatusNotFound, "Not found", "")
+		return
+	}
+	firmID, ok := utils.RequireFirm(c)
+	if !ok {
+		return
+	}
+
+	var orderID string
+	if err := config.DB.QueryRow(`
+		SELECT order_id FROM payment_orders
+		WHERE firm_id=$1::uuid AND kind='subscription'
+		ORDER BY created_at DESC LIMIT 1
+	`, firmID).Scan(&orderID); err != nil {
+		utils.Error(c, http.StatusNotFound, "No subscription checkout found for this firm", "")
+		return
+	}
+
+	status, err := activateFromOrder(orderID, "TEST_BYPASS_"+uuid.New().String(), firmID)
+	if err != nil {
+		if errors.Is(err, errOrderNotFound) {
+			utils.Error(c, http.StatusBadRequest, "Unknown order", err.Error())
+			return
+		}
+		if errors.Is(err, errAlreadyApplied) {
+			utils.Success(c, http.StatusOK, "Subscription active", currentSubscription(firmID))
+			return
+		}
+		utils.Error(c, http.StatusInternalServerError, "Could not activate subscription", err.Error())
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "TEST payment marked paid — subscription active", status)
 }
 
 // ─── WEBHOOK ─────────────────────────────────

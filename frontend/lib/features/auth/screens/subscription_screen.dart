@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../billing/repositories/subscription_repository.dart';
+import '../../billing/screens/subscription_checkout_screen.dart';
 
 /// Per-plan icon/tag are display-only — the plan itself (id, name, price,
 /// features) always comes from [SubscriptionRepository.fetchPlans], the same
@@ -79,25 +80,40 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   // the user payment is coming soon and leaves them on this screen, instead
   // of opening the Razorpay checkout flow below.
   Future<void> _subscribe(Plan plan) async {
+    if (_starting) return;
     HapticFeedback.heavyImpact();
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.bgCard,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Payment Coming Soon',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        content: const Text('Subscription payment will be available soon.',
-            style: TextStyle(color: AppColors.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK', style: TextStyle(color: AppColors.gold)),
-          ),
-        ],
-      ),
-    );
+    setState(() => _starting = true);
+    try {
+      final checkout = await _repo.startCheckout(
+        plan: plan.name,
+        billingCycle: _isYearly ? 'yearly' : 'monthly',
+      );
+      if (!mounted) return;
+      final outcome = await Navigator.of(context).push<CheckoutOutcome>(
+        MaterialPageRoute(
+            builder: (_) => SubscriptionCheckoutScreen(checkout: checkout)),
+      );
+      if (!mounted) return;
+      if (outcome == CheckoutOutcome.paid) {
+        HapticFeedback.heavyImpact();
+        if (widget.isOnboarding) {
+          context.go('/dashboard');
+        } else {
+          context.pop();
+        }
+      } else if (outcome == CheckoutOutcome.failed) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Payment failed. Please try again.'),
+            backgroundColor: Color(0xFFD9534F)));
+      }
+    } on BillingException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.message),
+          backgroundColor: const Color(0xFFD9534F)));
+    } finally {
+      if (mounted) setState(() => _starting = false);
+    }
   }
 
   @override

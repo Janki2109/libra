@@ -127,4 +127,22 @@ class ConsultationRepository {
       throw ConsultationPaymentException(DioClient.describeError(e));
     }
   }
+
+  /// Settles a booking's payment the same way [verifyPayment] does — same
+  /// confirmation, same lawyer notification — without a real Razorpay
+  /// signature. Only works when the backend has
+  /// ALLOW_TEST_PAYMENT_BYPASS=true set (never a real deployment); the
+  /// server 404s this route otherwise, which surfaces as a
+  /// ConsultationPaymentException the caller should treat as "bypass
+  /// unavailable" rather than a real booking failure.
+  Future<Map<String, dynamic>> testMarkPaid(String consultationId) async {
+    try {
+      final res = await DioClient.instance.post(
+          '/portal/book-consultation/test-mark-paid',
+          data: {'consultation_id': consultationId});
+      return (res.data['data'] as Map<String, dynamic>?) ?? const {};
+    } on DioException catch (e) {
+      throw ConsultationPaymentException(DioClient.describeError(e));
+    }
+  }
 }

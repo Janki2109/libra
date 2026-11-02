@@ -296,6 +296,32 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
     }
   }
 
+  /// Settles the current booking's payment without Razorpay — the server
+  /// does the exact same confirmation + lawyer notification VerifyPayment
+  /// does, it just skips the signature check. Only works when the backend
+  /// has ALLOW_TEST_PAYMENT_BYPASS=true set; otherwise the route 404s and
+  /// that failure is shown as-is so it's obvious the bypass isn't enabled
+  /// rather than looking like a real booking error.
+  Future<void> _testMarkPaid() async {
+    if (_consultationId == null) return;
+    setState(() => _loading = true);
+    try {
+      final result = await _consultRepo.testMarkPaid(_consultationId!);
+      if (!mounted) return;
+      setState(() => _loading = false);
+      if (result['payment_status'] == 'paid') {
+        HapticFeedback.heavyImpact();
+        _showSuccessDialog();
+      }
+    } on ConsultationPaymentException catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.message),
+          backgroundColor: const Color(0xFFD9534F)));
+    }
+  }
+
   void _showSuccessDialog() {
     showDialog(
         context: context,
@@ -895,6 +921,29 @@ class _BookConsultationScreenState extends State<BookConsultationScreen> {
                             fontSize: 12,
                             fontWeight: FontWeight.w600))),
               ])),
+        ],
+        if (_consultationId != null) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _testMarkPaid,
+              icon: const Icon(Icons.science_outlined,
+                  size: 16, color: Color(0xFFD4A017)),
+              label: const Text(
+                  'TEST: Mark as Paid (requires ALLOW_TEST_PAYMENT_BYPASS on the server)',
+                  style: TextStyle(
+                      color: Color(0xFFD4A017),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFD4A017)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
         ],
       ]);
 }

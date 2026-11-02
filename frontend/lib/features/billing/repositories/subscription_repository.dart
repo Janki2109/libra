@@ -166,6 +166,19 @@ class SubscriptionRepository {
     }
   }
 
+  /// Settles the firm's most recent subscription checkout the same way
+  /// [activate] does — same subscription/firm updates, same admin
+  /// notification — without a real Razorpay signature. Only works when the
+  /// backend has ALLOW_TEST_PAYMENT_BYPASS=true set; the server 404s this
+  /// route in any real deployment.
+  Future<void> testActivate() async {
+    try {
+      await DioClient.instance.post('/subscription/test-activate');
+    } on DioException catch (e) {
+      throw BillingException(DioClient.describeError(e));
+    }
+  }
+
   Future<void> cancel() async {
     try {
       await DioClient.instance.post('/subscription/cancel');

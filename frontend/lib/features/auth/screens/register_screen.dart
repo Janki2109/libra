@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -36,8 +37,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _docMimeType = 'image/jpeg';
   bool _uploadingDoc = false;
 
+  late final TapGestureRecognizer _termsTap =
+      TapGestureRecognizer()..onTap = () => context.push('/legal/terms');
+  late final TapGestureRecognizer _privacyTap =
+      TapGestureRecognizer()..onTap = () => context.push('/legal/privacy');
+
   @override
   void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
     _firmNameCtrl.dispose();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
@@ -369,21 +377,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             color: AppColors.primary, size: 16)
                         : null),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                     child: Text.rich(TextSpan(
                         text: 'I agree to the ',
-                        style:
-                            TextStyle(color: AppColors.textMuted, fontSize: 13),
+                        style: const TextStyle(
+                            color: AppColors.textMuted, fontSize: 13),
                         children: [
                       TextSpan(
                           text: 'Terms of Service',
-                          style: TextStyle(
+                          recognizer: _termsTap,
+                          style: const TextStyle(
                               color: AppColors.gold,
                               fontWeight: FontWeight.w600)),
-                      TextSpan(text: ' and '),
+                      const TextSpan(text: ' and '),
                       TextSpan(
                           text: 'Privacy Policy',
-                          style: TextStyle(
+                          recognizer: _privacyTap,
+                          style: const TextStyle(
                               color: AppColors.gold,
                               fontWeight: FontWeight.w600)),
                     ]))),

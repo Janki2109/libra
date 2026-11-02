@@ -489,6 +489,63 @@ func VerifyConsultationPayment(c *gin.Context) {
 	utils.Success(c, http.StatusOK, "Payment verified — booking confirmed", result)
 }
 
+// TestMarkConsultationPaid settles a booking's payment_orders row exactly
+// like VerifyConsultationPayment does — same confirmConsultationPayment call,
+// same lawyer/client notifications, same idempotency — but skips Razorpay's
+// signature check entirely. This exists so booking/notification/lawyer-accept
+// features can be tested end-to-end without a working payment gateway
+// integration (e.g. local dev, or Razorpay keys not yet provisioned).
+//
+// Gated behind ALLOW_TEST_PAYMENT_BYPASS so it can never fire against a real
+// deployment by accident — unset (or anything other than "true") and this
+// 404s as if the route didn't exist, same as a real production build should
+// behave. Never enable this in a production environment that takes real
+// client money.
+func TestMarkConsultationPaid(c *gin.Context) {
+	if !strings.EqualFold(config.GetEnv("ALLOW_TEST_PAYMENT_BYPASS", ""), "true") {
+		utils.Error(c, http.StatusNotFound, "Not found", "")
+		return
+	}
+	userID := utils.UserID(c)
+
+	var req struct {
+		ConsultationID string `json:"consultation_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	if !isUUID(req.ConsultationID) {
+		utils.Error(c, http.StatusBadRequest, "Invalid consultation_id", "not a uuid")
+		return
+	}
+
+	var orderID string
+	if err := config.DB.QueryRow(`
+		SELECT order_id FROM payment_orders
+		WHERE consultation_id=$1::uuid AND kind='consultation'
+		ORDER BY created_at DESC LIMIT 1
+	`, req.ConsultationID).Scan(&orderID); err != nil {
+		utils.Error(c, http.StatusNotFound, "No checkout found for this booking", "")
+		return
+	}
+
+	result, err := confirmConsultationPayment(orderID, "TEST_BYPASS_"+uuid.New().String(), userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, errConsultationOrderNotFound):
+			utils.Error(c, http.StatusBadRequest, "Unknown order", "no matching consultation order")
+		case errors.Is(err, errNotYourConsultation):
+			utils.Error(c, http.StatusForbidden, "Not your booking", "")
+		default:
+			utils.Error(c, http.StatusInternalServerError, "Failed to confirm booking", err.Error())
+		}
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "TEST payment marked paid — booking confirmed", result)
+}
+
 // GetMyConsultations - Client sees their bookings
 func GetMyConsultations(c *gin.Context) {
 	userID, _ := c.Get("user_id")

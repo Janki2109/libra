@@ -97,6 +97,7 @@ import '../../features/student/screens/legal_notes_screen.dart';
 import '../../features/student/screens/quiz_screen.dart';
 import '../../features/student/screens/mock_court_screen.dart';
 import '../../features/student/screens/certificate_screen.dart';
+import '../../features/legal/screens/legal_document_screen.dart';
 
 class AppRouter {
   // Lets code outside the widget tree (the FCM notification-tap handler)
@@ -195,6 +196,10 @@ class AppRouter {
             builder: (_, state) =>
                 ForgotPasswordScreen(role: state.extra as String?)),
         GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+        GoRoute(
+            path: '/legal/:docType',
+            builder: (_, state) => LegalDocumentScreen(
+                docType: state.pathParameters['docType'] ?? 'terms')),
         GoRoute(
             path: '/client/register',
             builder: (_, __) => const ClientRegisterScreen()),
