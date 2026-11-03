@@ -7,8 +7,10 @@ import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/realtime_events.dart';
 import '../../../core/services/auto_refresh_service.dart';
+import '../../../core/utils/file_opener.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../chat/providers/chat_unread_provider.dart';
+import '../../lawyer/utils/android_download.dart';
 
 // Same allow-list/format helpers used by the dedicated My Documents screen
 // (portal_documents_screen.dart) — duplicated here (Dart privacy is
@@ -576,7 +578,10 @@ class _HomeTab extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                 _QuickBtn(
                     Icons.gavel_rounded, 'Cases', _green, () => onTabChange(1)),
                 const SizedBox(width: 10),
@@ -1456,24 +1461,75 @@ class _DocCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
         ])),
-        if (url.isNotEmpty)
-          GestureDetector(
-            onTap: () async {
-              await Clipboard.setData(ClipboardData(text: url));
-              if (context.mounted)
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Link copied!'),
-                    backgroundColor: Color(0xFF2E8B57)));
-            },
-            child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8)),
-                child: Icon(Icons.copy_rounded, color: color, size: 16)),
-          ),
+        GestureDetector(
+          onTap: () => _download(context, doc),
+          child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Icon(Icons.download_rounded, color: color, size: 16)),
+        ),
       ]),
     );
+  }
+
+  // Fetches the document's actual bytes via the authenticated endpoint and
+  // saves/opens them — the icon used to just copy the raw file_url to the
+  // clipboard, which did nothing useful since that URL isn't a
+  // browser-reachable download link.
+  static Future<void> _download(BuildContext context, dynamic doc) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: _green)),
+    );
+    try {
+      final res =
+          await DioClient.instance.get('/portal/documents/${doc['id']}');
+      final data = res.data['data'] as Map<String, dynamic>?;
+      final content = (data?['file_content'] ?? '').toString();
+      if (context.mounted) Navigator.pop(context);
+
+      if (content.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('This document has no file content to download'),
+              backgroundColor: Color(0xFFD9534F)));
+        }
+        return;
+      }
+      final bytes = base64Decode(content);
+      final fileName = (doc['file_name'] ?? 'document').toString();
+      final mimeType = (data?['mime_type'] ?? '').toString().isNotEmpty
+          ? data!['mime_type'].toString()
+          : 'application/octet-stream';
+
+      if (await saveToAndroidDownloads(bytes, fileName, mimeType)) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('$fileName saved to Downloads'),
+              backgroundColor: const Color(0xFF2E8B57)));
+        }
+        return;
+      }
+
+      final result = await openDocumentBytes(
+          bytes: bytes, fileName: fileName, mimeType: mimeType);
+      if (!result.success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message ?? 'Could not download this file.'),
+            backgroundColor: const Color(0xFFD9534F)));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(DioClient.describeError(e)),
+            backgroundColor: const Color(0xFFD9534F)));
+      }
+    }
   }
 }
 
