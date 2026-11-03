@@ -270,18 +270,33 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
       _ProfileTab(auth: auth),
     ];
 
-    return Scaffold(
-      backgroundColor: _bg,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        child: _loading ? _buildLoading() : screens[_selectedIndex],
-      ),
-      bottomNavigationBar: _BottomNav(
-        selectedIndex: _selectedIndex,
-        onTap: (i) {
-          HapticFeedback.lightImpact();
-          setState(() => _selectedIndex = i);
-        },
+    // The bottom-nav tabs (Cases/Docs/Bills/Chat/Profile) are a plain index
+    // swap, not a go_router push — so without this, go_router's Navigator
+    // always has "nothing to pop" the moment you're anywhere but Home, and
+    // back skipped straight past every tab to main.dart's root "Exit app?"
+    // dialog. This intercepts back first: any tab but Home returns to Home,
+    // same as the rest of the app's "go back a page at a time"; only back
+    // from Home itself (nothing left for this screen to undo) falls through
+    // to that root exit confirmation.
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        setState(() => _selectedIndex = 0);
+      },
+      child: Scaffold(
+        backgroundColor: _bg,
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: _loading ? _buildLoading() : screens[_selectedIndex],
+        ),
+        bottomNavigationBar: _BottomNav(
+          selectedIndex: _selectedIndex,
+          onTap: (i) {
+            HapticFeedback.lightImpact();
+            setState(() => _selectedIndex = i);
+          },
+        ),
       ),
     );
   }

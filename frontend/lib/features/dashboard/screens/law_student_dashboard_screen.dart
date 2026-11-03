@@ -136,20 +136,34 @@ class _LawStudentDashboardScreenState extends State<LawStudentDashboardScreen>
       _ProfileTab(auth: auth, progress: _progress),
     ];
 
-    return Scaffold(
-      backgroundColor: _bg,
-      body: _loading
-          ? Container(
-              color: _bg,
-              child:
-                  const Center(child: CircularProgressIndicator(color: _blue)))
-          : screens[_selectedIndex],
-      bottomNavigationBar: _BottomNav(
-        selectedIndex: _selectedIndex,
-        onTap: (i) {
-          HapticFeedback.lightImpact();
-          setState(() => _selectedIndex = i);
-        },
+    // The bottom-nav tabs are a plain index swap, not a go_router push — so
+    // without this, go_router's Navigator always has "nothing to pop" the
+    // moment you're anywhere but Home, and back skipped straight past every
+    // tab to main.dart's root "Exit app?" dialog. This intercepts back
+    // first: any tab but Home returns to Home, same as the rest of the
+    // app's "go back a page at a time"; only back from Home itself falls
+    // through to that root exit confirmation.
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        setState(() => _selectedIndex = 0);
+      },
+      child: Scaffold(
+        backgroundColor: _bg,
+        body: _loading
+            ? Container(
+                color: _bg,
+                child: const Center(
+                    child: CircularProgressIndicator(color: _blue)))
+            : screens[_selectedIndex],
+        bottomNavigationBar: _BottomNav(
+          selectedIndex: _selectedIndex,
+          onTap: (i) {
+            HapticFeedback.lightImpact();
+            setState(() => _selectedIndex = i);
+          },
+        ),
       ),
     );
   }
