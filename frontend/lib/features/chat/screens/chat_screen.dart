@@ -476,7 +476,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         ? message['mime_type'].toString()
         : 'application/octet-stream';
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Opening $fileName...'),
+        content: Text('Opening $fileName...',
+            style: const TextStyle(color: Colors.white)),
         duration: const Duration(seconds: 1),
         backgroundColor: _brown,
         behavior: SnackBarBehavior.floating));
@@ -510,7 +511,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
+      content: Text(msg, style: const TextStyle(color: Colors.white)),
       backgroundColor: const Color(0xFFD9534F),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
