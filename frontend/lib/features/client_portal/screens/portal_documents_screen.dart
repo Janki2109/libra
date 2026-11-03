@@ -619,9 +619,9 @@ class _DocCard extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context); // close loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Failed to load the document'),
-            backgroundColor: Color(0xFFD9534F)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(DioClient.describeError(e)),
+            backgroundColor: const Color(0xFFD9534F)));
       }
     }
   }
@@ -676,9 +676,9 @@ class _DocCard extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Failed to download the document'),
-            backgroundColor: Color(0xFFD9534F)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(DioClient.describeError(e)),
+            backgroundColor: const Color(0xFFD9534F)));
       }
     }
   }

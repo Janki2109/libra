@@ -63,5 +63,14 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Without this, Android 11+'s package-visibility rules hide every
+             installed PDF/image/document viewer from this app's queries, so
+             open_filex (used to open a downloaded document) reports "no app
+             on this device can open this file" even when a perfectly good
+             viewer is installed — the app just isn't allowed to see it. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="*/*"/>
+        </intent>
     </queries>
 </manifest>
