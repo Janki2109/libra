@@ -163,9 +163,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         });
         if (msgs.isNotEmpty && !silent) _scrollToBottom();
         // GET /chat/rooms/:id/messages marks the other side's messages read
-        // on the backend (chat_controller.go) — refresh the Home badge so it
-        // drops immediately instead of waiting for the next chat_message push.
-        if (!silent) context.read<ChatUnreadProvider>().load();
+        // on the backend (chat_controller.go) on every call, silent polls
+        // included — a message that arrives while this screen is already
+        // open gets marked read by the very next 3s poll, not just the
+        // initial load. Refresh the Home badge every time too (not just on
+        // the initial non-silent load) so it drops the instant that happens,
+        // instead of waiting for the separate global 3s 'chat_unread' tick.
+        context.read<ChatUnreadProvider>().load();
       }
     } catch (e) {
       if (!silent && mounted) setState(() => _loading = false);
