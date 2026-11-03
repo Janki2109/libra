@@ -87,6 +87,23 @@ class AppTheme {
       ),
       dividerTheme:
           const DividerThemeData(color: AppColors.border, thickness: 1),
+      // Without this, a SnackBar that only overrides backgroundColor (every
+      // success/error SnackBar in the app does — brand green/red/gold/brown)
+      // falls back to Material 3's default contentTextStyle, which colors
+      // the text with onInverseSurface — a DARK color meant to sit on the
+      // light default SnackBar background. On these dark custom
+      // backgrounds that made the message unreadable; this makes every
+      // SnackBar's text white regardless of which screen shows it, unless a
+      // screen explicitly sets its own Text style (which still wins). The
+      // backgroundColor default here only applies to the handful of plain
+      // SnackBars with no explicit color of their own — without it, those
+      // would keep Material 3's light default inverseSurface background,
+      // which white text is just as unreadable against.
+      snackBarTheme: const SnackBarThemeData(
+        backgroundColor: AppColors.surfaceLight,
+        contentTextStyle: TextStyle(color: Colors.white),
+        actionTextColor: Colors.white,
+      ),
     );
   }
 

@@ -444,7 +444,15 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_loading)
+    // Only the very first load (no case data yet) blanks the whole screen
+    // for a spinner. Every later refresh — status change, pull-to-refresh,
+    // a document upload — used to set the same _loading flag and blow away
+    // the entire screen (app bar, tabs, everything) for as long as the
+    // refetch took, which is what made "Mark as Won" look like it broke:
+    // the dialog closed, the toast fired, and the case screen behind it
+    // went blank until _loadCase's sequential requests finished. Once
+    // there's already data on screen, a refresh now happens in place.
+    if (_loading && _case == null)
       return const Scaffold(
           backgroundColor: _bg,
           body: Center(child: CircularProgressIndicator(color: _brown)));
