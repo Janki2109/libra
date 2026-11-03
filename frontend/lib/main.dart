@@ -74,23 +74,24 @@ class LibraApp extends StatelessWidget {
               // Only reached once go_router's own Navigator has nothing left
               // to pop — i.e. the system/gesture back press would otherwise
               // exit the app outright with no warning. In-app back navigation
-              // elsewhere is untouched; this never intercepts a pop that a
-              // screen further down the stack can still handle itself.
+              // elsewhere is untouched (handled entirely by go_router's own
+              // Navigator popping to the previous page); this never
+              // intercepts a pop that a screen further down the stack can
+              // still handle itself.
               //
-              // An authenticated user lands here exactly when they're on their
-              // role's root dashboard (login/registration replace the whole
-              // stack via context.go(), so the dashboard sits at the bottom
-              // with nothing beneath it) — back must never exit or log them
-              // out from there, just stay put, per the "no accidental exit for
-              // a logged-in user" requirement. Logout is a separate, explicit
-              // action (see each role's own Logout confirmation), never a side
-              // effect of the back button. The pre-login "Exit app?" prompt
-              // (splash/onboarding/login/register) is unchanged.
+              // An authenticated user lands here exactly when they're on
+              // their role's root dashboard (login/registration replace the
+              // whole stack via context.go(), so the dashboard sits at the
+              // bottom with nothing beneath it) — back used to silently do
+              // nothing there, which looked like the app had frozen. It now
+              // shows the same confirmation as the pre-login case instead of
+              // either exiting unprompted or doing nothing. Logout stays a
+              // separate, explicit action (see each role's own Logout
+              // confirmation), never a side effect of the back button.
               builder: (context, child) => PopScope(
                 canPop: false,
                 onPopInvokedWithResult: (didPop, _) async {
                   if (didPop) return;
-                  if (auth.isAuthenticated) return;
                   // `context` here is the MaterialApp.router builder's own
                   // context, which sits ABOVE go_router's Navigator (child
                   // wraps it, not the other way around) — it has no
