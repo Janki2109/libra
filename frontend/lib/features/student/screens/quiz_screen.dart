@@ -79,6 +79,12 @@ class _QuizScreenState extends State<QuizScreen> {
       _currentQ = 0;
       _score = 0;
       _finished = false;
+      // A previous attempt's answer/answered state otherwise survives into
+      // the new quiz (this State object isn't recreated between attempts),
+      // so question 1 rendered as already answered — with the correct
+      // option pre-highlighted — the moment the first question appeared.
+      _selectedAnswer = null;
+      _answered = false;
     });
     HapticFeedback.lightImpact();
 
@@ -716,6 +722,9 @@ class _QuizScreenState extends State<QuizScreen> {
             _questions = [];
             _finished = false;
             _score = 0;
+            _currentQ = 0;
+            _selectedAnswer = null;
+            _answered = false;
           }),
           style: OutlinedButton.styleFrom(
               side: const BorderSide(color: _border),
@@ -734,6 +743,9 @@ class _QuizScreenState extends State<QuizScreen> {
             _selectedType = null;
             _finished = false;
             _score = 0;
+            _currentQ = 0;
+            _selectedAnswer = null;
+            _answered = false;
           }),
           style: ElevatedButton.styleFrom(
               backgroundColor: _blue,
