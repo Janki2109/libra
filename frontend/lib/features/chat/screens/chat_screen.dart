@@ -81,6 +81,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   // silently vanishing or blocking the whole thread.
   final Map<String, _PendingAttachment> _pendingAttachments = {};
 
+  // Text messages that failed to send, keyed by temp message id, mapped to
+  // their original text so Retry can resend the exact same content.
+  final Map<String, String> _failedTexts = {};
+
+  void _removeFailedText(String tempId) {
+    setState(() {
+      _messages.removeWhere((m) => m['id'] == tempId);
+      _failedTexts.remove(tempId);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -158,7 +169,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       final msgs = res.data['data'] ?? [];
       if (mounted) {
         setState(() {
-          _messages = msgs;
+          // The optimistic bubble _sendMessage adds the instant Send is
+          // tapped (id "temp_...") lives only in local state until its own
+          // POST resolves — a silent 3s poll firing in that window used to
+          // blindly overwrite _messages with the server's list, which
+          // doesn't have it yet, making the just-sent message vanish until
+          // a later poll happened to include it (the reported "takes 4-5
+          // seconds to appear" delay). Carrying still-pending temp bubbles
+          // forward across every poll keeps them visible the whole time;
+          // once _sendMessage's own response swaps a temp id for the real
+          // one (or removes it on failure), it stops being "pending" and
+          // this list naturally stops re-adding it, so no duplicate appears
+          // once the server copy shows up in msgs.
+          final pending = _messages
+              .where((m) => (m['id'] as String?)?.startsWith('temp_') == true)
+              .toList();
+          _messages = [...msgs, ...pending];
           _loading = false;
         });
         if (msgs.isNotEmpty && !silent) _scrollToBottom();
@@ -181,11 +207,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (text.isEmpty || _sending) return;
     HapticFeedback.lightImpact();
     _sendCtrl.forward().then((_) => _sendCtrl.reverse());
-    setState(() => _sending = true);
     _msgCtrl.clear();
 
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     final tempMsg = {
-      'id': 'temp_${DateTime.now().millisecondsSinceEpoch}',
+      'id': tempId,
       'message': text,
       'is_mine': true,
       'sender_name': 'Me',
@@ -197,38 +223,53 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     };
     setState(() => _messages.add(tempMsg));
     _scrollToBottom();
+    await _postTextMessage(tempId, text);
+  }
 
+  // Shared by the initial send and by _retryMessage — a failed send keeps
+  // its bubble (marked failed, with a Retry action) instead of disappearing,
+  // so the student/lawyer never loses what they typed and can resend the
+  // exact same message without retyping it.
+  Future<void> _postTextMessage(String tempId, String text) async {
+    setState(() {
+      _sending = true;
+      _failedTexts.remove(tempId);
+    });
     try {
       final res = await DioClient.instance.post(
           '/chat/rooms/${widget.roomId}/messages',
           data: {'message': text, 'message_type': 'text'});
+      if (!mounted) return;
       if (res.data['success'] == true) {
         final newMsg = res.data['data'];
-        if (mounted)
-          setState(() {
-            final idx = _messages.indexWhere((m) => m['id'] == tempMsg['id']);
-            if (idx != -1) _messages[idx] = {...newMsg, 'is_mine': true};
-            _sending = false;
-          });
-      } else {
         setState(() {
-          _messages.removeWhere((m) => m['id'] == tempMsg['id']);
+          final idx = _messages.indexWhere((m) => m['id'] == tempId);
+          if (idx != -1) _messages[idx] = {...newMsg, 'is_mine': true};
           _sending = false;
         });
-        _msgCtrl.text = text;
+      } else {
+        setState(() {
+          _failedTexts[tempId] = text;
+          _sending = false;
+        });
         _showError('Failed to send message');
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _messages.removeWhere((m) => m['id'] == tempMsg['id']);
+          _failedTexts[tempId] = text;
           _sending = false;
         });
-        _msgCtrl.text = text;
         _showError('Could not send. Check connection.');
       }
     }
     _scrollToBottom();
+  }
+
+  void _retryMessage(String tempId) {
+    final text = _failedTexts[tempId];
+    if (text == null) return;
+    _postTextMessage(tempId, text);
   }
 
   void _showAttachmentOptions() {
@@ -742,6 +783,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                 isMine: isMine,
                                 isPending: isTemp,
                                 pending: isTemp ? _pendingAttachments[msg['id']] : null,
+                                failedText:
+                                    isTemp && _failedTexts.containsKey(msg['id']),
                                 onLongPress: isMine && !isTemp
                                     ? () => _showDeleteDialog(msg['id'])
                                     : null,
@@ -750,6 +793,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                     : null,
                                 onRemoveFailedAttachment: isTemp
                                     ? () => _removeFailedAttachment(msg['id'])
+                                    : null,
+                                onRetryText: isTemp
+                                    ? () => _retryMessage(msg['id'])
+                                    : null,
+                                onRemoveFailedText: isTemp
+                                    ? () => _removeFailedText(msg['id'])
                                     : null,
                                 onOpenAttachment: () => _openAttachment(msg),
                                 fetchImageBytes: () => _fetchAttachment(msg['id'].toString()),
@@ -929,9 +978,14 @@ class _MessageBubble extends StatelessWidget {
   final bool isMine;
   final bool isPending;
   final _PendingAttachment? pending;
+  // Non-null while this text message failed to send — same "never silently
+  // vanish, show Retry" treatment as a failed attachment upload.
+  final bool failedText;
   final VoidCallback? onLongPress;
   final VoidCallback? onRetryAttachment;
   final VoidCallback? onRemoveFailedAttachment;
+  final VoidCallback? onRetryText;
+  final VoidCallback? onRemoveFailedText;
   final VoidCallback onOpenAttachment;
   final Future<Uint8List?> Function() fetchImageBytes;
   const _MessageBubble(
@@ -939,9 +993,12 @@ class _MessageBubble extends StatelessWidget {
       required this.isMine,
       this.isPending = false,
       this.pending,
+      this.failedText = false,
       this.onLongPress,
       this.onRetryAttachment,
       this.onRemoveFailedAttachment,
+      this.onRetryText,
+      this.onRemoveFailedText,
       required this.onOpenAttachment,
       required this.fetchImageBytes});
 
@@ -1194,6 +1251,37 @@ class _MessageBubble extends StatelessWidget {
                         ),
                       ),
                     ),
+                  if (failedText)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.error_outline_rounded,
+                            color: Color(0xFFD9534F), size: 14),
+                        const SizedBox(width: 4),
+                        const Text('Not sent',
+                            style: TextStyle(
+                                color: Color(0xFFD9534F), fontSize: 11)),
+                        const SizedBox(width: 10),
+                        GestureDetector(
+                          onTap: onRetryText,
+                          child: const Text('Retry',
+                              style: TextStyle(
+                                  color: Color(0xFFD9534F),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                        const SizedBox(width: 10),
+                        GestureDetector(
+                          onTap: onRemoveFailedText,
+                          child: Text('Remove',
+                              style: TextStyle(
+                                  color: isMine
+                                      ? Colors.white70
+                                      : _textMuted,
+                                  fontSize: 11)),
+                        ),
+                      ]),
+                    ),
                   if (isDeleted)
                     Text(
                       '🗑 Deleted',
@@ -1214,7 +1302,7 @@ class _MessageBubble extends StatelessWidget {
                                 ? Colors.white.withValues(alpha: 0.6)
                                 : _textMuted,
                             fontSize: 9)),
-                    if (isMine) ...[
+                    if (isMine && !failedText) ...[
                       const SizedBox(width: 4),
                       isPending
                           ? Icon(Icons.access_time_rounded,
