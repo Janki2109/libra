@@ -320,6 +320,125 @@ func VerifyRazorpayPayment(c *gin.Context) {
 	})
 }
 
+// PayInvoiceWithoutGateway settles an invoice's remaining balance in full,
+// with no payment gateway involved — Razorpay checkout is turned off for
+// clients for now (CreateRazorpayOrder was failing with "Failed to create
+// Razorpay order" and had no other way through). Mirrors
+// VerifyRazorpayPayment's crediting logic exactly — same payments insert,
+// same invoice update, same notifyPaymentRecorded call to the lawyer — just
+// without creating/verifying a gateway order first.
+//
+// TODO: once Razorpay checkout is reinstated for clients, retire this route
+// (or gate it behind ALLOW_TEST_PAYMENT_BYPASS the way the consultation/
+// subscription test-bypass endpoints are) rather than leaving two live ways
+// to pay an invoice.
+func PayInvoiceWithoutGateway(c *gin.Context) {
+	var callerFirmID string
+	if firmStaffRole(utils.Role(c)) {
+		fid, ok := utils.RequireFirm(c)
+		if !ok {
+			return
+		}
+		callerFirmID = fid
+	}
+	uID := utils.UserID(c)
+
+	var req struct {
+		InvoiceID string `json:"invoice_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	var total, paid float64
+	var invoiceFirmID string
+	err := config.DB.QueryRow(`
+		SELECT total_amount, COALESCE(paid_amount,0), firm_id::text
+		FROM invoices WHERE id=$1::uuid
+	`, req.InvoiceID).Scan(&total, &paid, &invoiceFirmID)
+	if err == sql.ErrNoRows {
+		utils.Error(c, http.StatusNotFound, "Invoice not found", "")
+		return
+	}
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to read invoice", err.Error())
+		return
+	}
+	if callerFirmID != "" && callerFirmID != invoiceFirmID {
+		utils.Error(c, http.StatusNotFound, "Invoice not found", "")
+		return
+	}
+	firmID := invoiceFirmID
+
+	if !callerOwnsInvoice(c, firmID, req.InvoiceID) {
+		utils.Error(c, http.StatusForbidden, "You can only pay your own invoice", "")
+		return
+	}
+
+	due := services.RoundMoney(total - paid)
+	if due <= 0 {
+		utils.Error(c, http.StatusBadRequest, "Invoice is already settled", "nothing due")
+		return
+	}
+
+	var gstAmount, platformFee, subtotal float64
+	config.DB.QueryRow(`
+		SELECT COALESCE(tax_amount,0), COALESCE(platform_fee,0), COALESCE(subtotal,0)
+		FROM invoices WHERE id=$1::uuid AND firm_id=$2::uuid
+	`, req.InvoiceID, firmID).Scan(&gstAmount, &platformFee, &subtotal)
+
+	tx, err := config.DB.Begin()
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to record payment", err.Error())
+		return
+	}
+	defer tx.Rollback()
+
+	payID := uuid.New().String()
+	today := time.Now().Format("2006-01-02")
+	txnID := "NO_GATEWAY_" + uuid.New().String()
+	if _, err := tx.Exec(`
+		INSERT INTO payments (id, firm_id, invoice_id, amount,
+		payment_date, payment_method, transaction_id, notes, created_by,
+		verification_status, verified_at, gst_amount, platform_fee, lawyer_payable_amount)
+		VALUES ($1, $2::uuid, $3::uuid, $4, $5, 'manual_test', $6, $7, $8::uuid, 'verified', NOW(),
+		$9, $10, $11)
+	`, payID, firmID, req.InvoiceID, due, today, txnID,
+		"Marked paid without a payment gateway (testing)", uID,
+		gstAmount, platformFee, subtotal); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to record payment", err.Error())
+		return
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE invoices SET
+		  paid_amount = COALESCE(paid_amount,0) + $1,
+		  status = CASE
+		    WHEN COALESCE(paid_amount,0) + $1 >= total_amount THEN 'paid'
+		    ELSE 'partial'
+		  END,
+		  updated_at = NOW()
+		WHERE id=$2::uuid AND firm_id=$3::uuid
+	`, due, req.InvoiceID, firmID); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to update invoice", err.Error())
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to record payment", err.Error())
+		return
+	}
+
+	notifyPaymentRecorded(firmID, req.InvoiceID, uID, payID, txnID, due)
+
+	utils.Success(c, http.StatusOK, "Payment recorded — lawyer notified", gin.H{
+		"payment_id": payID,
+		"amount":     due,
+		"status":     "success",
+	})
+}
+
 // notifyPaymentRecorded tells the invoice's author and the payer that money
 // landed. Failures here are logged by the DB layer but never fail the payment,
 // which has already been committed.

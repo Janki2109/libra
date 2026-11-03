@@ -479,10 +479,18 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
                 ),
                 TabBar(
                   controller: _tabCtrl,
+                  // Four fixed-width tabs squeezed 'Documents' into less
+                  // space than its own text needed on a standard-width
+                  // phone, clipping it. Scrollable sizes each tab to its
+                  // label instead of forcing an equal split.
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
                   indicatorColor: const Color(0xFFFFD700),
                   indicatorWeight: 3,
+                  indicatorSize: TabBarIndicatorSize.label,
                   labelColor: const Color(0xFFFFD700),
                   unselectedLabelColor: Colors.white60,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 18),
                   tabs: const [
                     Tab(text: 'Details'),
                     Tab(text: 'Timeline'),

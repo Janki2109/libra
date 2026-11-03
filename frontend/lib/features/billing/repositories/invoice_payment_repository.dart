@@ -91,4 +91,16 @@ class InvoicePaymentRepository {
       throw InvoicePaymentException(DioClient.describeError(e));
     }
   }
+
+  /// Settles an invoice's remaining balance in full, with no payment gateway
+  /// involved — Razorpay checkout is turned off for clients for now. The
+  /// lawyer is notified exactly as a real payment would.
+  Future<void> payWithoutGateway(String invoiceId) async {
+    try {
+      await DioClient.instance.post('/payments/pay-without-gateway',
+          data: {'invoice_id': invoiceId});
+    } on DioException catch (e) {
+      throw InvoicePaymentException(DioClient.describeError(e));
+    }
+  }
 }

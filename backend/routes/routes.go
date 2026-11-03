@@ -147,6 +147,9 @@ func SetupRoutes() *gin.Engine {
 		// the invoice when the caller isn't firm staff.
 		protected.POST("/payments/razorpay/order", controllers.CreateRazorpayOrder)
 		protected.POST("/payments/razorpay/verify", controllers.VerifyRazorpayPayment)
+		// Razorpay checkout is turned off for clients for now — see the
+		// handler's doc comment.
+		protected.POST("/payments/pay-without-gateway", controllers.PayInvoiceWithoutGateway)
 
 		// ── Client Portal ──────────────────────
 		portal := protected.Group("/portal")

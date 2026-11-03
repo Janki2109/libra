@@ -287,10 +287,18 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
             ),
             bottom: TabBar(
               controller: _tabController,
+              // Four fixed-width tabs squeezed 'Documents' into less space
+              // than its own text needed on a standard-width phone, clipping
+              // it to "Docume…". Scrollable sizes each tab to its label
+              // instead of forcing an equal split.
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               indicatorColor: const Color(0xFFFFD700),
               indicatorWeight: 2.5,
+              indicatorSize: TabBarIndicatorSize.label,
               labelColor: const Color(0xFFFFD700),
               unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 18),
               tabs: const [
                 Tab(text: 'Details'),
                 Tab(text: 'Bookings'),
