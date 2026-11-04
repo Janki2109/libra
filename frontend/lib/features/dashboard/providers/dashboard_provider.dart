@@ -149,4 +149,19 @@ class DashboardProvider extends ChangeNotifier {
     if (v is num) return v.toDouble();
     return 0;
   }
+
+  /// Called on logout/session-expiry (see main.dart) — this provider is a
+  /// singleton that outlives any one login, so without this the previous
+  /// account's dashboard numbers would still render for the instant between
+  /// logout and the next account's first load completing.
+  void reset() {
+    _stats = DashboardStats();
+    _todayHearings = [];
+    _recentCases = [];
+    _recentActivities = [];
+    _loading = false;
+    _error = null;
+    _lastSignature = null;
+    notifyListeners();
+  }
 }

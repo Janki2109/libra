@@ -36,4 +36,14 @@ class HearingProvider extends ChangeNotifier {
     _loading = false;
     notifyListeners();
   }
+
+  /// Called on logout/session-expiry (see main.dart) — this provider is a
+  /// singleton that outlives any one login, so without this the previous
+  /// account's hearings list would still render for the instant between
+  /// logout and the next account's first load completing.
+  void reset() {
+    _hearings = [];
+    _loading = false;
+    notifyListeners();
+  }
 }

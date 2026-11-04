@@ -158,7 +158,34 @@ class _AutoRefreshGateState extends State<_AutoRefreshGate>
   @override
   void didUpdateWidget(_AutoRefreshGate oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isAuthenticated != widget.isAuthenticated) _sync();
+    if (oldWidget.isAuthenticated != widget.isAuthenticated) {
+      _sync();
+      // Every data provider below is a singleton created once in main.dart's
+      // MultiProvider and kept alive for the whole app lifetime — logging
+      // out (or a 401-triggered session expiry) only flips isAuthenticated,
+      // it never recreates them. Without this, each provider's last-loaded
+      // list/count from the account that just logged out would still be
+      // sitting in memory and would render for the instant between landing
+      // on the login screen and the next account's first successful load —
+      // notifications, chat unread badge, cases, clients, hearings,
+      // invoices, documents, portal data, reports, staff, all included.
+      // Polling itself is already fully stopped by _sync() above (it cancels
+      // the single shared AutoRefreshService timer), so this only needs to
+      // clear in-memory state, not unregister anything further.
+      if (oldWidget.isAuthenticated && !widget.isAuthenticated) {
+        context.read<DashboardProvider>().reset();
+        context.read<ClientProvider>().reset();
+        context.read<CaseProvider>().reset();
+        context.read<HearingProvider>().reset();
+        context.read<NotificationProvider>().reset();
+        context.read<ChatUnreadProvider>().reset();
+        context.read<BillingProvider>().reset();
+        context.read<DocumentProvider>().reset();
+        context.read<PortalProvider>().reset();
+        context.read<ReportProvider>().reset();
+        context.read<StaffProvider>().reset();
+      }
+    }
   }
 
   @override

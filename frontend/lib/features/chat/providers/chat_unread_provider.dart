@@ -42,4 +42,14 @@ class ChatUnreadProvider extends ChangeNotifier {
       debugPrint('Chat unread count error: $e');
     }
   }
+
+  /// Called on logout/session-expiry (see main.dart) so the badge doesn't
+  /// keep showing the previous account's count for the instant between the
+  /// old session ending and the next account's first load completing — this
+  /// provider is a singleton that outlives any one login, so its in-memory
+  /// state otherwise just sits there until overwritten.
+  void reset() {
+    _unreadCount = 0;
+    notifyListeners();
+  }
 }

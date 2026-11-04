@@ -102,4 +102,20 @@ class PortalProvider extends ChangeNotifier {
       debugPrint('Documents refresh error: $e');
     }
   }
+
+  /// Called on logout/session-expiry (see main.dart) — this provider is a
+  /// singleton that outlives any one login, so without this the previous
+  /// account's cases/hearings/invoices/documents/notifications would still
+  /// render for the instant between logout and the next account's first
+  /// load completing.
+  void reset() {
+    _cases = [];
+    _hearings = [];
+    _invoices = [];
+    _documents = [];
+    _notifications = [];
+    _loading = false;
+    _error = null;
+    notifyListeners();
+  }
 }

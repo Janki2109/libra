@@ -57,4 +57,15 @@ class ClientProvider extends ChangeNotifier {
       return null;
     }
   }
+
+  /// Called on logout/session-expiry (see main.dart) — this provider is a
+  /// singleton that outlives any one login, so without this the previous
+  /// account's client list would still render for the instant between
+  /// logout and the next account's first load completing.
+  void reset() {
+    _clients = [];
+    _loading = false;
+    _error = null;
+    notifyListeners();
+  }
 }

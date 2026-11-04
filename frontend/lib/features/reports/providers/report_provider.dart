@@ -24,4 +24,15 @@ class ReportProvider extends ChangeNotifier {
     _loading = false;
     notifyListeners();
   }
+
+  /// Called on logout/session-expiry (see main.dart) — this provider is a
+  /// singleton that outlives any one login, so without this the previous
+  /// account's report data would still render for the instant between
+  /// logout and the next account's first load completing.
+  void reset() {
+    _caseReport = {};
+    _revenueReport = {};
+    _loading = false;
+    notifyListeners();
+  }
 }

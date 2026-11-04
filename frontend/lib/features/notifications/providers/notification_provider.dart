@@ -64,4 +64,14 @@ class NotificationProvider extends ChangeNotifier {
       debugPrint('Mark read error: $e');
     }
   }
+
+  /// Called on logout/session-expiry (see main.dart) — this provider is a
+  /// singleton that outlives any one login, so without this the previous
+  /// account's notification list/unread count would still render for the
+  /// instant between logout and the next account's first load completing.
+  void reset() {
+    _notifications = [];
+    _loading = false;
+    notifyListeners();
+  }
 }
