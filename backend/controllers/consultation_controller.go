@@ -363,6 +363,7 @@ func BookConsultationWithoutPayment(c *gin.Context) {
 		return
 	}
 
+	recordConsultationPayment(consultationID, amountPaise)
 	notifyConsultationPaid(consultationID, amountPaise)
 
 	utils.Success(c, http.StatusCreated, "Booking confirmed — lawyer notified",
@@ -434,6 +435,7 @@ func confirmConsultationPayment(orderID, paymentID, callerID string) (gin.H, err
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
+		recordConsultationPayment(consultationID, amountPaise)
 		notifyConsultationPaid(consultationID, amountPaise)
 	}
 
@@ -470,6 +472,53 @@ func fetchConsultationSummary(consultationID string) gin.H {
 		out["amount_rupees"] = float64(amountPaise.Int64) / 100
 	}
 	return out
+}
+
+// recordConsultationPayment writes a real ledger row for a paid consultation
+// into the same `payments` table invoice settlements already use — without
+// this, a ₹5 video/audio/chat consultation payment only ever updated
+// consultations.payment_status, so it never showed up in the lawyer's
+// existing Payment History screen (GET /payments, already firm-scoped) or
+// anywhere else that reads the payments table. invoice_id is left NULL
+// (nullable by schema — see migration 006) since this payment isn't tied to
+// an invoice. Idempotent by construction, not by a DB constraint: this is
+// only ever called once per consultation — BookConsultationWithoutPayment
+// inserts a brand-new consultation row each time it runs, and
+// confirmConsultationPayment only reaches here inside the
+// orderStatus!="paid" branch, which a replayed call can't re-enter (the
+// row is FOR UPDATE-locked and already flipped to "paid" by then).
+func recordConsultationPayment(consultationID string, amountPaise int64) {
+	var lawyerID, clientUserID, firmID, clientName, consultType string
+	err := config.DB.QueryRow(`
+		SELECT co.lawyer_id::text, co.client_id::text, COALESCE(l.firm_id::text,''),
+		       COALESCE(cl.name,'Client'), co.consultation_type
+		FROM consultations co
+		JOIN users l  ON co.lawyer_id = l.id
+		JOIN users cl ON co.client_id = cl.id
+		WHERE co.id = $1::uuid
+	`, consultationID).Scan(&lawyerID, &clientUserID, &firmID, &clientName, &consultType)
+	if err != nil || firmID == "" {
+		return
+	}
+
+	// payments.client_id references the firm's `clients` roster row, not the
+	// portal user row consultations.client_id points at — best-effort match
+	// by email, same as the client-portal document/upload scoping pattern.
+	// A payment is still recorded (with client_id left NULL) even when no
+	// such roster row exists.
+	var clientRowID sql.NullString
+	config.DB.QueryRow(`
+		SELECT cl.id::text FROM clients cl
+		JOIN users u ON lower(u.email) = lower(cl.email)
+		WHERE u.id = $1::uuid AND cl.firm_id = $2::uuid
+	`, clientUserID, firmID).Scan(&clientRowID)
+
+	config.DB.Exec(`
+		INSERT INTO payments (id, firm_id, invoice_id, client_id, amount,
+		payment_date, payment_method, transaction_id, notes)
+		VALUES ($1, $2::uuid, NULL, $3, $4, CURRENT_DATE, 'consultation', $5, $6)
+	`, uuid.New().String(), firmID, clientRowID, float64(amountPaise)/100,
+		"CONSULT_"+consultationID, fmt.Sprintf("%s consultation — %s", consultType, clientName))
 }
 
 // notifyConsultationPaid tells the lawyer a paid booking has landed and the

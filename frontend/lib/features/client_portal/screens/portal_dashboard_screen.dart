@@ -265,7 +265,7 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
           onTabChange: (i) => setState(() => _selectedIndex = i)),
       _CasesTab(cases: _cases, documents: _documents),
       _DocumentsTab(documents: _documents, cases: _cases, onRefresh: _loadData),
-      _BillingTab(invoices: _invoices),
+      _BillingTab(invoices: _invoices, consultations: _consultations),
       _ChatTab(chatRooms: _chatRooms, auth: auth),
       _ProfileTab(auth: auth),
     ];
@@ -1551,7 +1551,16 @@ class _DocCard extends StatelessWidget {
 // ── Billing Tab ────────────────────────────────────
 class _BillingTab extends StatelessWidget {
   final List<dynamic> invoices;
-  const _BillingTab({required this.invoices});
+  final List<dynamic> consultations;
+  const _BillingTab({required this.invoices, required this.consultations});
+
+  // Paid consultation/video-call bookings only — these are the ₹5-style
+  // charges that used to never appear anywhere in Billing because they only
+  // ever updated consultations.payment_status, never an invoice. The data
+  // itself was already being fetched for the Home tab's "My Consultations"
+  // list; this just also surfaces the paid ones here, as real transactions.
+  List<dynamic> get _paidConsultations =>
+      consultations.where((c) => c['payment_status'] == 'paid').toList();
 
   double get _totalPending => invoices
       .where((i) =>
@@ -1559,9 +1568,12 @@ class _BillingTab extends StatelessWidget {
           i['status'] == 'partial' ||
           i['status'] == 'pending_verification')
       .fold(0.0, (s, i) => s + ((i['total_amount'] ?? 0.0) as num).toDouble());
-  double get _totalPaid => invoices
-      .where((i) => i['status'] == 'paid')
-      .fold(0.0, (s, i) => s + ((i['total_amount'] ?? 0.0) as num).toDouble());
+  double get _totalPaid =>
+      invoices
+          .where((i) => i['status'] == 'paid')
+          .fold(0.0, (s, i) => s + ((i['total_amount'] ?? 0.0) as num).toDouble()) +
+      _paidConsultations.fold(
+          0.0, (s, c) => s + (((c['amount_paise'] ?? 0) as num) / 100));
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -1584,14 +1596,134 @@ class _BillingTab extends StatelessWidget {
                   child: _BillStat('₹${_totalPaid.toStringAsFixed(0)}', 'Paid',
                       const Color(0xFF2E8B57))),
               const SizedBox(width: 12),
-              Expanded(child: _BillStat('${invoices.length}', 'Total', _green)),
+              Expanded(
+                  child: _BillStat(
+                      '${invoices.length + _paidConsultations.length}',
+                      'Total',
+                      _green)),
             ]),
             const SizedBox(height: 20),
-            ...invoices.map((inv) => _InvoiceCard(invoice: inv)),
+            if (invoices.isNotEmpty) ...[
+              const Text('Invoices',
+                  style: TextStyle(
+                      color: _textPri,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              ...invoices.map((inv) => _InvoiceCard(invoice: inv)),
+              const SizedBox(height: 16),
+            ],
+            if (_paidConsultations.isNotEmpty) ...[
+              const Text('Consultation & Call Payments',
+                  style: TextStyle(
+                      color: _textPri,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              ..._paidConsultations
+                  .map((con) => _ConsultationPaymentCard(consultation: con)),
+            ],
+            if (invoices.isEmpty && _paidConsultations.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 60),
+                child: Column(children: [
+                  Icon(Icons.receipt_long_rounded,
+                      color: _textMuted.withValues(alpha: 0.4), size: 56),
+                  const SizedBox(height: 12),
+                  const Text('No bills or payments yet',
+                      style: TextStyle(color: _textMuted, fontSize: 13)),
+                ]),
+              ),
             const SizedBox(height: 40),
           ])), // ListView + SafeArea
         ]), // Stack
       );
+}
+
+// ── Consultation Payment Card ───────────────────────
+// Mirrors _InvoiceCard's visual language (same colors/card shape) rather
+// than introducing a new style, per "do not redesign" — just a different
+// data source: a paid consultation/video-call booking instead of an
+// invoice.
+class _ConsultationPaymentCard extends StatelessWidget {
+  final dynamic consultation;
+  const _ConsultationPaymentCard({required this.consultation});
+
+  String _typeLabel(String t) {
+    final lower = t.toLowerCase();
+    if (lower.contains('video')) return 'Video Consultation';
+    if (lower.contains('audio')) return 'Audio Consultation';
+    if (lower.contains('chat')) return 'Chat Consultation';
+    if (lower.contains('office') || lower.contains('visit')) {
+      return 'Office Visit Consultation';
+    }
+    return t.isEmpty ? 'Consultation' : t;
+  }
+
+  IconData _typeIcon(String t) {
+    final lower = t.toLowerCase();
+    if (lower.contains('video')) return Icons.videocam_rounded;
+    if (lower.contains('audio')) return Icons.call_rounded;
+    if (lower.contains('chat')) return Icons.chat_bubble_rounded;
+    return Icons.event_available_rounded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = (consultation['consultation_type'] ?? '').toString();
+    final lawyerName = (consultation['lawyer_name'] ?? 'Your lawyer').toString();
+    final amount =
+        (((consultation['amount_paise'] ?? 0) as num) / 100).toDouble();
+    final date = (consultation['consultation_date'] ?? '').toString();
+    const color = Color(0xFF2E8B57);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: _bgCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+          boxShadow: [
+            BoxShadow(
+                color: _green.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ]),
+      child: Row(children: [
+        Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12)),
+            child: Icon(_typeIcon(type), color: color, size: 22)),
+        const SizedBox(width: 14),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_typeLabel(type),
+              style: const TextStyle(
+                  color: _textPri, fontWeight: FontWeight.w700, fontSize: 14)),
+          Text('with $lawyerName',
+              style: const TextStyle(color: _textMuted, fontSize: 11),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+          Row(children: [
+            Text('₹${amount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                    color: color, fontWeight: FontWeight.w800, fontSize: 16)),
+            if (date.length >= 10) ...[
+              const SizedBox(width: 8),
+              Text('• ${date.substring(0, 10)}',
+                  style: const TextStyle(color: _textMuted, fontSize: 11)),
+            ],
+          ]),
+        ])),
+        const Icon(Icons.check_circle_rounded, color: color, size: 24),
+      ]),
+    );
+  }
 }
 
 // ── Chat Tab ───────────────────────────────────────

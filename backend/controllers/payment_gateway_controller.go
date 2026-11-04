@@ -383,10 +383,11 @@ func PayInvoiceWithoutGateway(c *gin.Context) {
 	}
 
 	var gstAmount, platformFee, subtotal float64
+	var invoiceClientID sql.NullString
 	config.DB.QueryRow(`
-		SELECT COALESCE(tax_amount,0), COALESCE(platform_fee,0), COALESCE(subtotal,0)
+		SELECT COALESCE(tax_amount,0), COALESCE(platform_fee,0), COALESCE(subtotal,0), client_id::text
 		FROM invoices WHERE id=$1::uuid AND firm_id=$2::uuid
-	`, req.InvoiceID, firmID).Scan(&gstAmount, &platformFee, &subtotal)
+	`, req.InvoiceID, firmID).Scan(&gstAmount, &platformFee, &subtotal, &invoiceClientID)
 
 	tx, err := config.DB.Begin()
 	if err != nil {
@@ -399,12 +400,12 @@ func PayInvoiceWithoutGateway(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
 	txnID := "NO_GATEWAY_" + uuid.New().String()
 	if _, err := tx.Exec(`
-		INSERT INTO payments (id, firm_id, invoice_id, amount,
+		INSERT INTO payments (id, firm_id, invoice_id, client_id, amount,
 		payment_date, payment_method, transaction_id, notes, created_by,
 		verification_status, verified_at, gst_amount, platform_fee, lawyer_payable_amount)
-		VALUES ($1, $2::uuid, $3::uuid, $4, $5, 'manual_test', $6, $7, $8::uuid, 'verified', NOW(),
-		$9, $10, $11)
-	`, payID, firmID, req.InvoiceID, due, today, txnID,
+		VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, 'manual_test', $7, $8, $9::uuid, 'verified', NOW(),
+		$10, $11, $12)
+	`, payID, firmID, req.InvoiceID, invoiceClientID, due, today, txnID,
 		"Marked paid without a payment gateway (testing)", uID,
 		gstAmount, platformFee, subtotal); err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to record payment", err.Error())

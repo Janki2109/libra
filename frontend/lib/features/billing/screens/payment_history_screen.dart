@@ -139,6 +139,8 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
       case 'upi': return 'UPI';
       case 'cash': return 'Cash';
       case 'bank_transfer': return 'Bank Transfer';
+      case 'consultation': return 'Consultation';
+      case 'manual_test': return 'Invoice Payment';
       default: return m;
     }
   }
