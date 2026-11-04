@@ -94,6 +94,28 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> _submit() async {
+    // The payment-details fields live inside a collapsible section
+    // (_bankDetailsExpanded) — when collapsed, those TextFormFields are
+    // unmounted entirely, so Form.validate() silently skips them instead of
+    // blocking submission. Checking the controllers directly here (not
+    // through the Form) means a collapsed, empty section still blocks
+    // Send Bill, and expanding it on failure shows the lawyer exactly why.
+    final paymentError = _validateUpi(_upiIdCtrl.text) ??
+        _validateName(_accountNameCtrl.text, 'Account holder name') ??
+        _validateAccountNumber(_accountNumberCtrl.text) ??
+        _validateIfsc(_ifscCtrl.text) ??
+        _validateName(_bankNameCtrl.text, 'Bank name') ??
+        _validateName(_bankBranchCtrl.text, 'Branch name');
+    if (paymentError != null) {
+      setState(() => _bankDetailsExpanded = true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(paymentError),
+        backgroundColor: const Color(0xFFD9534F),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     if (_selectedClientId == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -121,14 +143,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         'upi_id': _upiIdCtrl.text.trim(),
         'bank_account_name': _accountNameCtrl.text.trim(),
         'bank_account_number': _accountNumberCtrl.text.trim(),
-        'bank_ifsc': _ifscCtrl.text.trim(),
+        'bank_ifsc': _ifscCtrl.text.trim().toUpperCase(),
         'bank_name': _bankNameCtrl.text.trim(),
+        'bank_branch': _bankBranchCtrl.text.trim(),
       });
       await DioClient.instance.put('/firm/bank-details', data: {
         'upi_id': _upiIdCtrl.text.trim(),
         'bank_account_name': _accountNameCtrl.text.trim(),
         'bank_account_number': _accountNumberCtrl.text.trim(),
-        'bank_ifsc': _ifscCtrl.text.trim(),
+        'bank_ifsc': _ifscCtrl.text.trim().toUpperCase(),
         'bank_name': _bankNameCtrl.text.trim(),
         'bank_branch': _bankBranchCtrl.text.trim(),
       });
@@ -147,7 +170,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Failed to create invoice'),
+          content: Text(DioClient.describeError(e)),
           backgroundColor: const Color(0xFFD9534F),
           behavior: SnackBarBehavior.floating,
           shape:
@@ -592,7 +615,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                               _upiIdCtrl,
                               'UPI ID (e.g. lawyer@upi)',
                               Icons.phone_android_rounded,
-                              const Color(0xFF2E8B57)),
+                              const Color(0xFF2E8B57),
+                              validator: _validateUpi),
                           const SizedBox(height: 10),
                           Divider(color: _border, thickness: 0.6),
                           const SizedBox(height: 10),
@@ -608,29 +632,36 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                               _accountNameCtrl,
                               'Account Holder Name',
                               Icons.person_rounded,
-                              const Color(0xFF4A90D9)),
+                              const Color(0xFF4A90D9),
+                              validator: (v) =>
+                                  _validateName(v, 'Account holder name')),
                           const SizedBox(height: 10),
                           _buildFieldColored(
                               _accountNumberCtrl,
                               'Account Number',
                               Icons.numbers_rounded,
                               const Color(0xFF4A90D9),
-                              keyboardType: TextInputType.number),
+                              keyboardType: TextInputType.number,
+                              validator: _validateAccountNumber),
                           const SizedBox(height: 10),
                           _buildFieldColored(_ifscCtrl, 'IFSC Code',
-                              Icons.code_rounded, const Color(0xFF4A90D9)),
+                              Icons.code_rounded, const Color(0xFF4A90D9),
+                              validator: _validateIfsc),
                           const SizedBox(height: 10),
                           _buildFieldColored(
                               _bankNameCtrl,
                               'Bank Name',
                               Icons.account_balance_rounded,
-                              const Color(0xFF4A90D9)),
+                              const Color(0xFF4A90D9),
+                              validator: (v) => _validateName(v, 'Bank name')),
                           const SizedBox(height: 10),
                           _buildFieldColored(
                               _bankBranchCtrl,
                               'Branch Name',
                               Icons.location_on_rounded,
-                              const Color(0xFF4A90D9)),
+                              const Color(0xFF4A90D9),
+                              validator: (v) =>
+                                  _validateName(v, 'Branch name')),
                         ]),
                       ),
                     ],
@@ -727,10 +758,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   Widget _buildFieldColored(
           TextEditingController ctrl, String label, IconData icon, Color color,
-          {TextInputType? keyboardType}) =>
+          {TextInputType? keyboardType, String? Function(String?)? validator}) =>
       TextFormField(
           controller: ctrl,
           keyboardType: keyboardType,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           style: const TextStyle(color: _textPri, fontSize: 14),
           decoration: InputDecoration(
             labelText: label,
@@ -747,7 +780,49 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(color: color, width: 1.5)),
+            errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFD9534F))),
           ));
+
+  // Mirrors the backend's validatePaymentDetails (payment_details.go) —
+  // same rules, so a lawyer sees the exact same "why is this blocked"
+  // message inline instead of only after the server rejects the request.
+  // The backend remains the authority: this is a UX convenience, not the
+  // enforcement point.
+  static final _upiIdPattern =
+      RegExp(r'^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$');
+  static final _ifscPattern = RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$');
+  static final _accountNumberPattern = RegExp(r'^[0-9]{9,18}$');
+
+  String? _validateUpi(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'UPI ID is required';
+    if (!_upiIdPattern.hasMatch(s)) return 'Enter a valid UPI ID (e.g. yourname@upi)';
+    return null;
+  }
+
+  String? _validateName(String? v, String label) {
+    final s = (v ?? '').trim();
+    if (s.length < 2) return '$label is required';
+    return null;
+  }
+
+  String? _validateAccountNumber(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Bank account number is required';
+    if (!_accountNumberPattern.hasMatch(s)) {
+      return 'Enter a valid account number (9–18 digits)';
+    }
+    return null;
+  }
+
+  String? _validateIfsc(String? v) {
+    final s = (v ?? '').trim().toUpperCase();
+    if (s.isEmpty) return 'IFSC code is required';
+    if (!_ifscPattern.hasMatch(s)) return 'Enter a valid IFSC (e.g. SBIN0001234)';
+    return null;
+  }
 }
 
 class _TotalRow extends StatelessWidget {

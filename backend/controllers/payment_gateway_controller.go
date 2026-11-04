@@ -90,6 +90,24 @@ func CreateRazorpayOrder(c *gin.Context) {
 		utils.Error(c, http.StatusBadRequest, "Invoice is already settled", "nothing due")
 		return
 	}
+
+	// Same "never accept payment into a void" rule as PayInvoiceWithoutGateway.
+	var upiID, bankAccName, bankAccNum, bankIFSC, bankName, bankBranch string
+	config.DB.QueryRow(`
+		SELECT COALESCE(i.upi_id, f.upi_id, ''), COALESCE(i.bank_account_name, f.bank_account_name, ''),
+		       COALESCE(i.bank_account_number, f.bank_account_number, ''),
+		       COALESCE(i.bank_ifsc, f.bank_ifsc, ''), COALESCE(i.bank_name, f.bank_name, ''),
+		       COALESCE(i.bank_branch, f.bank_branch, '')
+		FROM invoices i LEFT JOIN firms f ON i.firm_id = f.id
+		WHERE i.id = $1::uuid
+	`, req.InvoiceID).Scan(&upiID, &bankAccName, &bankAccNum, &bankIFSC, &bankName, &bankBranch)
+	if msg := validatePaymentDetails(upiID, bankAccName, bankAccNum, bankIFSC, bankName, bankBranch); msg != "" {
+		utils.Error(c, http.StatusConflict,
+			"This lawyer has not configured valid payment details yet — payment cannot be completed.",
+			msg)
+		return
+	}
+
 	amountPaise := toPaise(due)
 
 	if !razorpayClient().Configured() {
@@ -379,6 +397,29 @@ func PayInvoiceWithoutGateway(c *gin.Context) {
 	due := services.RoundMoney(total - paid)
 	if due <= 0 {
 		utils.Error(c, http.StatusBadRequest, "Invoice is already settled", "nothing due")
+		return
+	}
+
+	// A client must never be able to pay into a void — if the lawyer never
+	// configured valid payment details (or this is a pre-existing invoice
+	// from before they became mandatory on CreateInvoice), block the
+	// payment here rather than accepting money with no verified destination
+	// on record. Falls back to the firm's default details exactly like the
+	// invoice PDF does, so a per-invoice override isn't required if the
+	// firm-wide default is already valid.
+	var upiID, bankAccName, bankAccNum, bankIFSC, bankName, bankBranch string
+	config.DB.QueryRow(`
+		SELECT COALESCE(i.upi_id, f.upi_id, ''), COALESCE(i.bank_account_name, f.bank_account_name, ''),
+		       COALESCE(i.bank_account_number, f.bank_account_number, ''),
+		       COALESCE(i.bank_ifsc, f.bank_ifsc, ''), COALESCE(i.bank_name, f.bank_name, ''),
+		       COALESCE(i.bank_branch, f.bank_branch, '')
+		FROM invoices i LEFT JOIN firms f ON i.firm_id = f.id
+		WHERE i.id = $1::uuid
+	`, req.InvoiceID).Scan(&upiID, &bankAccName, &bankAccNum, &bankIFSC, &bankName, &bankBranch)
+	if msg := validatePaymentDetails(upiID, bankAccName, bankAccNum, bankIFSC, bankName, bankBranch); msg != "" {
+		utils.Error(c, http.StatusConflict,
+			"This lawyer has not configured valid payment details yet — payment cannot be completed.",
+			msg)
 		return
 	}
 

@@ -11,7 +11,7 @@ func TestBuildInvoicePdf_WellFormed(t *testing.T) {
 		"ramesh@example.com", "9876543210",
 		"2026-09-01", "2026-09-15", "partial", "Thank you for your business.",
 		5000, 18, 900, 100, 6000, 2000,
-		"firm@upi", "HDFC Bank", "1234567890", "HDFC0001234", "Libra Law Associates")
+		"firm@upi", "HDFC Bank", "1234567890", "HDFC0001234", "Libra Law Associates", "MG Road")
 	if err != nil {
 		t.Fatalf("buildInvoicePdf failed: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestBuildInvoicePdf_FullyPaidNoPaymentDetails(t *testing.T) {
 		"INV-2026-002", "Libra Law Associates", "Anita Rao", "", "",
 		"2026-09-01", "", "paid", "",
 		1000, 18, 180, 100, 1280, 1280,
-		"firm@upi", "HDFC Bank", "1234567890", "HDFC0001234", "")
+		"firm@upi", "HDFC Bank", "1234567890", "HDFC0001234", "", "")
 	if err != nil {
 		t.Fatalf("buildInvoicePdf failed: %v", err)
 	}

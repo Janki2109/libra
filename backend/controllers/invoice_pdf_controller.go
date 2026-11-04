@@ -45,6 +45,7 @@ func ExportInvoicePdf(c *gin.Context) {
 		BankAccNum  string
 		BankIFSC    string
 		BankAccName string
+		BankBranch  string
 	}
 	err := config.DB.QueryRow(`
 		SELECT i.invoice_number, COALESCE(i.subtotal,0), COALESCE(i.tax_percent,0),
@@ -57,7 +58,8 @@ func ExportInvoicePdf(c *gin.Context) {
 		       COALESCE(i.bank_name, f.bank_name, ''),
 		       COALESCE(i.bank_account_number, f.bank_account_number, ''),
 		       COALESCE(i.bank_ifsc, f.bank_ifsc, ''),
-		       COALESCE(i.bank_account_name, f.bank_account_name, '')
+		       COALESCE(i.bank_account_name, f.bank_account_name, ''),
+		       COALESCE(i.bank_branch, f.bank_branch, '')
 		FROM invoices i
 		LEFT JOIN clients cl ON i.client_id = cl.id
 		LEFT JOIN firms f ON i.firm_id = f.id
@@ -66,7 +68,7 @@ func ExportInvoicePdf(c *gin.Context) {
 		&inv.Number, &inv.Subtotal, &inv.GSTRate, &inv.GSTAmount, &inv.PlatformFee,
 		&inv.Total, &inv.Paid, &inv.Status, &inv.IssueDate, &inv.DueDate, &inv.Notes,
 		&inv.ClientName, &inv.ClientEmail, &inv.ClientPhone, &inv.FirmName,
-		&inv.UPIID, &inv.BankName, &inv.BankAccNum, &inv.BankIFSC, &inv.BankAccName)
+		&inv.UPIID, &inv.BankName, &inv.BankAccNum, &inv.BankIFSC, &inv.BankAccName, &inv.BankBranch)
 	if err != nil {
 		utils.Error(c, http.StatusNotFound, "Invoice not found", err.Error())
 		return
@@ -75,7 +77,7 @@ func ExportInvoicePdf(c *gin.Context) {
 	pdfBytes, err := buildInvoicePdf(inv.Number, inv.FirmName, inv.ClientName, inv.ClientEmail,
 		inv.ClientPhone, inv.IssueDate, inv.DueDate, inv.Status, inv.Notes,
 		inv.Subtotal, inv.GSTRate, inv.GSTAmount, inv.PlatformFee, inv.Total, inv.Paid,
-		inv.UPIID, inv.BankName, inv.BankAccNum, inv.BankIFSC, inv.BankAccName)
+		inv.UPIID, inv.BankName, inv.BankAccNum, inv.BankIFSC, inv.BankAccName, inv.BankBranch)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to build invoice PDF", err.Error())
 		return
@@ -94,7 +96,7 @@ func ExportInvoicePdf(c *gin.Context) {
 func buildInvoicePdf(number, firmName, clientName, clientEmail, clientPhone,
 	issueDate, dueDate, status, notes string,
 	subtotal, gstRate, gstAmount, platformFee, total, paid float64,
-	upiID, bankName, bankAccNum, bankIFSC, bankAccName string) ([]byte, error) {
+	upiID, bankName, bankAccNum, bankIFSC, bankAccName, bankBranch string) ([]byte, error) {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(20, 20, 20)
 	pdf.SetAutoPageBreak(true, 20)
@@ -200,9 +202,15 @@ func buildInvoicePdf(number, firmName, clientName, clientEmail, clientPhone,
 			pdf.CellFormat(0, 5.5, tr("UPI ID: "+upiID), "", 1, "L", false, 0, "")
 		}
 		if bankAccNum != "" {
-			bank := "Bank: " + bankName + "  |  A/c: " + bankAccNum + "  |  IFSC: " + bankIFSC
+			// Last 4 digits only — never the full account number — on a
+			// document that a client downloads and can forward/print.
+			bank := "Bank: " + bankName + "  |  A/c: " + maskAccountNumber(bankAccNum) +
+				"  |  IFSC: " + bankIFSC
 			if bankAccName != "" {
 				bank += "  |  Name: " + bankAccName
+			}
+			if bankBranch != "" {
+				bank += "  |  Branch: " + bankBranch
 			}
 			pdf.MultiCell(0, 5.5, tr(bank), "", "L", false)
 		}

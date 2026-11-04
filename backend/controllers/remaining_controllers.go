@@ -390,9 +390,22 @@ func CreateInvoice(c *gin.Context) {
 		BankAccountNumber string  `json:"bank_account_number"`
 		BankIFSC          string  `json:"bank_ifsc"`
 		BankName          string  `json:"bank_name"`
+		BankBranch        string  `json:"bank_branch"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	// Payment details are mandatory on every invoice, not optional — a
+	// client must always have a verified-format way to actually pay the
+	// lawyer. Checked here, server-side, so the Flutter form's own
+	// validation (easily bypassed by anyone calling this API directly)
+	// is never the only thing standing between an invoice and a blank
+	// payment destination.
+	if msg := validatePaymentDetails(req.UPIID, req.BankAccountName,
+		req.BankAccountNumber, req.BankIFSC, req.BankName, req.BankBranch); msg != "" {
+		utils.Error(c, http.StatusBadRequest, msg, "invalid or missing payment details")
 		return
 	}
 
@@ -418,15 +431,15 @@ func CreateInvoice(c *gin.Context) {
 		INSERT INTO invoices (id, firm_id, client_id, case_id, invoice_number,
 		issue_date, due_date, subtotal, tax_percent, tax_amount, platform_fee,
 		total_amount, notes, created_by,
-		upi_id, bank_account_name, bank_account_number, bank_ifsc, bank_name)
+		upi_id, bank_account_name, bank_account_number, bank_ifsc, bank_name, bank_branch)
 		VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11,
 		$12, $13, $14::uuid,
-		$15, $16, $17, $18, $19)
+		$15, $16, $17, $18, $19, $20)
 	`, id, fID, nullIfEmpty(req.ClientID), nullIfEmpty(req.CaseID), req.InvoiceNumber,
 		req.IssueDate, nullIfEmpty(req.DueDate), req.Subtotal, gstRate, gstAmount, platformFee,
 		total, req.Notes, userID,
 		req.UPIID, req.BankAccountName, req.BankAccountNumber,
-		req.BankIFSC, req.BankName)
+		req.BankIFSC, req.BankName, req.BankBranch)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to create invoice", err.Error())
 		return
@@ -1333,6 +1346,11 @@ func UpdateFirmBankDetails(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	if msg := validatePaymentDetails(req.UPIID, req.BankAccountName,
+		req.BankAccountNumber, req.BankIFSC, req.BankName, req.BankBranch); msg != "" {
+		utils.Error(c, http.StatusBadRequest, msg, "invalid or missing payment details")
 		return
 	}
 

@@ -509,6 +509,9 @@ func GetMyInvoice(c *gin.Context) {
 		utils.Error(c, http.StatusNotFound, "Invoice not found", err.Error())
 		return
 	}
+	// The client is never the account owner, so the in-app view (like the
+	// PDF) only ever shows the last 4 digits — never the full number.
+	inv.BankAccountNumber = maskAccountNumber(inv.BankAccountNumber)
 	utils.Success(c, http.StatusOK, "Invoice fetched", inv)
 }
 
@@ -551,6 +554,7 @@ func ExportMyInvoicePdf(c *gin.Context) {
 		BankAccNum  string
 		BankIFSC    string
 		BankAccName string
+		BankBranch  string
 	}
 	err := config.DB.QueryRow(`
 		SELECT i.invoice_number, COALESCE(i.subtotal,0), COALESCE(i.tax_percent,0),
@@ -563,7 +567,8 @@ func ExportMyInvoicePdf(c *gin.Context) {
 		       COALESCE(i.bank_name, f.bank_name, ''),
 		       COALESCE(i.bank_account_number, f.bank_account_number, ''),
 		       COALESCE(i.bank_ifsc, f.bank_ifsc, ''),
-		       COALESCE(i.bank_account_name, f.bank_account_name, '')
+		       COALESCE(i.bank_account_name, f.bank_account_name, ''),
+		       COALESCE(i.bank_branch, f.bank_branch, '')
 		FROM invoices i
 		LEFT JOIN clients cl ON i.client_id = cl.id
 		LEFT JOIN firms f ON i.firm_id = f.id
@@ -573,7 +578,7 @@ func ExportMyInvoicePdf(c *gin.Context) {
 		&inv.Number, &inv.Subtotal, &inv.GSTRate, &inv.GSTAmount, &inv.PlatformFee,
 		&inv.Total, &inv.Paid, &inv.Status, &inv.IssueDate, &inv.DueDate, &inv.Notes,
 		&inv.ClientName, &inv.ClientEmail, &inv.ClientPhone, &inv.FirmName,
-		&inv.UPIID, &inv.BankName, &inv.BankAccNum, &inv.BankIFSC, &inv.BankAccName)
+		&inv.UPIID, &inv.BankName, &inv.BankAccNum, &inv.BankIFSC, &inv.BankAccName, &inv.BankBranch)
 	if err != nil {
 		utils.Error(c, http.StatusNotFound, "Invoice not found", err.Error())
 		return
@@ -582,7 +587,7 @@ func ExportMyInvoicePdf(c *gin.Context) {
 	pdfBytes, err := buildInvoicePdf(inv.Number, inv.FirmName, inv.ClientName, inv.ClientEmail,
 		inv.ClientPhone, inv.IssueDate, inv.DueDate, inv.Status, inv.Notes,
 		inv.Subtotal, inv.GSTRate, inv.GSTAmount, inv.PlatformFee, inv.Total, inv.Paid,
-		inv.UPIID, inv.BankName, inv.BankAccNum, inv.BankIFSC, inv.BankAccName)
+		inv.UPIID, inv.BankName, inv.BankAccNum, inv.BankIFSC, inv.BankAccName, inv.BankBranch)
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to build invoice PDF", err.Error())
 		return
