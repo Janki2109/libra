@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"libra/config"
 	"libra/utils"
 	"net/http"
@@ -509,4 +510,90 @@ func GetMyInvoice(c *gin.Context) {
 		return
 	}
 	utils.Success(c, http.StatusOK, "Invoice fetched", inv)
+}
+
+// ExportMyInvoicePdf lets a client download the exact same invoice PDF their
+// lawyer can (see ExportInvoicePdf in invoice_pdf_controller.go) — same
+// buildInvoicePdf renderer, same numbers, just scoped by the client's own
+// email instead of firm staff membership, matching GetMyInvoice's ownership
+// check. Before this, only firm staff could ever download an invoice PDF;
+// a client had no way to get one at all.
+func ExportMyInvoicePdf(c *gin.Context) {
+	id := c.Param("id")
+	if !isUUID(id) {
+		utils.Error(c, http.StatusBadRequest, "Invalid id", "not a uuid")
+		return
+	}
+	userEmail, ok := portalClientEmail(c)
+	if !ok {
+		utils.Error(c, http.StatusNotFound, "Invoice not found", "")
+		return
+	}
+
+	var inv struct {
+		Number      string
+		Subtotal    float64
+		GSTRate     float64
+		GSTAmount   float64
+		PlatformFee float64
+		Total       float64
+		Paid        float64
+		Status      string
+		IssueDate   string
+		DueDate     string
+		Notes       string
+		ClientName  string
+		ClientEmail string
+		ClientPhone string
+		FirmName    string
+		UPIID       string
+		BankName    string
+		BankAccNum  string
+		BankIFSC    string
+		BankAccName string
+	}
+	err := config.DB.QueryRow(`
+		SELECT i.invoice_number, COALESCE(i.subtotal,0), COALESCE(i.tax_percent,0),
+		       COALESCE(i.tax_amount,0), COALESCE(i.platform_fee,0), i.total_amount,
+		       COALESCE(i.paid_amount,0), i.status, i.issue_date::text,
+		       COALESCE(i.due_date::text,''), COALESCE(i.notes,''),
+		       COALESCE(cl.name,''), COALESCE(cl.email,''), COALESCE(cl.phone,''),
+		       COALESCE(f.name,'Libra Law'),
+		       COALESCE(i.upi_id, f.upi_id, ''),
+		       COALESCE(i.bank_name, f.bank_name, ''),
+		       COALESCE(i.bank_account_number, f.bank_account_number, ''),
+		       COALESCE(i.bank_ifsc, f.bank_ifsc, ''),
+		       COALESCE(i.bank_account_name, f.bank_account_name, '')
+		FROM invoices i
+		LEFT JOIN clients cl ON i.client_id = cl.id
+		LEFT JOIN firms f ON i.firm_id = f.id
+		WHERE i.id = $1::uuid
+		  AND i.client_id IN (SELECT id FROM clients WHERE lower(email) = $2)
+	`, id, userEmail).Scan(
+		&inv.Number, &inv.Subtotal, &inv.GSTRate, &inv.GSTAmount, &inv.PlatformFee,
+		&inv.Total, &inv.Paid, &inv.Status, &inv.IssueDate, &inv.DueDate, &inv.Notes,
+		&inv.ClientName, &inv.ClientEmail, &inv.ClientPhone, &inv.FirmName,
+		&inv.UPIID, &inv.BankName, &inv.BankAccNum, &inv.BankIFSC, &inv.BankAccName)
+	if err != nil {
+		utils.Error(c, http.StatusNotFound, "Invoice not found", err.Error())
+		return
+	}
+
+	pdfBytes, err := buildInvoicePdf(inv.Number, inv.FirmName, inv.ClientName, inv.ClientEmail,
+		inv.ClientPhone, inv.IssueDate, inv.DueDate, inv.Status, inv.Notes,
+		inv.Subtotal, inv.GSTRate, inv.GSTAmount, inv.PlatformFee, inv.Total, inv.Paid,
+		inv.UPIID, inv.BankName, inv.BankAccNum, inv.BankIFSC, inv.BankAccName)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to build invoice PDF", err.Error())
+		return
+	}
+	if len(pdfBytes) == 0 {
+		utils.Error(c, http.StatusInternalServerError, "Failed to build invoice PDF", "empty PDF output")
+		return
+	}
+
+	utils.Success(c, http.StatusOK, "Invoice exported", gin.H{
+		"file_base64": base64.StdEncoding.EncodeToString(pdfBytes),
+		"file_name":   timestampedFileName("Invoice "+inv.Number, ".pdf"),
+	})
 }

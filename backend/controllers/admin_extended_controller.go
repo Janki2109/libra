@@ -11,6 +11,7 @@ package controllers
 import (
 	"fmt"
 	"libra/config"
+	"libra/services"
 	"libra/utils"
 	"net/http"
 	"strings"
@@ -840,5 +841,49 @@ func AdminSearch(c *gin.Context) {
 
 	utils.Success(c, http.StatusOK, "Search results", gin.H{
 		"users": users, "consultations": consultations, "payments": payments, "cases": cases,
+	})
+}
+
+// AdminGetBillingSettings returns the platform's current invoice GST rate
+// and flat platform fee — the same single row services.CurrentBillingRates
+// reads for every invoice calculation (see migration 037). Exposed here so
+// the rate is an operator-configurable setting rather than a value only a
+// code change could touch.
+func AdminGetBillingSettings(c *gin.Context) {
+	gstRate, platformFee := services.CurrentBillingRates()
+	utils.Success(c, http.StatusOK, "Billing settings fetched", gin.H{
+		"gst_rate_percent":    gstRate,
+		"platform_fee_rupees": platformFee,
+	})
+}
+
+// AdminUpdateBillingSettings changes the rate new invoices are calculated
+// with. Deliberately does not touch any existing invoice — it only changes
+// what services.ComputeInvoiceBreakdown uses for invoices created from this
+// point on, exactly like changing any other forward-looking price.
+func AdminUpdateBillingSettings(c *gin.Context) {
+	var req struct {
+		GSTRatePercent    float64 `json:"gst_rate_percent" binding:"required,gte=0,lte=100"`
+		PlatformFeeRupees float64 `json:"platform_fee_rupees" binding:"gte=0"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	_, err := config.DB.Exec(`
+		INSERT INTO billing_settings (id, gst_rate_percent, platform_fee_rupees, updated_at)
+		VALUES (1, $1, $2, NOW())
+		ON CONFLICT (id) DO UPDATE
+		SET gst_rate_percent = EXCLUDED.gst_rate_percent,
+		    platform_fee_rupees = EXCLUDED.platform_fee_rupees,
+		    updated_at = NOW()
+	`, req.GSTRatePercent, req.PlatformFeeRupees)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to update billing settings", err.Error())
+		return
+	}
+	utils.Success(c, http.StatusOK, "Billing settings updated", gin.H{
+		"gst_rate_percent":    req.GSTRatePercent,
+		"platform_fee_rupees": req.PlatformFeeRupees,
 	})
 }

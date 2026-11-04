@@ -161,6 +161,7 @@ func SetupRoutes() *gin.Engine {
 			portal.POST("/documents/upload", controllers.UploadDocument)
 			portal.GET("/my-invoices", controllers.GetMyInvoices)
 			portal.GET("/my-invoices/:id", controllers.GetMyInvoice)
+			portal.GET("/my-invoices/:id/pdf", controllers.ExportMyInvoicePdf)
 
 			portal.POST("/book-consultation", controllers.BookConsultation)
 			// Payment-gated booking (Razorpay). The plain /book-consultation
@@ -393,6 +394,10 @@ func SetupRoutes() *gin.Engine {
 			admin.GET("/audit-logs", controllers.AdminGetAuditLogs)
 			admin.GET("/audit-logs/stats", controllers.AdminGetAuditLogStats)
 			admin.GET("/audit-logs/:id", controllers.AdminGetAuditLogDetail)
+
+			// ✅ Billing configuration (invoice GST rate / platform fee)
+			admin.GET("/billing-settings", controllers.AdminGetBillingSettings)
+			admin.PUT("/billing-settings", controllers.AdminUpdateBillingSettings)
 
 			// ✅ Support / Complaints
 			admin.GET("/support/stats", controllers.AdminGetSupportStats)

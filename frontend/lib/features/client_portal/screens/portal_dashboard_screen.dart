@@ -2279,8 +2279,74 @@ class _InvoiceCard extends StatelessWidget {
         else
           const Icon(Icons.check_circle_rounded,
               color: Color(0xFF2E8B57), size: 24),
+        const SizedBox(width: 6),
+        GestureDetector(
+          onTap: () => _downloadPdf(context, invoice),
+          child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Icon(Icons.picture_as_pdf_rounded, color: color, size: 18)),
+        ),
       ]),
     );
+  }
+
+  // Same authenticated-PDF-bytes pattern as the document downloads
+  // elsewhere in this screen — fetches GET /portal/my-invoices/:id/pdf
+  // (new: previously only firm staff could ever get an invoice PDF at all)
+  // and saves/opens it exactly like any other downloaded file.
+  static Future<void> _downloadPdf(BuildContext context, dynamic invoice) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: _green)),
+    );
+    try {
+      final res = await DioClient.instance
+          .get('/portal/my-invoices/${invoice['id']}/pdf');
+      final data = res.data['data'] as Map<String, dynamic>?;
+      final b64 = (data?['file_base64'] ?? '').toString();
+      if (context.mounted) Navigator.pop(context);
+
+      if (b64.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Could not generate this invoice PDF'),
+              backgroundColor: Color(0xFFD9534F)));
+        }
+        return;
+      }
+      final bytes = base64Decode(b64);
+      final fileName =
+          (data?['file_name'] ?? 'invoice.pdf').toString();
+
+      if (await saveToAndroidDownloads(bytes, fileName, 'application/pdf')) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('$fileName saved to Downloads'),
+              backgroundColor: const Color(0xFF2E8B57)));
+        }
+        return;
+      }
+      final result = await openDocumentBytes(
+          bytes: bytes, fileName: fileName, mimeType: 'application/pdf');
+      if (!result.success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message ?? 'Could not open this PDF.'),
+            backgroundColor: const Color(0xFFD9534F)));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(DioClient.describeError(e)),
+            backgroundColor: const Color(0xFFD9534F)));
+      }
+    }
   }
 }
 
