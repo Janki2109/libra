@@ -32,6 +32,23 @@ void main() async {
     ),
   );
   await FcmService.instance.initialize();
+  // Flutter's default release-mode ErrorWidget renders as a blank,
+  // transparent box with no text — a widget that throws during build
+  // silently disappears instead of showing anything, which is
+  // indistinguishable from "no data yet" (see the blank client-dashboard
+  // report below the stats row). This makes a build failure visible with
+  // the actual exception, in debug AND release, so a silent blank section
+  // can actually be diagnosed from a user's screenshot.
+  ErrorWidget.builder = (FlutterErrorDetails details) => Container(
+        color: const Color(0xFFFFEBEE),
+        padding: const EdgeInsets.all(12),
+        alignment: Alignment.center,
+        child: Text(
+          'Failed to load this section:\n${details.exceptionAsString()}',
+          style: const TextStyle(color: Color(0xFFB71C1C), fontSize: 11),
+          textAlign: TextAlign.center,
+        ),
+      );
   runApp(const LibraApp());
 }
 
