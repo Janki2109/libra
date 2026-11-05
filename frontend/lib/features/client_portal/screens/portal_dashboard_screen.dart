@@ -595,7 +595,6 @@ class _HomeTab extends StatelessWidget {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                 _QuickBtn(
                     Icons.gavel_rounded, 'Cases', _green, () => onTabChange(1)),
