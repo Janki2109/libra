@@ -3108,8 +3108,15 @@ class _QuickBtn extends StatelessWidget {
                     blurRadius: 6,
                     offset: const Offset(0, 2))
               ]),
-          child: Stack(clipBehavior: Clip.none, children: [
-            Column(mainAxisSize: MainAxisSize.min, children: [
+          child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+            Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
               Icon(icon, color: color, size: 22),
               const SizedBox(height: 4),
               Text(label,
