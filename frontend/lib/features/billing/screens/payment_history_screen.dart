@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/dio_client.dart';
+import '../../lawyer/utils/android_download.dart';
+import '../../../core/utils/file_opener.dart';
 
 class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
@@ -74,7 +77,12 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                           (p['amount'] ?? 0).toDouble();
                       final method =
                           (p['payment_method'] ?? 'manual').toString();
-                      final status = (p['status'] ?? 'success').toString();
+                      final status =
+                          (p['verification_status'] ?? 'success').toString();
+                      final clientName = (p['client_name'] ?? '').toString();
+                      final invoiceNumber =
+                          (p['invoice_number'] ?? '').toString();
+                      final txnId = (p['transaction_id'] ?? '').toString();
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(14),
@@ -104,26 +112,57 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                                         color: AppColors.success,
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16)),
+                                if (clientName.isNotEmpty)
+                                  Text(
+                                      invoiceNumber.isNotEmpty
+                                          ? '$clientName • $invoiceNumber'
+                                          : clientName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600)),
                                 Text(
                                     '${_methodLabel(method)} • ${_safe(p['payment_date'])}',
                                     style: const TextStyle(
                                         color: AppColors.textMuted,
                                         fontSize: 11)),
+                                if (txnId.isNotEmpty)
+                                  Text('Txn: $txnId',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 10)),
                               ],
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.success.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(status.toUpperCase(),
-                                style: const TextStyle(
-                                    color: AppColors.success,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700)),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppColors.success.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(status.toUpperCase(),
+                                    style: const TextStyle(
+                                        color: AppColors.success,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                              const SizedBox(height: 6),
+                              GestureDetector(
+                                onTap: () => _downloadReceipt(
+                                    (p['id'] ?? '').toString()),
+                                child: const Icon(Icons.download_rounded,
+                                    color: AppColors.gold, size: 20),
+                              ),
+                            ],
                           ),
                         ]),
                       );
@@ -131,6 +170,55 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                   ),
                 ),
     );
+  }
+
+  Future<void> _downloadReceipt(String paymentId) async {
+    if (paymentId.isEmpty) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+          child: CircularProgressIndicator(color: AppColors.gold)),
+    );
+    try {
+      final res =
+          await DioClient.instance.get('/payments/$paymentId/receipt');
+      final data = res.data['data'] as Map<String, dynamic>?;
+      final b64 = (data?['file_base64'] ?? '').toString();
+      final fileName = (data?['file_name'] ?? 'receipt.pdf').toString();
+      if (mounted) Navigator.pop(context);
+      if (b64.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Receipt has no content to download'),
+              backgroundColor: AppColors.error));
+        }
+        return;
+      }
+      final bytes = base64Decode(b64);
+      if (await saveToAndroidDownloads(bytes, fileName, 'application/pdf')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('$fileName saved to Downloads'),
+              backgroundColor: AppColors.success));
+        }
+        return;
+      }
+      final result = await openDocumentBytes(
+          bytes: bytes, fileName: fileName, mimeType: 'application/pdf');
+      if (!result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message ?? 'Could not open the receipt'),
+            backgroundColor: AppColors.error));
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Could not download receipt: $e'),
+            backgroundColor: AppColors.error));
+      }
+    }
   }
 
   String _methodLabel(String m) {

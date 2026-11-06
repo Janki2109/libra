@@ -7,6 +7,7 @@ import (
 	"libra/config"
 	"libra/services"
 	"libra/utils"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -513,12 +514,23 @@ func recordConsultationPayment(consultationID string, amountPaise int64) {
 		WHERE u.id = $1::uuid AND cl.firm_id = $2::uuid
 	`, clientUserID, firmID).Scan(&clientRowID)
 
-	config.DB.Exec(`
+	// ON CONFLICT DO NOTHING against the existing
+	// uq_payments_firm_txn (firm_id, transaction_id) unique index: the
+	// transaction_id here is deterministic ("CONSULT_"+consultationID), so a
+	// retried webhook/call that reaches this twice for the same consultation
+	// must not create a second payment row. The Exec result is logged
+	// (not silently dropped) so a real failure — as opposed to the expected
+	// conflict-on-retry case — is actually visible.
+	_, err = config.DB.Exec(`
 		INSERT INTO payments (id, firm_id, invoice_id, client_id, amount,
 		payment_date, payment_method, transaction_id, notes)
 		VALUES ($1, $2::uuid, NULL, $3, $4, CURRENT_DATE, 'consultation', $5, $6)
+		ON CONFLICT (firm_id, transaction_id) WHERE transaction_id IS NOT NULL DO NOTHING
 	`, uuid.New().String(), firmID, clientRowID, float64(amountPaise)/100,
 		"CONSULT_"+consultationID, fmt.Sprintf("%s consultation — %s", consultType, clientName))
+	if err != nil {
+		log.Printf("recordConsultationPayment: insert failed for consultation %s: %v", consultationID, err)
+	}
 }
 
 // notifyConsultationPaid tells the lawyer a paid booking has landed and the

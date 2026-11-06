@@ -162,6 +162,7 @@ func SetupRoutes() *gin.Engine {
 			portal.GET("/my-invoices", controllers.GetMyInvoices)
 			portal.GET("/my-invoices/:id", controllers.GetMyInvoice)
 			portal.GET("/my-invoices/:id/pdf", controllers.ExportMyInvoicePdf)
+			portal.GET("/payments/:id/receipt", controllers.ExportMyPaymentReceiptPdf)
 
 			portal.POST("/book-consultation", controllers.BookConsultation)
 			// Payment-gated booking (Razorpay). The plain /book-consultation
@@ -178,6 +179,7 @@ func SetupRoutes() *gin.Engine {
 			portal.GET("/lawyers/:id/booked-slots", controllers.GetLawyerBookedSlots)
 			portal.GET("/my-consultations", controllers.GetMyConsultations)
 			portal.GET("/my-consultations/:id", controllers.GetConsultation)
+			portal.GET("/my-consultations/:id/receipt", controllers.ExportMyConsultationReceiptPdf)
 			portal.PUT("/my-consultations/:id/cancel", controllers.CancelConsultation)
 			portal.POST("/my-consultations/:id/call-response", controllers.RespondToConsultationCall)
 			// Same handler as the lawyer-side /consultations/:id/call below —
@@ -288,6 +290,7 @@ func SetupRoutes() *gin.Engine {
 			billed.GET("/invoices/:id/pdf", controllers.ExportInvoicePdf)
 			billed.PUT("/invoices/:id", controllers.UpdateInvoice)
 			billed.GET("/payments", controllers.GetPayments)
+			billed.GET("/payments/:id/receipt", controllers.ExportPaymentReceiptPdf)
 			billed.PUT("/payments/:id/verify", controllers.VerifyPayment)
 			billed.POST("/payments/:id/refund", controllers.RefundPayment)
 		}

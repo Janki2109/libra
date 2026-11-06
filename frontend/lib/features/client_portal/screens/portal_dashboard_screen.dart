@@ -1710,6 +1710,64 @@ class _ConsultationPaymentCard extends StatelessWidget {
     return Icons.event_available_rounded;
   }
 
+  // GetMyConsultations never returns payment_method/transaction_id --
+  // they're implementation details of how a consultation payment is
+  // recorded (see recordConsultationPayment on the backend), not fields on
+  // the consultation itself. Both are fully deterministic for any paid
+  // consultation (payment_method is always 'consultation',
+  // transaction_id is always "CONSULT_"+id), so they're reconstructed here
+  // rather than requiring a backend/schema change just to display them.
+  String get _txnId => 'CONSULT_${(consultation['id'] ?? '').toString()}';
+
+  static Future<void> _downloadReceipt(
+      BuildContext context, String consultationId) async {
+    if (consultationId.isEmpty) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: _green)),
+    );
+    try {
+      final res = await DioClient.instance
+          .get('/portal/my-consultations/$consultationId/receipt');
+      final data = res.data['data'] as Map<String, dynamic>?;
+      final b64 = (data?['file_base64'] ?? '').toString();
+      final fileName = (data?['file_name'] ?? 'receipt.pdf').toString();
+      if (context.mounted) Navigator.pop(context);
+      if (b64.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Receipt has no content to download'),
+              backgroundColor: Color(0xFFD9534F)));
+        }
+        return;
+      }
+      final bytes = base64Decode(b64);
+      if (await saveToAndroidDownloads(bytes, fileName, 'application/pdf')) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('$fileName saved to Downloads'),
+              backgroundColor: const Color(0xFF2E8B57)));
+        }
+        return;
+      }
+      final result = await openDocumentBytes(
+          bytes: bytes, fileName: fileName, mimeType: 'application/pdf');
+      if (!result.success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message ?? 'Could not open the receipt'),
+            backgroundColor: const Color(0xFFD9534F)));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Could not download receipt: $e'),
+            backgroundColor: const Color(0xFFD9534F)));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final type = (consultation['consultation_type'] ?? '').toString();
@@ -1761,8 +1819,21 @@ class _ConsultationPaymentCard extends StatelessWidget {
                   style: const TextStyle(color: _textMuted, fontSize: 11)),
             ],
           ]),
+          const SizedBox(height: 2),
+          Text('Consultation payment • Txn: $_txnId',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _textMuted, fontSize: 10)),
         ])),
-        const Icon(Icons.check_circle_rounded, color: color, size: 24),
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.check_circle_rounded, color: color, size: 22),
+          const SizedBox(height: 6),
+          GestureDetector(
+            onTap: () => _downloadReceipt(
+                context, (consultation['id'] ?? '').toString()),
+            child: const Icon(Icons.download_rounded, color: color, size: 20),
+          ),
+        ]),
       ]),
     );
   }
