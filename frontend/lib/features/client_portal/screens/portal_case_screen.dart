@@ -19,6 +19,12 @@ const _gold = Color(0xFFD4A017);
 const _blue = Color(0xFF4A90D9);
 const _red = Color(0xFFD9534F);
 
+String _caseDocFileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
 class PortalCaseScreen extends StatefulWidget {
   const PortalCaseScreen({super.key});
   @override
@@ -1499,6 +1505,17 @@ class _DocCard extends StatelessWidget {
             const SizedBox(width: 6),
             Text(date, style: const TextStyle(color: _textMuted, fontSize: 10)),
           ]),
+          if ((doc['file_type'] ?? '').toString().isNotEmpty ||
+              (doc['file_size'] ?? 0) is num && (doc['file_size'] ?? 0) > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+                [
+                  (doc['file_type'] ?? '').toString().toUpperCase(),
+                  if ((doc['file_size'] ?? 0) is num && (doc['file_size'] ?? 0) > 0)
+                    _caseDocFileSize((doc['file_size'] as num).toInt()),
+                ].where((s) => s.isNotEmpty).join(' · '),
+                style: const TextStyle(color: _textMuted, fontSize: 10)),
+          ],
         ])),
         GestureDetector(
           onTap: () => _download(context, doc),

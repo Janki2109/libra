@@ -48,13 +48,33 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
     // Timer of its own.
     AutoRefreshService.instance
         .register('case_hearings_${widget.caseId}', _refreshHearingsSilently);
+    // Same silent-poll pattern as hearings above: a document the Client
+    // uploads to this case while the Lawyer already has it open used to
+    // only appear after a manual pull-to-refresh or leaving and reopening
+    // the screen — "automatic synchronization" means neither should be
+    // required.
+    AutoRefreshService.instance
+        .register('case_documents_${widget.caseId}', _refreshDocumentsSilently);
   }
 
   @override
   void dispose() {
     AutoRefreshService.instance.unregister('case_hearings_${widget.caseId}');
+    AutoRefreshService.instance.unregister('case_documents_${widget.caseId}');
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshDocumentsSilently() async {
+    try {
+      final res = await DioClient.instance
+          .get('/documents', queryParameters: {'case_id': widget.caseId});
+      if (!mounted) return;
+      setState(() => _documents = res.data['data'] ?? []);
+    } catch (_) {
+      // Silent background poll — a transient failure here isn't worth a
+      // visible error; the next tick or a manual pull-to-refresh recovers.
+    }
   }
 
   Future<void> _refreshHearingsSilently() async {
@@ -1009,7 +1029,20 @@ class _DocumentsTab extends StatelessWidget {
                                       fontSize: 14),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis),
-                              Text(d['category'] ?? '',
+                              Text(
+                                  [
+                                    (d['category'] ?? '').toString(),
+                                    (d['file_type'] ?? '')
+                                        .toString()
+                                        .toUpperCase(),
+                                    (d['created_at'] ?? '')
+                                                .toString()
+                                                .length >=
+                                            10
+                                        ? (d['created_at'] as String)
+                                            .substring(0, 10)
+                                        : '',
+                                  ].where((s) => s.isNotEmpty).join(' · '),
                                   style: const TextStyle(
                                       color: _textMuted, fontSize: 12)),
                               if ((d['uploader_name'] ?? '')
