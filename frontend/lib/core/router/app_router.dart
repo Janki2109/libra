@@ -90,6 +90,8 @@ import '../../features/student/screens/lawyer_profile_screen.dart';
 import '../../features/lawyer/screens/ai_legal_research_screen.dart';
 import '../../features/lawyer/screens/research_history_screen.dart';
 import '../../features/lawyer/screens/ai_drafting_screen.dart';
+import '../../features/lawyer/screens/smart_draft_history_screen.dart';
+import '../../features/lawyer/screens/smart_draft_history_detail_screen.dart';
 import '../../features/lawyer/screens/ecourts_screen.dart';
 import '../../features/lawyer/screens/consultation_management_screen.dart';
 import '../../features/earnings/screens/lawyer_earnings_screen.dart';
@@ -516,6 +518,13 @@ class AppRouter {
         GoRoute(
             path: '/lawyer/ai-drafting',
             builder: (_, __) => const AIDraftingScreen()),
+        GoRoute(
+            path: '/smart-draft/history',
+            builder: (_, __) => const SmartDraftHistoryScreen()),
+        GoRoute(
+            path: '/smart-draft/history/:id',
+            builder: (_, state) => SmartDraftHistoryDetailScreen(
+                itemId: state.pathParameters['id']!)),
         GoRoute(
             path: '/lawyer/ecourts', builder: (_, __) => const EcourtsScreen()),
         GoRoute(

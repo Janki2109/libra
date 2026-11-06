@@ -455,6 +455,17 @@ class _AIDraftingScreenState extends State<AIDraftingScreen> {
         _toolLoading = false;
         _toolGenerated = true;
       });
+      // Only reached on a genuinely non-empty success (the empty-result
+      // branch above already returned) -- a failed request skips straight
+      // to the catch block and never reaches this line either.
+      _autoSaveHistory(
+        activityType: _activeTool == 'ocr' ? 'file_analysis' : 'tool',
+        title: _toolTitle(_activeTool),
+        inputText: _activeTool == 'ocr'
+            ? 'Uploaded document image'
+            : _toolTextCtrl.text.trim(),
+        outputText: content,
+      );
     } catch (e) {
       setState(() => _toolLoading = false);
       if (mounted) {
@@ -706,11 +717,23 @@ Generate the complete document now:''';
       // never talks to the AI provider directly.
       final response = await DioClient.instance
           .post('/ai/draft', data: {'prompt': prompt});
+      final content = response.data['data']?['content'] ?? '';
       setState(() {
-        _generatedDoc = response.data['data']?['content'] ?? '';
+        _generatedDoc = content;
         _loading = false;
         _generated = true;
       });
+      // Automatic save to history on success only -- never for an empty or
+      // failed generation, which never reaches this line at all (an
+      // exception below skips straight to the catch block).
+      if (content.toString().trim().isNotEmpty) {
+        _autoSaveHistory(
+          activityType: 'draft',
+          title: (_selectedTemplate?['name'] ?? 'Draft').toString(),
+          inputText: prompt,
+          outputText: content.toString(),
+        );
+      }
     } catch (e) {
       setState(() {
         _loading = false;
@@ -720,6 +743,44 @@ Generate the complete document now:''';
             SnackBar(content: Text('Error: $e'), backgroundColor: _error));
       }
     }
+  }
+
+  String _toolTitle(String? toolKey) {
+    final match = _aiTools.firstWhere((t) => t['key'] == toolKey,
+        orElse: () => const {'name': 'AI Tool'});
+    return (match['name'] ?? 'AI Tool').toString();
+  }
+
+  /// Fire-and-forget save to Smart Draft History right after a generation
+  /// actually succeeds (every call site above already gated this on
+  /// non-empty content). Deliberately not awaited by its caller and never
+  /// shows its own error -- a history-save hiccup must never block or
+  /// interrupt the lawyer from seeing/using the result they just got; the
+  /// worst case is just a gap in history, not a broken Smart Draft screen.
+  void _autoSaveHistory({
+    required String activityType,
+    required String title,
+    required String inputText,
+    required String outputText,
+    String fileName = '',
+    String fileContent = '',
+    String mimeType = '',
+  }) {
+    () async {
+      try {
+        await DioClient.instance.post('/ai/history', data: {
+          'activity_type': activityType,
+          'title': title.isEmpty ? 'Untitled' : title,
+          'input_text': inputText,
+          'output_text': outputText,
+          'file_name': fileName,
+          'file_content': fileContent,
+          'mime_type': mimeType,
+        });
+      } catch (e) {
+        debugPrint('Smart Draft history auto-save failed: $e');
+      }
+    }();
   }
 
   void _copyDoc() {
@@ -825,6 +886,13 @@ Generate the complete document now:''';
                       child: const Text('Templates',
                           style: TextStyle(
                               color: _goldLight, fontWeight: FontWeight.w700)),
+                    )
+                  else
+                    IconButton(
+                      tooltip: 'History',
+                      icon: const Icon(Icons.history_rounded,
+                          color: Colors.white),
+                      onPressed: () => context.push('/smart-draft/history'),
                     ),
                 ]),
               )),
