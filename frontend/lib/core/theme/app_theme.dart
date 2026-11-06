@@ -99,10 +99,20 @@ class AppTheme {
       // SnackBars with no explicit color of their own — without it, those
       // would keep Material 3's light default inverseSurface background,
       // which white text is just as unreadable against.
-      snackBarTheme: const SnackBarThemeData(
+      snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.surfaceLight,
-        contentTextStyle: TextStyle(color: Colors.white),
+        contentTextStyle: const TextStyle(color: Colors.white),
         actionTextColor: Colors.white,
+        // A handful of SnackBars across the app (e.g. invoice_details_screen,
+        // dashboard_screen) never set their own `behavior`, which defaults
+        // to SnackBarBehavior.fixed — docked flush to the very bottom edge,
+        // full-width, no margin, no rounding. On some devices that sits
+        // right at or under the system gesture/nav bar. Every other SnackBar
+        // in the app already sets floating+rounded explicitly; this makes
+        // that the default for the ones that don't, instead of editing each
+        // call site individually.
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
