@@ -33,14 +33,17 @@ func nonEmptyName(s string) bool {
 	return len(strings.TrimSpace(s)) >= 2
 }
 
-// validatePaymentDetails checks all six mandatory payment fields together
-// and returns the first problem found as a user-facing message, or "" if
-// every field is present and well-formed. It never claims the account is
-// real/active — only that the submitted values are plausible, well-formed
-// payment instructions. "Verified" in the business sense (the bank account
-// actually exists and belongs to this lawyer) is explicitly out of scope:
-// there is no bank-side verification call anywhere in this codebase, and
-// this function must never be read as providing one.
+// validatePaymentDetails requires at least one complete, well-formed payment
+// method — a UPI ID, or a full set of bank account details — and returns the
+// first problem found as a user-facing message, or "" if that's satisfied.
+// Both are validated whenever both are present, but neither is mandatory on
+// its own: a lawyer who only takes UPI payments, or only bank transfers,
+// isn't forced to fill in the method they don't use. It never claims the
+// account is real/active — only that the submitted values are plausible,
+// well-formed payment instructions. "Verified" in the business sense (the
+// bank account actually exists and belongs to this lawyer) is explicitly
+// out of scope: there is no bank-side verification call anywhere in this
+// codebase, and this function must never be read as providing one.
 func validatePaymentDetails(upiID, accountName, accountNumber, ifsc, bankName, branch string) string {
 	upiID = strings.TrimSpace(upiID)
 	accountName = strings.TrimSpace(accountName)
@@ -49,32 +52,38 @@ func validatePaymentDetails(upiID, accountName, accountNumber, ifsc, bankName, b
 	bankName = strings.TrimSpace(bankName)
 	branch = strings.TrimSpace(branch)
 
-	if upiID == "" {
-		return "UPI ID is required"
+	hasUPI := upiID != ""
+	hasAnyBankField := accountName != "" || accountNumber != "" || ifsc != "" ||
+		bankName != "" || branch != ""
+
+	if !hasUPI && !hasAnyBankField {
+		return "Add a UPI ID or complete bank account details so clients can pay you"
 	}
-	if !upiIDPattern.MatchString(upiID) {
+	if hasUPI && !upiIDPattern.MatchString(upiID) {
 		return "Enter a valid UPI ID (e.g. yourname@upi)"
 	}
-	if !nonEmptyName(accountName) {
-		return "Account holder name is required"
-	}
-	if accountNumber == "" {
-		return "Bank account number is required"
-	}
-	if !accountNumberPattern.MatchString(accountNumber) {
-		return "Enter a valid bank account number (9–18 digits)"
-	}
-	if ifsc == "" {
-		return "IFSC code is required"
-	}
-	if !ifscPattern.MatchString(ifsc) {
-		return "Enter a valid IFSC code (e.g. SBIN0001234)"
-	}
-	if !nonEmptyName(bankName) {
-		return "Bank name is required"
-	}
-	if !nonEmptyName(branch) {
-		return "Branch name is required"
+	if hasAnyBankField {
+		if !nonEmptyName(accountName) {
+			return "Account holder name is required"
+		}
+		if accountNumber == "" {
+			return "Bank account number is required"
+		}
+		if !accountNumberPattern.MatchString(accountNumber) {
+			return "Enter a valid bank account number (9–18 digits)"
+		}
+		if ifsc == "" {
+			return "IFSC code is required"
+		}
+		if !ifscPattern.MatchString(ifsc) {
+			return "Enter a valid IFSC code (e.g. SBIN0001234)"
+		}
+		if !nonEmptyName(bankName) {
+			return "Bank name is required"
+		}
+		if !nonEmptyName(branch) {
+			return "Branch name is required"
+		}
 	}
 	return ""
 }

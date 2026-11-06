@@ -13,11 +13,14 @@ func TestValidatePaymentDetails(t *testing.T) {
 		t.Errorf("expected no error for fully valid details, got %q", msg)
 	}
 
+	// Malformed-UPI and incomplete-bank-field cases: these stay errors
+	// regardless of the "only one method required" rule below, because a
+	// value that *was* entered must still be well-formed/complete -- the
+	// rule only excuses a method that was left entirely blank.
 	cases := []struct {
 		name   string
 		mutate func(upi, acc, ifsc, holder, bank, branch *string)
 	}{
-		{"empty UPI", func(upi, acc, ifsc, holder, bank, branch *string) { *upi = "" }},
 		{"malformed UPI (no @)", func(upi, acc, ifsc, holder, bank, branch *string) { *upi = "lawyerokaxis" }},
 		{"malformed UPI (no handle)", func(upi, acc, ifsc, holder, bank, branch *string) { *upi = "@okaxis" }},
 		{"whitespace-only account holder name", func(upi, acc, ifsc, holder, bank, branch *string) { *holder = "   " }},
@@ -39,6 +42,24 @@ func TestValidatePaymentDetails(t *testing.T) {
 				t.Errorf("%s: expected a validation error, got none", tc.name)
 			}
 		})
+	}
+}
+
+// Exactly one method is required, not both -- a lawyer who only takes UPI
+// shouldn't be forced to also fill in bank details, and vice versa.
+func TestValidatePaymentDetails_EitherMethodAlone(t *testing.T) {
+	if msg := validatePaymentDetails("lawyer@okaxis", "", "", "", "", ""); msg != "" {
+		t.Errorf("UPI alone should be sufficient, got error %q", msg)
+	}
+	if msg := validatePaymentDetails("", "Ramesh Kumar", "123456789012", "SBIN0001234", "SBI", "MG Road"); msg != "" {
+		t.Errorf("complete bank details alone should be sufficient, got error %q", msg)
+	}
+}
+
+// Neither method present at all is still rejected.
+func TestValidatePaymentDetails_NeitherMethod(t *testing.T) {
+	if msg := validatePaymentDetails("", "", "", "", "", ""); msg == "" {
+		t.Error("expected an error when no payment method is provided at all")
 	}
 }
 

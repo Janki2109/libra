@@ -305,6 +305,11 @@ func SetupRoutes() *gin.Engine {
 			// ── Firm ───────────────────────────
 			staffOnly.GET("/firm/bank-details", controllers.GetFirmBankDetails)
 			staffOnly.PUT("/firm/bank-details", controllers.UpdateFirmBankDetails)
+			staffOnly.GET("/firm/payment-profiles", controllers.ListPaymentProfiles)
+			staffOnly.POST("/firm/payment-profiles", controllers.CreatePaymentProfile)
+			staffOnly.PUT("/firm/payment-profiles/:id", controllers.UpdatePaymentProfile)
+			staffOnly.PUT("/firm/payment-profiles/:id/default", controllers.SetDefaultPaymentProfile)
+			staffOnly.DELETE("/firm/payment-profiles/:id", controllers.DeletePaymentProfile)
 
 			// ── Reports ────────────────────────
 			staffOnly.GET("/reports/cases", controllers.GetCaseReport)
