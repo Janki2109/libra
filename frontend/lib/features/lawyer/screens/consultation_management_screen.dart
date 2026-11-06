@@ -482,14 +482,34 @@ class _ConsultationManagementScreenState
                 ),
                 TabBar(
                   controller: _tabCtrl,
+                  isScrollable: false,
                   indicatorColor: const Color(0xFFFFD700),
                   indicatorWeight: 3,
+                  indicatorSize: TabBarIndicatorSize.tab,
                   labelColor: const Color(0xFFFFD700),
                   unselectedLabelColor: Colors.white60,
+                  // Tab's default labelPadding (16px each side) left too
+                  // little room for "Confirmed (N)" in an equally-divided
+                  // third of the screen on narrower devices, so the label
+                  // was clipped at the edge of its segment instead of
+                  // wrapping. FittedBox scales each label down only as
+                  // much as it actually needs (usually not at all on
+                  // normal-width screens) instead of ever clipping, and the
+                  // tighter padding below gives it more room before that's
+                  // needed at all.
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
                   tabs: [
-                    Tab(text: 'Pending (${_pending.length})'),
-                    Tab(text: 'Confirmed (${_confirmed.length})'),
-                    Tab(text: 'History'),
+                    Tab(
+                        child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Pending (${_pending.length})'))),
+                    Tab(
+                        child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Confirmed (${_confirmed.length})'))),
+                    const Tab(
+                        child: FittedBox(
+                            fit: BoxFit.scaleDown, child: Text('History'))),
                   ],
                 ),
               ])),
