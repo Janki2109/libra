@@ -1450,7 +1450,10 @@ class _DocCard extends StatelessWidget {
     final color = _color(doc['file_type'], doc['file_name']);
     final icon = _icon(doc['file_type'], doc['file_name']);
 
-    return Container(
+    return GestureDetector(
+      onTap: () =>
+          context.push('/portal/documents/${doc['id']}/preview'),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1508,6 +1511,7 @@ class _DocCard extends StatelessWidget {
               child: Icon(Icons.download_rounded, color: color, size: 18)),
         ),
       ]),
+      ),
     );
   }
 

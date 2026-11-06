@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/utils/file_opener.dart';
+import '../../../core/widgets/document_preview_body.dart';
 import '../../lawyer/utils/android_download.dart';
 
 class ViewDocumentScreen extends StatefulWidget {
@@ -53,6 +54,12 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
     final type = (_doc?['file_type'] ?? '').toString().toLowerCase();
     return mime.startsWith('image/') ||
         ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(type);
+  }
+
+  bool get _isPdf {
+    final mime = (_doc?['mime_type'] ?? '').toString();
+    final type = (_doc?['file_type'] ?? '').toString().toLowerCase();
+    return mime == 'application/pdf' || type == 'pdf';
   }
 
   Uint8List? get _bytes {
@@ -217,7 +224,60 @@ class _ViewDocumentScreenState extends State<ViewDocumentScreen> {
                   ? const Center(
                       child: Text('Document not found',
                           style: TextStyle(color: AppColors.textMuted)))
-                  : SingleChildScrollView(
+                  : _isPdf && _bytes != null
+                      ? Column(children: [
+                          Expanded(
+                            child: Container(
+                              color: Colors.black,
+                              child: DocumentPreviewBody(
+                                bytes: _bytes!,
+                                isPdf: true,
+                                isImage: false,
+                                unsupportedFallback: const SizedBox(),
+                              ),
+                            ),
+                          ),
+                          SafeArea(
+                            top: false,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _downloading ? null : _download,
+                                    icon: _downloading
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: AppColors.gold))
+                                        : const Icon(Icons.download_rounded,
+                                            color: AppColors.gold, size: 20),
+                                    label: Text(
+                                        _downloading
+                                            ? 'Saving...'
+                                            : 'Download',
+                                        style: const TextStyle(
+                                            color: AppColors.gold,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(
+                                          color: AppColors.gold),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
+                                    ),
+                                  ),
+                                ),
+                              ]),
+                            ),
+                          ),
+                        ])
+                      : SingleChildScrollView(
                       padding: const EdgeInsets.all(16),
                       child: Column(children: [
                         if (_isImage && _bytes != null)

@@ -1460,7 +1460,10 @@ class _DocCard extends StatelessWidget {
     final dateStr = date.length >= 10 ? date.substring(0, 10) : '';
     final url = doc['file_url'] ?? '';
 
-    return Container(
+    return GestureDetector(
+      onTap: () =>
+          context.push('/portal/documents/${doc['id']}/preview'),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1524,6 +1527,7 @@ class _DocCard extends StatelessWidget {
               child: Icon(Icons.download_rounded, color: color, size: 16)),
         ),
       ]),
+      ),
     );
   }
 

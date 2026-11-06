@@ -45,6 +45,7 @@ import '../../features/client_portal/screens/portal_dashboard_screen.dart';
 import '../../features/client_portal/screens/portal_case_screen.dart';
 import '../../features/client_portal/screens/portal_invoices_screen.dart';
 import '../../features/client_portal/screens/portal_documents_screen.dart';
+import '../../features/client_portal/screens/portal_document_preview_screen.dart';
 import '../../features/client_portal/screens/incoming_call_screen.dart';
 import '../../features/calls/screens/call_screen.dart';
 import '../../features/client_portal/screens/portal_messages_screen.dart';
@@ -292,6 +293,10 @@ class AppRouter {
         GoRoute(
             path: '/portal/documents',
             builder: (_, __) => const PortalDocumentsScreen()),
+        GoRoute(
+            path: '/portal/documents/:id/preview',
+            builder: (_, state) => PortalDocumentPreviewScreen(
+                documentId: state.pathParameters['id']!)),
         GoRoute(
             path: '/portal/messages',
             builder: (_, __) => const PortalMessagesScreen()),

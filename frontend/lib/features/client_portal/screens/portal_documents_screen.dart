@@ -432,7 +432,9 @@ class _DocCard extends StatelessWidget {
     final category = doc['category'] ?? doc['file_type'] ?? 'General';
     final date = doc['created_at']?.toString().substring(0, 10) ?? '';
 
-    return Container(
+    return GestureDetector(
+      onTap: () => context.push('/portal/documents/${doc['id']}/preview'),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -498,6 +500,7 @@ class _DocCard extends StatelessWidget {
               child: Icon(Icons.more_vert_rounded, color: color, size: 18)),
         ),
       ]),
+      ),
     );
   }
 
@@ -545,11 +548,11 @@ class _DocCard extends StatelessWidget {
                   color: _green, size: 20)),
           title: const Text('Open / View',
               style: TextStyle(color: _textPri, fontWeight: FontWeight.w600)),
-          subtitle: const Text('Open or download this document',
+          subtitle: const Text('Preview this document in the app',
               style: TextStyle(color: _textMuted, fontSize: 12)),
-          onTap: () async {
+          onTap: () {
             Navigator.pop(context);
-            await _openDocument(context, doc);
+            context.push('/portal/documents/${doc['id']}/preview');
           },
         ),
         ListTile(
@@ -580,50 +583,6 @@ class _DocCard extends StatelessWidget {
     if (fromServer.isNotEmpty) return fromServer;
     return _extToMime[_extOf(doc['file_name'] ?? '')] ??
         'application/octet-stream';
-  }
-
-  Future<void> _openDocument(BuildContext context, dynamic doc) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) =>
-          const Center(child: CircularProgressIndicator(color: _green)),
-    );
-    try {
-      final res =
-          await DioClient.instance.get('/portal/documents/${doc['id']}');
-      final data = res.data['data'] as Map<String, dynamic>?;
-      final content = (data?['file_content'] ?? '').toString();
-      if (context.mounted) Navigator.pop(context); // close loading dialog
-
-      if (content.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('This document has no file content to open'),
-              backgroundColor: Color(0xFFD9534F)));
-        }
-        return;
-      }
-      final bytes = base64Decode(content);
-      final result = await openDocumentBytes(
-        bytes: bytes,
-        fileName: (doc['file_name'] ?? 'document').toString(),
-        mimeType: _mimeTypeOf(doc, data),
-      );
-      if (!result.success && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                result.message ?? 'Could not open this file on your device'),
-            backgroundColor: const Color(0xFFD9534F)));
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // close loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(DioClient.describeError(e)),
-            backgroundColor: const Color(0xFFD9534F)));
-      }
-    }
   }
 
   /// Saves the document straight to the device's Downloads folder on
