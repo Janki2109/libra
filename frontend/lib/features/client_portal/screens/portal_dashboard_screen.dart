@@ -271,18 +271,57 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
     ];
 
     // The bottom-nav tabs (Cases/Docs/Bills/Chat/Profile) are a plain index
-    // swap, not a go_router push — so without this, go_router's Navigator
-    // always has "nothing to pop" the moment you're anywhere but Home, and
-    // back skipped straight past every tab to main.dart's root "Exit app?"
-    // dialog. This intercepts back first: any tab but Home returns to Home,
-    // same as the rest of the app's "go back a page at a time"; only back
-    // from Home itself (nothing left for this screen to undo) falls through
-    // to that root exit confirmation.
+    // swap, not a go_router push, and this dashboard is always the bottom
+    // of the stack (login replaces the whole stack via context.go(), so
+    // nothing sits beneath it). canPop: _selectedIndex == 0 used to let the
+    // pop go through natively on the Home tab — but with nothing beneath
+    // this route, "letting the pop go through" means Android just finishes
+    // the Activity immediately, with no dialog: main.dart's own "Exit app?"
+    // PopScope sits OUTSIDE go_router's Navigator/ModalRoute tree, and
+    // PopScope silently never registers (and never intercepts anything)
+    // without a ModalRoute ancestor, so that fallback never actually ran on
+    // any screen. canPop is unconditionally false here instead: every back
+    // press is intercepted and handled locally — off Home it resets to
+    // Home, same as before; on Home it shows the exit confirmation itself
+    // rather than deferring to a dialog that was never reachable.
     return PopScope(
-      canPop: _selectedIndex == 0,
-      onPopInvokedWithResult: (didPop, _) {
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        setState(() => _selectedIndex = 0);
+        if (_selectedIndex != 0) {
+          setState(() => _selectedIndex = 0);
+          return;
+        }
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: _bgCard,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: const Text('Exit app?',
+                style:
+                    TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
+            content: const Text('Are you sure you want to exit?',
+                style: TextStyle(color: _textMuted)),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('No',
+                      style: TextStyle(color: _textMuted))),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: _green,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10))),
+                child: const Text('Yes',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true) SystemNavigator.pop();
       },
       child: Scaffold(
         backgroundColor: _bg,
