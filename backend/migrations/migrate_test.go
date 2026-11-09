@@ -57,6 +57,7 @@ func TestAllMigrationsAreEmbedded(t *testing.T) {
 		"039_payment_profiles.sql",
 		"040_smart_draft_history.sql",
 		"041_document_client_visibility.sql",
+		"042_fix_corrupted_document_data_uri.sql",
 	}
 
 	if len(names) != len(want) {

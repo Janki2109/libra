@@ -136,10 +136,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (success && mounted) {
       setState(() => _uploadingDoc = true);
+      // Raw base64 only -- UploadDocument stores file_content verbatim and
+      // the Documents list later decodes it straight with base64Decode(), so
+      // a "data:<mime>;base64,<...>" prefix here (as this used to send)
+      // corrupted every registration document's stored content: the ':',
+      // ';' and ',' characters aren't valid base64, so opening/previewing/
+      // downloading it failed every single time, even though the document
+      // still showed up in the list by name/date (those come from separate
+      // metadata columns, never decoded).
       final docOk = await auth.uploadVerificationDocument(
         fileName: _docFileName!,
         mimeType: _docMimeType,
-        base64Content: 'data:$_docMimeType;base64,${base64Encode(_docBytes!)}',
+        base64Content: base64Encode(_docBytes!),
       );
       if (mounted) setState(() => _uploadingDoc = false);
       if (!docOk && mounted) {

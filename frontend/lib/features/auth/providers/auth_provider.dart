@@ -261,11 +261,27 @@ class AuthProvider extends ChangeNotifier {
     required String base64Content,
   }) async {
     try {
+      // Defensive: strip an accidental data-URI prefix ("data:<mime>;base64,")
+      // if a caller ever passes one again -- UploadDocument stores this
+      // string verbatim and it's later fed straight to base64Decode(), which
+      // ':' ';' ',' break.
+      final commaIndex = base64Content.indexOf(',');
+      final cleanContent = base64Content.startsWith('data:') && commaIndex != -1
+          ? base64Content.substring(commaIndex + 1)
+          : base64Content;
+      // file_type is a short extension ('jpg'/'png'), matching every other
+      // upload path and what the Documents list's icon/color lookup expects
+      // -- sending the full mime string here previously left every
+      // registration document rendering with the generic fallback icon.
+      final dotIndex = fileName.lastIndexOf('.');
+      final ext = dotIndex != -1 && dotIndex != fileName.length - 1
+          ? fileName.substring(dotIndex + 1).toLowerCase()
+          : (mimeType.contains('png') ? 'png' : 'jpg');
       final response =
           await DioClient.instance.post('/documents/upload', data: {
         'file_name': fileName,
-        'file_type': mimeType,
-        'file_content': base64Content,
+        'file_type': ext,
+        'file_content': cleanContent,
         'mime_type': mimeType,
         'category': 'lawyer_verification',
         'description': 'Professional/Bar Council verification document',
