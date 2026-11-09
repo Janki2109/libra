@@ -170,3 +170,80 @@ func TestMarkNotificationRead_SucceedsForOwner(t *testing.T) {
 		t.Errorf("expected 200 for the actual owner, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// Role-labeled matrix per the explicit "Lawyer A/B, Client A/B, Student A/B"
+// audit requirement. GetNotifications and MarkNotificationRead scope purely
+// by the authenticated user_id -- role never enters either query -- which is
+// exactly why cross-role isolation holds for free: a Client's own id can
+// never match a Lawyer's or Student's row regardless of firm, case, or
+// booking relationship. This exercises that against every pair, named by
+// role, instead of only the two anonymous ids above.
+func TestNotificationIsolation_AcrossAllSixAccounts(t *testing.T) {
+	type account struct {
+		label, id string
+	}
+	accounts := []account{
+		{"Lawyer A", "a1111111-1111-1111-1111-111111111111"},
+		{"Lawyer B", "a2222222-2222-2222-2222-222222222222"},
+		{"Client A", "c1111111-1111-1111-1111-111111111111"},
+		{"Client B", "c2222222-2222-2222-2222-222222222222"},
+		{"Student A", "d1111111-1111-1111-1111-111111111111"},
+		{"Student B", "d2222222-2222-2222-2222-222222222222"},
+	}
+
+	for _, owner := range accounts {
+		for _, caller := range accounts {
+			owner, caller := owner, caller
+			same := owner.id == caller.id
+			t.Run(caller.label+"_reads_"+owner.label+"_notifications", func(t *testing.T) {
+				mock := withMockDB(t)
+				mock.ExpectQuery(`FROM notifications WHERE user_id=\$1::uuid`).
+					WithArgs(owner.id).
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "title", "message", "type", "is_read", "created_at",
+						"reference_id", "reference_type",
+					}))
+
+				c, w := ginContextWithUser(caller.id)
+				GetNotifications(c)
+
+				if same {
+					if w.Code != http.StatusOK {
+						t.Errorf("%s reading their own notifications should succeed, got %d", caller.label, w.Code)
+					}
+				} else if w.Code == http.StatusOK {
+					t.Errorf("%s must not be able to read %s's notifications", caller.label, owner.label)
+				}
+			})
+
+			t.Run(caller.label+"_marks_read_"+owner.label+"_notification", func(t *testing.T) {
+				notifID := "99999999-9999-9999-9999-999999999999"
+				mock := withMockDB(t)
+				rowsAffected := int64(0)
+				if same {
+					rowsAffected = 1
+				}
+				mock.ExpectExec(`UPDATE notifications SET is_read=true WHERE id=\$1::uuid AND user_id=\$2::uuid`).
+					WithArgs(notifID, caller.id).
+					WillReturnResult(sqlmock.NewResult(0, rowsAffected))
+
+				gin.SetMode(gin.TestMode)
+				w := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(w)
+				c.Request = httptest.NewRequest(http.MethodPut, "/notifications/"+notifID+"/read", nil)
+				c.Params = gin.Params{{Key: "id", Value: notifID}}
+				c.Set("user_id", caller.id)
+
+				MarkNotificationRead(c)
+
+				if same {
+					if w.Code != http.StatusOK {
+						t.Errorf("%s marking their own notification should succeed, got %d", caller.label, w.Code)
+					}
+				} else if w.Code != http.StatusNotFound {
+					t.Errorf("%s marking %s's notification must 404, got %d", caller.label, owner.label, w.Code)
+				}
+			})
+		}
+	}
+}
