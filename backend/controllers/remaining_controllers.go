@@ -539,6 +539,63 @@ func GetInvoice(c *gin.Context) {
 	utils.Success(c, http.StatusOK, "Invoice fetched", inv)
 }
 
+// GetInvoicePayments — the Lawyer-facing "Invoice-wise Payment History".
+// GetInvoice above only ever surfaced the single latest *razorpay* payment
+// (a LATERAL ... LIMIT 1 filtered to payment_method='razorpay'), so manual/
+// bank-transfer payments (recorded by VerifyPayment) never appeared at all,
+// and a second or third payment against the same invoice (partial payments)
+// was always invisible even for razorpay — only the most recent row showed.
+// Every payment is already written to the `payments` table by whichever
+// path records it (VerifyPayment, VerifyRazorpayPayment, PayInvoiceWithoutGateway);
+// this just lists them all for the invoice instead of adding a new table.
+func GetInvoicePayments(c *gin.Context) {
+	id := c.Param("id")
+	firmID, ok := requireFirmResource(c, tblInvoices, id)
+	if !ok {
+		return
+	}
+
+	rows, err := config.DB.Query(`
+		SELECT p.id, COALESCE(p.transaction_id,''), p.amount, p.payment_date::text,
+		       COALESCE(p.payment_method,''), COALESCE(p.verification_status,'verified'),
+		       COALESCE(p.razorpay_order_id,''), COALESCE(p.refund_status,''),
+		       COALESCE(p.refunded_amount,0), COALESCE(p.notes,''), p.created_at::text
+		FROM payments p
+		WHERE p.invoice_id = $1::uuid AND p.firm_id = $2::uuid
+		ORDER BY p.created_at ASC
+	`, id, firmID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to fetch payment history", err.Error())
+		return
+	}
+	defer rows.Close()
+
+	type PaymentRecord struct {
+		ID                 string  `json:"id"`
+		TransactionID      string  `json:"transaction_id"`
+		Amount             float64 `json:"amount"`
+		PaymentDate        string  `json:"payment_date"`
+		PaymentMethod      string  `json:"payment_method"`
+		VerificationStatus string  `json:"verification_status"`
+		RazorpayOrderID    string  `json:"razorpay_order_id"`
+		RefundStatus       string  `json:"refund_status"`
+		RefundedAmount     float64 `json:"refunded_amount"`
+		Notes              string  `json:"notes"`
+		CreatedAt          string  `json:"created_at"`
+	}
+	payments := []PaymentRecord{}
+	for rows.Next() {
+		var p PaymentRecord
+		if err := rows.Scan(&p.ID, &p.TransactionID, &p.Amount, &p.PaymentDate,
+			&p.PaymentMethod, &p.VerificationStatus, &p.RazorpayOrderID,
+			&p.RefundStatus, &p.RefundedAmount, &p.Notes, &p.CreatedAt); err != nil {
+			continue
+		}
+		payments = append(payments, p)
+	}
+	utils.Success(c, http.StatusOK, "Payment history fetched", payments)
+}
+
 func UpdateInvoice(c *gin.Context) {
 	id := c.Param("id")
 	firmID, ok := requireFirmResource(c, tblInvoices, id)

@@ -15,6 +15,7 @@ class InvoiceDetailsScreen extends StatefulWidget {
 
 class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
   Map<String, dynamic>? _invoice;
+  List<dynamic> _payments = [];
   bool _loading = true;
   bool _printing = false;
 
@@ -29,9 +30,20 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
       // The API path is /invoices/:id. '/billing/...' is the app's own route
       // name, and calling it as an endpoint 404'd every time — this screen
       // could never load an invoice.
-      final res = await DioClient.instance.get('/invoices/${widget.invoiceId}');
+      //
+      // GetInvoice alone only ever carried the single latest *razorpay*
+      // payment — a manual/bank-transfer payment the lawyer verified never
+      // showed up here at all, and a second or third payment against the
+      // same invoice (partial payments) was invisible even for razorpay.
+      // /invoices/:id/payments lists every row from the `payments` table
+      // for this invoice instead.
+      final results = await Future.wait([
+        DioClient.instance.get('/invoices/${widget.invoiceId}'),
+        DioClient.instance.get('/invoices/${widget.invoiceId}/payments'),
+      ]);
       setState(() {
-        _invoice = res.data['data'];
+        _invoice = results[0].data['data'];
+        _payments = results[1].data['data'] ?? [];
         _loading = false;
       });
     } catch (e) {
@@ -245,6 +257,21 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                                     color: AppColors.gold, fontSize: 11))),
                       ]),
                     ),
+                    if (_payments.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _Card(children: [
+                        const Text('Payment History',
+                            style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 10),
+                        for (int i = 0; i < _payments.length; i++) ...[
+                          if (i > 0) const Divider(color: AppColors.border),
+                          _PaymentRow(_payments[i] as Map<String, dynamic>),
+                        ],
+                      ]),
+                    ],
                     if ((inv['description'] ?? '').isNotEmpty) ...[
                       const SizedBox(height: 12),
                       _Card(children: [
@@ -354,6 +381,75 @@ class _Card extends StatelessWidget {
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.start, children: children),
       );
+}
+
+class _PaymentRow extends StatelessWidget {
+  final Map<String, dynamic> p;
+  const _PaymentRow(this.p);
+
+  Color _statusColor(String s) {
+    switch (s) {
+      case 'verified':
+        return AppColors.success;
+      case 'rejected':
+        return AppColors.error;
+      default:
+        return AppColors.gold;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final refundStatus = (p['refund_status'] ?? '').toString();
+    final verification = (p['verification_status'] ?? 'verified').toString();
+    final status = refundStatus.isNotEmpty ? refundStatus : verification;
+    final date = (p['payment_date'] ?? p['created_at'] ?? '').toString();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('₹${(p['amount'] ?? 0).toDouble().toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                    color: _statusColor(status).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text(status.toUpperCase(),
+                    style: TextStyle(
+                        color: _statusColor(status),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+              '${(p['payment_method'] ?? '').toString().toUpperCase()} • '
+              '${date.length >= 10 ? date.substring(0, 10) : date}',
+              style: const TextStyle(
+                  color: AppColors.textMuted, fontSize: 12)),
+          if ((p['transaction_id'] ?? '').toString().isNotEmpty)
+            Text('Ref: ${p['transaction_id']}',
+                style: const TextStyle(
+                    color: AppColors.textMuted, fontSize: 11)),
+          if (refundStatus.isNotEmpty &&
+              (p['refunded_amount'] ?? 0).toDouble() > 0)
+            Text(
+                'Refunded: ₹${(p['refunded_amount']).toDouble().toStringAsFixed(2)}',
+                style: const TextStyle(color: AppColors.error, fontSize: 11)),
+        ],
+      ),
+    );
+  }
 }
 
 class _AmountRow extends StatelessWidget {
