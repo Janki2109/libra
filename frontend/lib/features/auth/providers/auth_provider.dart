@@ -454,6 +454,16 @@ class AuthProvider extends ChangeNotifier {
     // runs on the next rebuild; this guarantees no in-flight/queued refresh
     // call fires against a session that's already being torn down below.
     AutoRefreshService.instance.stop();
+    // Must run before DioClient.reset()/token clear below — it needs the
+    // still-attached Authorization header to identify which account to mark
+    // offline. Without this call, logging out left last_active_at untouched
+    // server-side, so anyone chatting with this account kept seeing them as
+    // "Online" for up to the full presence timeout even though they'd
+    // already signed out. Best-effort: a failed call here must never block
+    // the actual local logout.
+    try {
+      await DioClient.instance.post('/auth/logout');
+    } catch (_) {}
     await FcmService.instance.clearToken();
     await StorageService.clearAll();
     await TrialService.clear();

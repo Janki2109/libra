@@ -908,7 +908,24 @@ func UpdateProfile(c *gin.Context) {
 }
 
 // ─── LOGOUT ──────────────────────────────────
+// Previously a pure no-op: it never touched last_active_at, so a user who
+// logged out still showed as "Online" to anyone chatting with them for up
+// to onlineWindow (2 minutes, see chat_controller.go) afterward -- the
+// presence poll has no way to know the account logged out, only that no
+// new authenticated request has arrived yet. This route sits on the public
+// /auth group (logout must still succeed even with a slightly stale token),
+// so the token is parsed here directly, the same way AuthMiddleware does,
+// rather than moving the route under full middleware. A missing/invalid
+// token is not an error here -- the client-side logout proceeds regardless,
+// this is just best-effort immediate presence cleanup.
 func Logout(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) == 2 && parts[0] == "Bearer" {
+		if claims, err := utils.ValidateToken(parts[1]); err == nil && claims.UserID != "" {
+			config.DB.Exec(`UPDATE users SET last_active_at = NULL WHERE id = $1::uuid`, claims.UserID)
+		}
+	}
 	utils.Success(c, http.StatusOK, "Logged out successfully", nil)
 }
 
