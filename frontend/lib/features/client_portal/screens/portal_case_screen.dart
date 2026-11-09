@@ -56,12 +56,18 @@ class _PortalCaseScreenState extends State<PortalCaseScreen> {
     }
   }
 
+  // Previously pushed via a raw Navigator.push(MaterialPageRoute(...)),
+  // bypassing go_router entirely even though every other Client route
+  // (including this very screen) is pushed through it. go_router tracks its
+  // own declarative match list and doesn't know an imperative route sits on
+  // top; that mismatch is what let the real previous-screen/back chain
+  // (Dashboard -> Cases -> Case Detail -> back -> Cases -> back -> Dashboard)
+  // misbehave at runtime despite each screen's own back button looking
+  // correct in isolation. Routing this through context.push instead keeps
+  // the whole Client stack inside go_router's own tracked history, so system
+  // back and the AppBar arrow both resolve the same, real previous route.
   void _openCaseDetail(BuildContext context, Map<String, dynamic> c) {
-    Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _CaseDetailScreen(caseData: c),
-        ));
+    context.push('/portal/cases/detail', extra: c);
   }
 
   @override
@@ -340,14 +346,17 @@ class _PortalCaseScreenState extends State<PortalCaseScreen> {
 }
 
 // ── Case Detail Screen ─────────────────────────────
-class _CaseDetailScreen extends StatefulWidget {
+// Public (and routed via go_router at /portal/cases/detail) so system back
+// and the AppBar arrow both pop through go_router's own tracked history
+// instead of an imperative route it doesn't know about.
+class CaseDetailScreen extends StatefulWidget {
   final Map<String, dynamic> caseData;
-  const _CaseDetailScreen({required this.caseData});
+  const CaseDetailScreen({super.key, required this.caseData});
   @override
-  State<_CaseDetailScreen> createState() => _CaseDetailScreenState();
+  State<CaseDetailScreen> createState() => _CaseDetailScreenState();
 }
 
-class _CaseDetailScreenState extends State<_CaseDetailScreen>
+class _CaseDetailScreenState extends State<CaseDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   List<dynamic> _hearings = [];
@@ -461,7 +470,7 @@ class _CaseDetailScreenState extends State<_CaseDetailScreen>
                     IconButton(
                         icon: const Icon(Icons.arrow_back_rounded,
                             color: Colors.white),
-                        onPressed: () => Navigator.pop(context)),
+                        onPressed: () => context.pop()),
                     Expanded(
                         child: Text(c['case_title'] ?? 'Case Details',
                             textAlign: TextAlign.center,

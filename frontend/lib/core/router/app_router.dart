@@ -290,6 +290,11 @@ class AppRouter {
             path: '/portal/cases',
             builder: (_, __) => const PortalCaseScreen()),
         GoRoute(
+          path: '/portal/cases/detail',
+          builder: (_, state) => CaseDetailScreen(
+              caseData: (state.extra as Map<String, dynamic>?) ?? const {}),
+        ),
+        GoRoute(
             path: '/portal/invoices',
             builder: (_, __) => const PortalInvoicesScreen()),
         GoRoute(
