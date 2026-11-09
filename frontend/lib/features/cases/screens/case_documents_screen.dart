@@ -49,6 +49,25 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
     }
   }
 
+  // The toggle is optimistic (flips immediately) but reverts on failure —
+  // e.g. the backend rejects turning OFF a client's own upload (it must
+  // always stay visible to that client), which the SnackBar explains rather
+  // than leaving the switch silently stuck in the wrong state.
+  Future<void> _setVisibility(int index, bool visible) async {
+    final previous = _docs[index]['visible_to_client'] ?? false;
+    setState(() => _docs[index]['visible_to_client'] = visible);
+    try {
+      await DioClient.instance.put('/documents/${_docs[index]['id']}/visibility',
+          data: {'visible_to_client': visible});
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _docs[index]['visible_to_client'] = previous);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(DioClient.describeError(e)),
+          backgroundColor: AppColors.error));
+    }
+  }
+
   Color _color(String t) {
     switch (t.toLowerCase()) {
       case 'pdf':
@@ -79,8 +98,9 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.upload_file_rounded, color: AppColors.gold),
-            onPressed: () =>
-                context.push('/documents/upload').then((_) => _load()),
+            onPressed: () => context
+                .push('/documents/upload', extra: {'caseId': widget.caseId})
+                .then((_) => _load()),
           ),
         ],
       ),
@@ -153,11 +173,21 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
                                           fontSize: 10.5,
                                           fontWeight: FontWeight.w600)),
                               ]),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.open_in_new_rounded,
-                                color: AppColors.gold, size: 20),
-                            onPressed: () =>
-                                context.push('/documents/${d['id']}'),
+                          trailing: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.open_in_new_rounded,
+                                    color: AppColors.gold, size: 20),
+                                onPressed: () =>
+                                    context.push('/documents/${d['id']}'),
+                              ),
+                              _VisibilityToggle(
+                                doc: d,
+                                onChanged: (v) => _setVisibility(i, v),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -165,5 +195,40 @@ class _CaseDocumentsScreenState extends State<CaseDocumentsScreen> {
                   ),
                 ),
     );
+  }
+}
+
+// ── Visible to Client toggle ───────────────────────
+// A client's own upload (uploaded_by_role == 'client') is always visible to
+// them — the backend rejects turning it off, so the switch is disabled for
+// those rows rather than letting the lawyer tap something that will just
+// bounce back with an error.
+class _VisibilityToggle extends StatelessWidget {
+  final Map<String, dynamic> doc;
+  final ValueChanged<bool> onChanged;
+  const _VisibilityToggle({required this.doc, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = doc['visible_to_client'] == true;
+    final isClientUpload = (doc['uploaded_by_role'] ?? '') == 'client';
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Text('Visible to Client:',
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+      const SizedBox(width: 4),
+      Text(visible ? 'YES' : 'NO',
+          style: TextStyle(
+              color: visible ? AppColors.success : AppColors.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w700)),
+      Transform.scale(
+        scale: 0.7,
+        child: Switch(
+          value: visible,
+          onChanged: isClientUpload ? null : onChanged,
+          activeThumbColor: AppColors.success,
+        ),
+      ),
+    ]);
   }
 }

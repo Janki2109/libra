@@ -424,8 +424,13 @@ class AppRouter {
         GoRoute(
             path: '/documents', builder: (_, __) => const DocumentListScreen()),
         GoRoute(
-            path: '/documents/upload',
-            builder: (_, __) => const UploadDocumentScreen()),
+          path: '/documents/upload',
+          builder: (_, state) {
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            return UploadDocumentScreen(
+                caseId: extra['caseId'] as String?);
+          },
+        ),
         GoRoute(
           path: '/documents/:id',
           builder: (_, state) =>

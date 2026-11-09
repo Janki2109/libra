@@ -48,7 +48,7 @@ func GetDocuments(c *gin.Context) {
 		       COALESCE(d.file_size,0), COALESCE(d.mime_type,''),
 		       COALESCE(NULLIF(d.uploaded_by_role,''), r.name, ''),
 		       COALESCE(u.name,''),
-		       d.is_archived, d.created_at
+		       d.is_archived, d.created_at, d.visible_to_client
 		FROM documents d
 		LEFT JOIN users u ON u.id = d.uploaded_by
 		LEFT JOIN roles r ON r.id = u.role_id
@@ -65,24 +65,26 @@ func GetDocuments(c *gin.Context) {
 	defer rows.Close()
 
 	type Doc struct {
-		ID             string    `json:"id"`
-		FileName       string    `json:"file_name"`
-		FileType       string    `json:"file_type"`
-		Category       string    `json:"category"`
-		FileURL        string    `json:"file_url"`
-		FileSize       int       `json:"file_size"`
-		MimeType       string    `json:"mime_type"`
-		UploadedByRole string    `json:"uploaded_by_role"`
-		UploaderName   string    `json:"uploader_name"`
-		IsArchived     bool      `json:"is_archived"`
-		CreatedAt      time.Time `json:"created_at"`
+		ID              string    `json:"id"`
+		FileName        string    `json:"file_name"`
+		FileType        string    `json:"file_type"`
+		Category        string    `json:"category"`
+		FileURL         string    `json:"file_url"`
+		FileSize        int       `json:"file_size"`
+		MimeType        string    `json:"mime_type"`
+		UploadedByRole  string    `json:"uploaded_by_role"`
+		UploaderName    string    `json:"uploader_name"`
+		IsArchived      bool      `json:"is_archived"`
+		CreatedAt       time.Time `json:"created_at"`
+		VisibleToClient bool      `json:"visible_to_client"`
 	}
 	docs := []Doc{}
 	for rows.Next() {
 		var d Doc
 		if err := rows.Scan(&d.ID, &d.FileName, &d.FileType, &d.Category,
 			&d.FileURL, &d.FileSize, &d.MimeType,
-			&d.UploadedByRole, &d.UploaderName, &d.IsArchived, &d.CreatedAt); err != nil {
+			&d.UploadedByRole, &d.UploaderName, &d.IsArchived, &d.CreatedAt,
+			&d.VisibleToClient); err != nil {
 			utils.Error(c, http.StatusInternalServerError, "Failed to read documents", err.Error())
 			return
 		}
@@ -107,6 +109,9 @@ func UploadDocument(c *gin.Context) {
 		Category       string `json:"category"`
 		Description    string `json:"description"`
 		UploadedByRole string `json:"uploaded_by_role"`
+		// Only meaningful for a lawyer/firm-staff upload — a client's own
+		// upload is always forced visible below regardless of this field.
+		VisibleToClient *bool `json:"visible_to_client"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
@@ -193,6 +198,19 @@ func UploadDocument(c *gin.Context) {
 	// and vice versa simply by setting the field.
 	uploadedByRole := role
 
+	// A client's own upload is always visible to themselves and their
+	// lawyer — the toggle only exists for the lawyer's own uploads, and a
+	// client has no way to hide their own submission from their lawyer. A
+	// lawyer/firm-staff upload defaults to NOT visible to the client unless
+	// explicitly opted in, per product requirement; the client-supplied
+	// value is never trusted for this (ignored above, forced true below).
+	visibleToClient := false
+	if uploadedByRole == "client" {
+		visibleToClient = true
+	} else if req.VisibleToClient != nil {
+		visibleToClient = *req.VisibleToClient
+	}
+
 	// file_content holds a base64 payload inline in the row. Without a ceiling
 	// a single request can push an arbitrarily large string into Postgres.
 	if len(req.FileContent) > maxInlineDocumentBytes {
@@ -205,12 +223,12 @@ func UploadDocument(c *gin.Context) {
 	_, err := config.DB.Exec(`
 		INSERT INTO documents (id, firm_id, case_id, client_id, uploaded_by,
 		file_name, file_type, file_url, file_content, file_size, mime_type,
-		category, description, uploaded_by_role)
-		VALUES ($1, $2::uuid, $3, $4, $5::uuid, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		category, description, uploaded_by_role, visible_to_client)
+		VALUES ($1, $2::uuid, $3, $4, $5::uuid, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`, id, fID, nullIfEmpty(req.CaseID), nullIfEmpty(req.ClientID), userID,
 		req.FileName, req.FileType, req.FileURL,
 		req.FileContent, req.FileSize, req.MimeType,
-		req.Category, req.Description, uploadedByRole)
+		req.Category, req.Description, uploadedByRole, visibleToClient)
 
 	if err != nil {
 		utils.Error(c, http.StatusInternalServerError, "Failed to upload document", err.Error())
@@ -249,29 +267,31 @@ func GetDocument(c *gin.Context) {
 		return
 	}
 	var d struct {
-		ID             string `json:"id"`
-		FileName       string `json:"file_name"`
-		FileURL        string `json:"file_url"`
-		FileContent    string `json:"file_content"`
-		FileType       string `json:"file_type"`
-		Category       string `json:"category"`
-		FileSize       int    `json:"file_size"`
-		MimeType       string `json:"mime_type"`
-		UploadedByRole string `json:"uploaded_by_role"`
-		UploaderName   string `json:"uploader_name"`
+		ID              string `json:"id"`
+		FileName        string `json:"file_name"`
+		FileURL         string `json:"file_url"`
+		FileContent     string `json:"file_content"`
+		FileType        string `json:"file_type"`
+		Category        string `json:"category"`
+		FileSize        int    `json:"file_size"`
+		MimeType        string `json:"mime_type"`
+		UploadedByRole  string `json:"uploaded_by_role"`
+		UploaderName    string `json:"uploader_name"`
+		VisibleToClient bool   `json:"visible_to_client"`
 	}
 	err := config.DB.QueryRow(`
 		SELECT d.id, d.file_name, COALESCE(d.file_url,''),
 		COALESCE(d.file_content,''), COALESCE(d.file_type,''),
 		COALESCE(d.category,''), COALESCE(d.file_size,0), COALESCE(d.mime_type,''),
-		COALESCE(NULLIF(d.uploaded_by_role,''), r.name, ''), COALESCE(u.name,'')
+		COALESCE(NULLIF(d.uploaded_by_role,''), r.name, ''), COALESCE(u.name,''),
+		d.visible_to_client
 		FROM documents d
 		LEFT JOIN users u ON u.id = d.uploaded_by
 		LEFT JOIN roles r ON r.id = u.role_id
 		WHERE d.id=$1::uuid AND d.firm_id=$2::uuid
 	`, id, firmID).Scan(&d.ID, &d.FileName, &d.FileURL, &d.FileContent,
 		&d.FileType, &d.Category, &d.FileSize, &d.MimeType,
-		&d.UploadedByRole, &d.UploaderName)
+		&d.UploadedByRole, &d.UploaderName, &d.VisibleToClient)
 	// A real DB/connection failure was previously reported as "Document not
 	// found" too, which told a user staring at a network blip that their
 	// file had been deleted.
@@ -300,6 +320,52 @@ func DeleteDocument(c *gin.Context) {
 		return
 	}
 	utils.Success(c, http.StatusOK, "Document archived", nil)
+}
+
+// SetDocumentVisibility — the Lawyer's "Visible to Client: YES/NO" toggle.
+// Enforced here, not just in the Flutter UI: GetMyDocuments/GetMyDocument
+// (the client portal's only read paths for this table) both require
+// visible_to_client=true unless the client uploaded the row themselves, so
+// flipping this is what actually grants/revokes the client's access, not a
+// display-only flag.
+func SetDocumentVisibility(c *gin.Context) {
+	id := c.Param("id")
+	firmID, ok := requireFirmResource(c, tblDocuments, id)
+	if !ok {
+		return
+	}
+	var req struct {
+		VisibleToClient bool `json:"visible_to_client"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	var uploadedByRole string
+	if err := config.DB.QueryRow(
+		`SELECT COALESCE(uploaded_by_role,'') FROM documents WHERE id=$1::uuid AND firm_id=$2::uuid`,
+		id, firmID).Scan(&uploadedByRole); err != nil {
+		utils.Error(c, http.StatusNotFound, "Document not found", "")
+		return
+	}
+	// A client's own upload must always stay visible to that client — the
+	// lawyer's toggle only governs the lawyer's own uploads, never revokes a
+	// client's access to what the client themselves submitted.
+	if uploadedByRole == "client" && !req.VisibleToClient {
+		utils.Error(c, http.StatusBadRequest,
+			"Cannot hide a client's own upload from that client", "")
+		return
+	}
+
+	_, err := config.DB.Exec(
+		`UPDATE documents SET visible_to_client=$1, updated_at=NOW() WHERE id=$2::uuid AND firm_id=$3::uuid`,
+		req.VisibleToClient, id, firmID)
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to update visibility", err.Error())
+		return
+	}
+	utils.Success(c, http.StatusOK, "Visibility updated", gin.H{"visible_to_client": req.VisibleToClient})
 }
 
 // ─── BILLING ─────────────────────────────────

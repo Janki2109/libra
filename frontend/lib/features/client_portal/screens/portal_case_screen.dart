@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -367,6 +368,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 4, vsync: this);
+    // Only the Documents tab (index 3) shows the upload FAB.
+    _tabCtrl.addListener(() => setState(() {}));
     _loadDetails();
   }
 
@@ -529,6 +532,13 @@ class _CaseDetailScreenState extends State<CaseDetailScreen>
                     _buildDocumentsTab(),
                   ])),
       ]),
+      floatingActionButton: _tabCtrl.index == 3
+          ? FloatingActionButton(
+              backgroundColor: _green,
+              onPressed: () => _openUploadSheet(c),
+              child: const Icon(Icons.upload_file_rounded, color: Colors.white),
+            )
+          : null,
     );
   }
 
@@ -1430,6 +1440,229 @@ class _CaseDetailScreenState extends State<CaseDetailScreen>
       const SizedBox(height: 40),
     ]);
   }
+
+  // Previously there was no way to upload a document from inside a case's
+  // own Documents tab at all — the only upload path was the separate
+  // top-level My Documents screen, which has no case picker, so a client
+  // could never attach a file to a specific case from here. This reuses the
+  // same /portal/documents/upload endpoint the top-level screen does, with
+  // case_id/client_id already known from this case, and refreshes the list
+  // on success.
+  void _openUploadSheet(Map<String, dynamic> c) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CaseDocUploadSheet(
+        caseId: widget.caseData['id'].toString(),
+        clientId: (c['client_id'] ?? '').toString(),
+        onUploaded: _loadDetails,
+      ),
+    );
+  }
+}
+
+// ── Case Documents Upload Sheet ────────────────────
+class _CaseDocUploadSheet extends StatefulWidget {
+  final String caseId;
+  final String clientId;
+  final VoidCallback onUploaded;
+  const _CaseDocUploadSheet(
+      {required this.caseId, required this.clientId, required this.onUploaded});
+  @override
+  State<_CaseDocUploadSheet> createState() => _CaseDocUploadSheetState();
+}
+
+class _CaseDocUploadSheetState extends State<_CaseDocUploadSheet> {
+  static const _allowedExt = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+  static const _extToMime = {
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx':
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+  };
+  static const _maxBytes = 6 * 1024 * 1024;
+
+  PlatformFile? _picked;
+  bool _picking = false;
+  bool _uploading = false;
+  double _progress = 0;
+  String? _error;
+
+  String _extOf(String name) {
+    final i = name.lastIndexOf('.');
+    return i == -1 || i == name.length - 1
+        ? ''
+        : name.substring(i + 1).toLowerCase();
+  }
+
+  Future<void> _pick() async {
+    setState(() {
+      _picking = true;
+      _error = null;
+    });
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: _allowedExt,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      final ext = _extOf(file.name);
+      if (!_allowedExt.contains(ext)) {
+        setState(() => _error =
+            'Unsupported file type. Allowed: ${_allowedExt.join(', ').toUpperCase()}');
+        return;
+      }
+      if (file.size > _maxBytes) {
+        setState(() => _error = 'File is too large. Maximum size is 6 MB.');
+        return;
+      }
+      if (file.bytes == null) {
+        setState(() => _error = 'Could not read the selected file.');
+        return;
+      }
+      setState(() => _picked = file);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Future<void> _upload() async {
+    final file = _picked;
+    if (file == null || file.bytes == null) {
+      setState(() => _error = 'Please select a file to upload');
+      return;
+    }
+    setState(() {
+      _uploading = true;
+      _error = null;
+      _progress = 0;
+    });
+    try {
+      final ext = _extOf(file.name);
+      await DioClient.instance.post('/portal/documents/upload', data: {
+        'file_name': file.name,
+        'file_content': base64Encode(file.bytes!),
+        'file_type': ext,
+        'file_size': file.size,
+        'mime_type': _extToMime[ext] ?? 'application/octet-stream',
+        'case_id': widget.caseId,
+        if (widget.clientId.isNotEmpty) 'client_id': widget.clientId,
+        'category': 'General',
+        'description': 'Uploaded by client',
+      }, onSendProgress: (sent, total) {
+        if (total > 0 && mounted) setState(() => _progress = sent / total);
+      });
+      if (mounted) {
+        HapticFeedback.heavyImpact();
+        Navigator.pop(context);
+        widget.onUploaded();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Document uploaded'),
+            backgroundColor: Color(0xFF2E8B57)));
+      }
+    } catch (e) {
+      setState(() {
+        _uploading = false;
+        _error = DioClient.describeError(e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+        decoration: const BoxDecoration(
+          color: _bgCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Upload Document',
+              style: TextStyle(
+                  color: _textPri, fontWeight: FontWeight.w800, fontSize: 18)),
+          const SizedBox(height: 4),
+          const Text('PDF, DOC, DOCX, JPG, JPEG or PNG — up to 6 MB',
+              style: TextStyle(color: _textMuted, fontSize: 12)),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: _picking ? null : _pick,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _green.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: _green.withValues(alpha: 0.3),
+                    style: BorderStyle.solid),
+              ),
+              child: Row(children: [
+                Icon(
+                    _picked == null
+                        ? Icons.add_circle_outline_rounded
+                        : Icons.insert_drive_file_rounded,
+                    color: _green),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                      _picked?.name ?? 'Choose a file',
+                      style: const TextStyle(
+                          color: _textPri, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                if (_picked != null)
+                  Text(_caseDocFileSize(_picked!.size),
+                      style: const TextStyle(color: _textMuted, fontSize: 11)),
+              ]),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!,
+                style: const TextStyle(color: _red, fontSize: 12),
+                textAlign: TextAlign.center),
+          ],
+          if (_uploading) ...[
+            const SizedBox(height: 14),
+            LinearProgressIndicator(
+                value: _progress > 0 ? _progress : null,
+                color: _green,
+                backgroundColor: _green.withValues(alpha: 0.1)),
+          ],
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _uploading ? null : _upload,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _green,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape:
+                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: _uploading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('Upload',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ]),
+      );
 }
 
 // ── Document Card ─────────────────────────────────

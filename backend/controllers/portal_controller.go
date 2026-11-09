@@ -276,6 +276,12 @@ func GetMyDocuments(c *gin.Context) {
 		    WHERE client_id IN (SELECT id FROM clients WHERE lower(email) = $2)
 		  )
 		)
+		-- A lawyer's document for this client's case only shows up here once
+		-- explicitly made visible — the client's own upload (uploaded_by
+		-- matches) always passes regardless, since UploadDocument forces
+		-- visible_to_client=true for a client-role upload anyway, but this
+		-- OR keeps that true even if a row was ever written another way.
+		AND (d.visible_to_client = true OR d.uploaded_by = $1::uuid)
 		AND d.is_archived = false
 		ORDER BY d.created_at DESC
 	`, userID, userEmail)
@@ -367,6 +373,13 @@ func GetMyDocument(c *gin.Context) {
 		      WHERE client_id IN (SELECT id FROM clients WHERE lower(email) = $3)
 		    )
 		  )
+		  -- Same visibility gate as GetMyDocuments: a lawyer document this
+		  -- client would otherwise be "related to" via case/client_id is
+		  -- still blocked from direct fetch-by-id unless explicitly made
+		  -- visible, or the client uploaded it themselves. Never trust the
+		  -- id alone — this is exactly the direct-API-request vector the
+		  -- toggle has to hold against, not just the list view.
+		  AND (d.visible_to_client = true OR d.uploaded_by = $2::uuid)
 	`, id, userID, userEmail).Scan(&d.ID, &d.FileName, &d.FileURL, &d.FileContent,
 		&d.FileType, &d.Category, &d.FileSize, &d.MimeType,
 		&d.UploadedByRole, &d.UploaderName)

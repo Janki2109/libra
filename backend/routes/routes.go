@@ -286,6 +286,7 @@ func SetupRoutes() *gin.Engine {
 			billed.POST("/documents/upload", controllers.UploadDocument)
 			billed.GET("/documents/:id", controllers.GetDocument)
 			billed.DELETE("/documents/:id", controllers.DeleteDocument)
+			billed.PUT("/documents/:id/visibility", controllers.SetDocumentVisibility)
 
 			// ── Billing ────────────────────────
 			// Same ordering rule as /hearings: the literal
