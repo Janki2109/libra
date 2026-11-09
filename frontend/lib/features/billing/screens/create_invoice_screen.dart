@@ -80,7 +80,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           .cast<Map<String, dynamic>?>()
           .firstWhere((p) => p?['is_default'] == true, orElse: () => null);
       if (defaultProfile != null && _selectedProfileId == null) {
-        _applyProfile(defaultProfile, markSelected: true);
+        _applyProfile(defaultProfile['id'] as String, markSelected: true);
       }
     } catch (e) {
       if (mounted) setState(() => _profilesLoading = false);
@@ -88,23 +88,39 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     }
   }
 
-  void _applyProfile(Map<String, dynamic> p, {bool markSelected = true}) {
-    setState(() {
-      _upiIdCtrl.text = (p['upi_id'] ?? '').toString();
-      _accountNameCtrl.text = (p['bank_account_name'] ?? '').toString();
-      // The list/get response masks the account number (e.g. "XXXXXX7890")
-      // for display -- it is never safe to silently resubmit that masked
-      // value as if it were the real number, so this field is intentionally
-      // left for the lawyer to re-enter if they picked a bank-detail
-      // profile. UPI-only profiles are unaffected since they have no
-      // account number to mask in the first place.
-      _accountNumberCtrl.text = '';
-      _ifscCtrl.text = (p['bank_ifsc'] ?? '').toString();
-      _bankNameCtrl.text = (p['bank_name'] ?? '').toString();
-      _bankBranchCtrl.text = (p['bank_branch'] ?? '').toString();
-      if (markSelected) _selectedProfileId = p['id'] as String?;
-      _bankDetailsExpanded = true;
-    });
+  // Takes the profile's id, not the list item itself: ListPaymentProfiles
+  // masks the account number (e.g. "XXXXXX7890") for display, and prefilling
+  // the invoice form from that masked value — or just leaving the field
+  // blank, as this used to do — defeated the entire point of "automatically
+  // fetch saved bank details": the lawyer still had to retype their own
+  // account number on every single invoice. GET /firm/payment-profiles/:id
+  // returns the real number for the lawyer's own saved profile, which is
+  // exactly what's needed here since it's about to be reused, not displayed
+  // in a list.
+  Future<void> _applyProfile(String profileId,
+      {bool markSelected = true}) async {
+    try {
+      final res = await DioClient.instance
+          .get('/firm/payment-profiles/$profileId');
+      final p = res.data['data'] as Map<String, dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _upiIdCtrl.text = (p['upi_id'] ?? '').toString();
+        _accountNameCtrl.text = (p['bank_account_name'] ?? '').toString();
+        _accountNumberCtrl.text = (p['bank_account_number'] ?? '').toString();
+        _ifscCtrl.text = (p['bank_ifsc'] ?? '').toString();
+        _bankNameCtrl.text = (p['bank_name'] ?? '').toString();
+        _bankBranchCtrl.text = (p['bank_branch'] ?? '').toString();
+        if (markSelected) _selectedProfileId = profileId;
+        _bankDetailsExpanded = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Could not load saved payment details: ${DioClient.describeError(e)}'),
+          backgroundColor: const Color(0xFFD9534F)));
+    }
   }
 
   void _useNewDetails() {
@@ -836,7 +852,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                               ..._paymentProfiles.map((p) => _ProfileChip(
                                     profile: p,
                                     selected: _selectedProfileId == p['id'],
-                                    onTap: () => _applyProfile(p),
+                                    onTap: () =>
+                                        _applyProfile(p['id'] as String),
                                     onSetDefault: () =>
                                         _setDefaultProfile(p['id'] as String),
                                     onDelete: () => _deleteProfile(

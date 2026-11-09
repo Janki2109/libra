@@ -72,6 +72,35 @@ func ListPaymentProfiles(c *gin.Context) {
 	utils.Success(c, http.StatusOK, "Payment profiles", profiles)
 }
 
+// GetPaymentProfile returns one profile with the REAL, unmasked account
+// number — ListPaymentProfiles masks it because that endpoint is only ever
+// used to show a picker of which profile to use, but Create Invoice needs
+// the actual number to prefill the invoice form once the lawyer has
+// selected (or defaulted to) a specific profile they already own. Still
+// firm-scoped like every other profile handler, so a lawyer can only ever
+// fetch their own firm's profile this way, never another firm's.
+func GetPaymentProfile(c *gin.Context) {
+	firmID, ok := utils.RequireFirm(c)
+	if !ok {
+		return
+	}
+	id := c.Param("id")
+	var p paymentProfile
+	err := config.DB.QueryRow(`
+		SELECT id, name, upi_id, bank_account_name, bank_account_number,
+		       bank_ifsc, bank_name, bank_branch, is_default, created_at
+		FROM payment_profiles
+		WHERE id = $1::uuid AND firm_id = $2
+	`, id, firmID).Scan(&p.ID, &p.Name, &p.UPIID, &p.BankAccountName,
+		&p.BankAccountNumber, &p.BankIFSC, &p.BankName, &p.BankBranch,
+		&p.IsDefault, &p.CreatedAt)
+	if err != nil {
+		utils.Error(c, http.StatusNotFound, "Payment profile not found", "")
+		return
+	}
+	utils.Success(c, http.StatusOK, "Payment profile", p)
+}
+
 type paymentProfileRequest struct {
 	Name              string `json:"name"`
 	UPIID             string `json:"upi_id"`
