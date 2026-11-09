@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/notification_provider.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -195,18 +196,59 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   // Every notification already carries the reference_id/reference_type the
-  // backend wrote via utils.NotifyWithRef — this just routes to the existing
+  // backend wrote via utils.NotifyWithRef — this routes to the existing
   // screen for that reference instead of leaving the tap as a no-op read.
+  //
+  // This screen is shared by every role (Lawyer/Client/Student all use the
+  // same NotificationsScreen), but the routes below used to be hardcoded to
+  // the Lawyer module unconditionally ('/cases/:id', '/lawyer/consultations',
+  // '/billing') -- so a Client or Student tapping their own, correctly-
+  // scoped notification was sent into a Lawyer-only screen. The backend's
+  // RequireFirmStaff middleware still rejects the resulting API calls (a
+  // Client's firm_id is their lawyer's firm, which previously also leaked
+  // the firm's client/case list before that middleware existed -- see
+  // routes.go), but the navigation itself must never point there in the
+  // first place. Every reference type is now mapped per-role, with no
+  // fallback to a Lawyer-only path when the current role has no equivalent
+  // screen (Student has no cases/invoices/consultations at all).
   void _openReference(BuildContext context, dynamic n) {
     final refId = (n['reference_id'] ?? '').toString();
     final refType = (n['reference_type'] ?? '').toString();
     if (refId.isEmpty) return;
+    final role = context.read<AuthProvider>().user?.roleName ?? '';
+
+    if (refType == 'chat_room') {
+      context.push('/chat/$refId');
+      return;
+    }
+
+    if (role == 'client') {
+      switch (refType) {
+        case 'case':
+          context.push('/portal/cases');
+          break;
+        case 'consultation':
+          context.push('/portal/consultation-history');
+          break;
+        case 'invoice':
+        case 'payment':
+          context.push('/portal/invoices');
+          break;
+      }
+      return;
+    }
+
+    if (role == 'law_student' || role == 'super_admin') {
+      // Students have no case/invoice/consultation screens of their own, and
+      // Super Admin's own notification center is a separate screen entirely
+      // -- nothing safe to navigate to here, so the tap just marks it read.
+      return;
+    }
+
+    // Lawyer (default) and firm staff.
     switch (refType) {
       case 'case':
         context.push('/cases/$refId');
-        break;
-      case 'chat_room':
-        context.push('/chat/$refId');
         break;
       case 'consultation':
         context.push('/lawyer/consultations');
