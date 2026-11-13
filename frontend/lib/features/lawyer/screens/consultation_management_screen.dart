@@ -261,9 +261,42 @@ class _ConsultationManagementScreenState
   /// client's booking flips out of "Waiting for Lawyer" — this used to open
   /// chat directly with no start call at all, so the client's session never
   /// actually started.
+  ///
+  /// This previously pushed straight to the generic chat list ('/chat')
+  /// with no room created at all — unlike the Client's own "Start Chat"
+  /// action (portal_dashboard_screen.dart), which calls POST /chat/rooms to
+  /// get-or-create the room before opening it. So the conversation this
+  /// booking was supposed to connect never actually existed from the
+  /// Lawyer's side unless the Client happened to open their own chat first.
+  /// Mirrors that same get-or-create call here, using client_user_id since
+  /// consultations.client_id is a users.id (chat_rooms.client_id is a
+  /// different id space — see CreateChatRoom's client_user_id handling).
   Future<void> _startChat(dynamic c) async {
     await _ringClient(c);
-    if (mounted) context.push('/chat');
+    if (!mounted) return;
+    final clientUserId = (c['client_id'] ?? '').toString();
+    final clientName = (c['client_name'] ?? 'Client').toString();
+    if (clientUserId.isEmpty) {
+      context.push('/chat');
+      return;
+    }
+    try {
+      final res = await DioClient.instance.post('/chat/rooms', data: {
+        'client_user_id': clientUserId,
+        'room_name': clientName,
+      });
+      final roomId =
+          (res.data['data']?['id'] ?? res.data['data']?['room_id'] ?? '')
+              .toString();
+      if (!mounted) return;
+      if (roomId.isNotEmpty) {
+        context.push('/chat/$roomId?name=${Uri.encodeComponent(clientName)}');
+      } else {
+        context.push('/chat');
+      }
+    } catch (_) {
+      if (mounted) context.push('/chat');
+    }
   }
 
   void _showSnack(String message) {

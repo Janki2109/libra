@@ -758,7 +758,7 @@ func GetLawyerConsultations(c *gin.Context) {
 	// /portal/book-consultation path) must never reach the lawyer's booking
 	// list. The lawyer only ever sees a booking once it is paid and confirmed.
 	query := `
-		SELECT con.id, con.consultation_type,
+		SELECT con.id, con.client_id::text, con.consultation_type,
 			con.consultation_date::text, con.consultation_time,
 			con.status, con.session_status, COALESCE(con.notes,''),
 			COALESCE(con.lawyer_notes,''), COALESCE(con.meeting_link,''),
@@ -788,7 +788,14 @@ func GetLawyerConsultations(c *gin.Context) {
 	defer rows.Close()
 
 	type Consultation struct {
-		ID                  string     `json:"id"`
+		ID       string `json:"id"`
+		// consultations.client_id is a users.id, needed separately from
+		// ClientName/Email/Phone so the Flutter "Start Chat" action can
+		// resolve/create the matching chat_rooms participant (a different
+		// id space — see CreateChatRoom's client_user_id handling) instead
+		// of just opening the generic chat list with no room connected to
+		// this booking at all.
+		ClientID            string     `json:"client_id"`
 		ConsultationType    string     `json:"consultation_type"`
 		ConsultationDate    string     `json:"consultation_date"`
 		ConsultationTime    string     `json:"consultation_time"`
@@ -813,7 +820,7 @@ func GetLawyerConsultations(c *gin.Context) {
 		var con Consultation
 		var startedAt, endedAt sql.NullTime
 		rows.Scan(
-			&con.ID, &con.ConsultationType, &con.ConsultationDate,
+			&con.ID, &con.ClientID, &con.ConsultationType, &con.ConsultationDate,
 			&con.ConsultationTime, &con.Status, &con.SessionStatus, &con.Notes,
 			&con.LawyerNotes, &con.MeetingLink,
 			&con.ClientName, &con.ClientEmail, &con.ClientPhone,

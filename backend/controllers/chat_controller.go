@@ -121,6 +121,13 @@ func CreateChatRoom(c *gin.Context) {
 		LawyerID string `json:"lawyer_id"`
 		CaseID   string `json:"case_id"`
 		RoomName string `json:"room_name"`
+		// ClientUserID is a users.id (e.g. consultations.client_id), not a
+		// clients.id — accepted as an alternative to ClientID for the lawyer
+		// branch below, which otherwise requires a clients.id the lawyer's
+		// own consultation list never actually has (consultations.client_id
+		// references users, chat_rooms.client_id references clients; see
+		// the resolution block below for why).
+		ClientUserID string `json:"client_user_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
@@ -284,8 +291,63 @@ func CreateChatRoom(c *gin.Context) {
 	// A lawyer could previously open a room against another firm's client id,
 	// which would then have shown that client's name and let the lawyer
 	// message them.
-	if !isUUID(clientID) || !belongsToFirm(tblClients, clientID, firmID) {
+	if clientID != "" && (!isUUID(clientID) || !belongsToFirm(tblClients, clientID, firmID)) {
 		utils.Error(c, http.StatusBadRequest, "Unknown client", "client not in caller's firm")
+		return
+	}
+	if clientID == "" && req.ClientUserID != "" {
+		// Starting chat from a consultation (consultations.client_id is a
+		// users.id, not a clients.id) previously had no way to reach this
+		// branch at all — the lawyer's "Start Chat" action just opened the
+		// generic chat list with no room created, so the conversation never
+		// actually connected to the booking. Resolved the same way a
+		// client's own self-service room-creation already resolves their
+		// clients row: match by verified email within this lawyer's firm,
+		// creating the row if this is the first time they've been onboarded
+		// as a client here.
+		if !isUUID(req.ClientUserID) {
+			utils.Error(c, http.StatusBadRequest, "Invalid client reference", "")
+			return
+		}
+		// Same gate as the client-initiated branch, checked from the other
+		// side: a lawyer may only open a room this way against a user they
+		// actually have a paid consultation with -- otherwise client_user_id
+		// would let a lawyer open a room with any arbitrary user_id at all,
+		// not just someone who actually booked them.
+		var hasPaidConsultation bool
+		config.DB.QueryRow(`
+			SELECT EXISTS(
+				SELECT 1 FROM consultations
+				WHERE client_id=$1::uuid AND lawyer_id=$2::uuid AND payment_status='paid'
+			)
+		`, req.ClientUserID, userID).Scan(&hasPaidConsultation)
+		if !hasPaidConsultation {
+			utils.Error(c, http.StatusForbidden,
+				"No paid consultation with this client", "")
+			return
+		}
+		var clientUserName, clientUserEmail, clientUserPhone string
+		if err := config.DB.QueryRow(
+			`SELECT name, email, COALESCE(phone,'') FROM users WHERE id=$1::uuid`,
+			req.ClientUserID).Scan(&clientUserName, &clientUserEmail, &clientUserPhone); err != nil || clientUserEmail == "" {
+			utils.Error(c, http.StatusBadRequest, "Unknown client", "")
+			return
+		}
+		if err := config.DB.QueryRow(
+			`SELECT id FROM clients WHERE firm_id=$1::uuid AND lower(email)=lower($2) LIMIT 1`,
+			firmID, clientUserEmail).Scan(&clientID); err != nil {
+			clientID = uuid.New().String()
+			if _, err := config.DB.Exec(`
+				INSERT INTO clients (id, firm_id, name, email, phone)
+				VALUES ($1, $2::uuid, $3, $4, $5)
+			`, clientID, firmID, clientUserName, clientUserEmail, clientUserPhone); err != nil {
+				utils.Error(c, http.StatusInternalServerError, "Failed to set up client record", err.Error())
+				return
+			}
+		}
+	}
+	if !isUUID(clientID) {
+		utils.Error(c, http.StatusBadRequest, "Unknown client", "client_id or client_user_id required")
 		return
 	}
 	if !belongsToFirm(tblCases, req.CaseID, firmID) {
