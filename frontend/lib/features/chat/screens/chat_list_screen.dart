@@ -111,9 +111,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                   fontSize: 17,
                                   fontWeight: FontWeight.w700))),
                       // Top-right pencil/compose icon removed — it had no
-                      // handler of its own; the bottom-right FloatingAction
-                      // Button below is the existing new-chat entry point and
-                      // is left untouched.
+                      // handler of its own. The bottom-right floating pencil
+                      // button was removed too (per the Lawyer Portal request
+                      // that follows this one) — it also had no onPressed
+                      // action (`() {}`), so nothing is lost by removing it.
                       const SizedBox(width: 48),
                     ]),
                   )),
@@ -269,11 +270,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
           ]),
         ), // Container
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {},
-          backgroundColor: _brown,
-          child: const Icon(Icons.edit_rounded, color: Colors.white),
-        ),
       ),
     );
   }
