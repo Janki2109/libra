@@ -97,6 +97,40 @@ class Checkout {
       );
 }
 
+/// The server's authoritative result of a completed demo payment -- the
+/// actual start/expiry dates (which depend on the firm's own current
+/// period, not just "today + 30 days") and the generated demo transaction
+/// id, never computed client-side.
+class DemoPaymentResult {
+  final String planName;
+  final double amount;
+  final String billingCycle;
+  final DateTime startDate;
+  final DateTime expiryDate;
+  final String transactionId;
+
+  const DemoPaymentResult({
+    required this.planName,
+    required this.amount,
+    required this.billingCycle,
+    required this.startDate,
+    required this.expiryDate,
+    required this.transactionId,
+  });
+
+  factory DemoPaymentResult.fromJson(Map<String, dynamic> json) =>
+      DemoPaymentResult(
+        planName: json['plan_name'] as String? ?? '',
+        amount: (json['amount'] as num?)?.toDouble() ?? 0,
+        billingCycle: json['billing_cycle'] as String? ?? 'monthly',
+        startDate: DateTime.tryParse(json['start_date']?.toString() ?? '') ??
+            DateTime.now(),
+        expiryDate: DateTime.tryParse(json['expiry_date']?.toString() ?? '') ??
+            DateTime.now(),
+        transactionId: json['transaction_id'] as String? ?? '',
+      );
+}
+
 /// Raised when the server declines a billing request, carrying the message it
 /// gave so the UI can show something specific rather than "an error occurred".
 class BillingException implements Exception {
@@ -175,6 +209,34 @@ class SubscriptionRepository {
     try {
       await DioClient.instance.post('/subscription/test-activate');
     } on DioException catch (e) {
+      throw BillingException(DioClient.describeError(e));
+    }
+  }
+
+  /// Real payment gateway integration is not available yet -- this is a
+  /// genuine, always-available DEMO payment: no card/UPI/bank details are
+  /// asked for anywhere, no money moves, and the backend tags every record
+  /// this writes payment_mode='demo' so it is never mistaken for a real
+  /// transaction in the subscription/payment history. Replaces the old
+  /// "Payment Coming Soon" dialog, which called nothing at all.
+  Future<DemoPaymentResult> demoPay({
+    required String plan,
+    required String billingCycle,
+  }) async {
+    try {
+      final res = await DioClient.instance.post('/subscription/demo-pay', data: {
+        'plan': plan,
+        'billing_cycle': billingCycle,
+      });
+      final data = res.data['data'] as Map<String, dynamic>?;
+      if (data == null) {
+        throw const BillingException('Could not activate the plan. Please try again.');
+      }
+      return DemoPaymentResult.fromJson(data);
+    } on DioException catch (e) {
+      // 409 means a firm's existing active subscription blocked a second
+      // one from being created -- surfaced as-is rather than a generic
+      // "payment failed", since nothing about payment went wrong.
       throw BillingException(DioClient.describeError(e));
     }
   }

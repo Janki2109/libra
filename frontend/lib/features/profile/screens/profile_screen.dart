@@ -205,6 +205,14 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 _SettingTile(
+                  icon: Icons.workspace_premium_outlined,
+                  label: 'Subscription & Billing',
+                  subtitle: 'Current plan, history & payments',
+                  color: const Color(0xFFD4A017),
+                  onTap: () => context.push('/subscription/billing'),
+                ),
+                const SizedBox(height: 8),
+                _SettingTile(
                   icon: Icons.notifications_outlined,
                   label: 'Notifications',
                   subtitle: 'Manage alerts & reminders',

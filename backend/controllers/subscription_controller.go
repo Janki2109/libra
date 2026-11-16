@@ -40,18 +40,23 @@ func GetMySubscription(c *gin.Context) {
 		planDisplay  sql.NullString
 		trialEndsAt  sql.NullTime
 		periodEndsAt sql.NullTime
+		startedAt    sql.NullTime
+		amount       sql.NullFloat64
+		billingCycle sql.NullString
 	)
 
 	err := config.DB.QueryRow(`
 		SELECT s.status,
 		       p.name, p.display_name,
-		       s.trial_ends_at, s.current_period_end
+		       s.trial_ends_at, s.current_period_end,
+		       s.started_at, s.amount, s.billing_cycle
 		FROM subscriptions s
 		LEFT JOIN plans p ON s.plan_id = p.id
 		WHERE s.firm_id = $1::uuid
 		ORDER BY s.created_at DESC
 		LIMIT 1
-	`, firmID).Scan(&status, &planName, &planDisplay, &trialEndsAt, &periodEndsAt)
+	`, firmID).Scan(&status, &planName, &planDisplay, &trialEndsAt, &periodEndsAt,
+		&startedAt, &amount, &billingCycle)
 
 	if err == sql.ErrNoRows {
 		utils.Success(c, http.StatusOK, "Subscription fetched", gin.H{
@@ -108,6 +113,15 @@ func GetMySubscription(c *gin.Context) {
 	}
 	if periodEndsAt.Valid {
 		resp["current_period_end"] = periodEndsAt.Time
+	}
+	if startedAt.Valid {
+		resp["started_at"] = startedAt.Time
+	}
+	if amount.Valid {
+		resp["amount"] = amount.Float64
+	}
+	if billingCycle.Valid {
+		resp["billing_cycle"] = billingCycle.String
 	}
 
 	utils.Success(c, http.StatusOK, "Subscription fetched", resp)

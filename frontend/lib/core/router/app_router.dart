@@ -32,6 +32,7 @@ import '../../features/billing/screens/create_invoice_screen.dart';
 import '../../features/billing/screens/payment_screen.dart';
 import '../../features/billing/screens/invoice_checkout_screen.dart';
 import '../../features/billing/screens/payment_verification_screen.dart';
+import '../../features/billing/screens/subscription_billing_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
 import '../../features/staff/screens/staff_list_screen.dart';
@@ -537,6 +538,9 @@ class AppRouter {
                 itemId: state.pathParameters['id']!)),
         GoRoute(
             path: '/lawyer/ecourts', builder: (_, __) => const EcourtsScreen()),
+        GoRoute(
+            path: '/subscription/billing',
+            builder: (_, __) => const SubscriptionBillingScreen()),
         GoRoute(
             path: '/lawyer/consultations',
             builder: (_, __) => const ConsultationManagementScreen()),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../billing/repositories/subscription_repository.dart';
+import '../../billing/screens/demo_payment_screen.dart';
 
 const _bg = Color(0xFF0A0A14);
 const _bgCard = Color(0xFF150A2E);
@@ -69,30 +71,28 @@ class _SubscriptionWallScreenState extends State<SubscriptionWallScreen> {
     }
   }
 
-  // Checkout is temporarily disabled — Subscribe just tells the user payment
-  // is coming soon and leaves them on this screen, instead of opening the
-  // Razorpay checkout flow below.
+  // Real payment gateway integration is not available yet, so this used to
+  // just show a "Payment Coming Soon" dialog that called nothing at all --
+  // a trial-expired firm had no way to actually keep using the app. Opens
+  // the real DEMO payment confirmation screen instead, which does activate
+  // a real subscription server-side (clearly tagged payment_mode='demo'
+  // throughout, never a real charge). On success, returns to the dashboard,
+  // which re-checks entitlement and proceeds normally since requires_plan
+  // is now false.
   Future<void> _subscribe() async {
     if (_plans.isEmpty) return;
     HapticFeedback.lightImpact();
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _bgCard,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Payment Coming Soon',
-            style: TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
-        content: const Text('Subscription payment will be available soon.',
-            style: TextStyle(color: _textMuted)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK', style: TextStyle(color: _gold)),
-          ),
-        ],
+    final paid = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DemoPaymentScreen(
+          plan: _plans[_selected],
+          billingCycle: _cycle,
+        ),
       ),
     );
+    if (paid == true && mounted) {
+      context.go('/dashboard');
+    }
   }
 
   double _price(Plan p) => _cycle == 'yearly' ? p.priceYearly : p.priceMonthly;

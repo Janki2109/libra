@@ -121,6 +121,7 @@ func SetupRoutes() *gin.Engine {
 		protected.POST("/subscription/activate", controllers.ActivateSubscription)
 		// 404s unless ALLOW_TEST_PAYMENT_BYPASS=true — see the handler's doc comment.
 		protected.POST("/subscription/test-activate", controllers.TestActivateSubscription)
+		protected.POST("/subscription/demo-pay", controllers.DemoActivateSubscription)
 		protected.POST("/subscription/cancel", controllers.CancelSubscription)
 
 		// The app's change-password screen has always posted here; nothing

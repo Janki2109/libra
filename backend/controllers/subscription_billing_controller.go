@@ -85,6 +85,26 @@ func CreateSubscriptionCheckout(c *gin.Context) {
 		return
 	}
 
+	// A firm with an active, unexpired subscription must not be able to
+	// start a second checkout at all -- enforced here (not just hidden in
+	// the Flutter UI) so a direct API call can't buy a second plan on top
+	// of one already running. DemoActivateSubscription enforces the same
+	// rule for the demo path with a row lock across the whole check+write;
+	// this read-then-reject is enough here since CreateSubscriptionCheckout
+	// only ever opens a gateway order -- the money/activation only happens
+	// later in activateFromOrder, which is itself transactional per order.
+	var curStatus string
+	var curEnd sql.NullTime
+	config.DB.QueryRow(`
+		SELECT status, current_period_end FROM subscriptions WHERE firm_id = $1::uuid
+	`, firmID).Scan(&curStatus, &curEnd)
+	if curStatus == "active" && curEnd.Valid && curEnd.Time.After(time.Now().UTC()) {
+		utils.Error(c, http.StatusConflict,
+			"Your subscription is already active",
+			fmt.Sprintf("current plan is active until %s", curEnd.Time.Format("2 Jan 2006")))
+		return
+	}
+
 	if !razorpayClient().Configured() {
 		utils.Error(c, http.StatusServiceUnavailable,
 			"Online payment is not available right now",
@@ -169,7 +189,7 @@ func ActivateSubscription(c *gin.Context) {
 		return
 	}
 
-	status, err := activateFromOrder(req.RazorpayOrderID, req.RazorpayPaymentID, firmID)
+	status, err := activateFromOrder(req.RazorpayOrderID, req.RazorpayPaymentID, firmID, "razorpay")
 	if err != nil {
 		if errors.Is(err, errOrderNotFound) {
 			utils.Error(c, http.StatusBadRequest, "Unknown order", err.Error())
@@ -216,7 +236,7 @@ func TestActivateSubscription(c *gin.Context) {
 		return
 	}
 
-	status, err := activateFromOrder(orderID, "TEST_BYPASS_"+uuid.New().String(), firmID)
+	status, err := activateFromOrder(orderID, "TEST_BYPASS_"+uuid.New().String(), firmID, "test")
 	if err != nil {
 		if errors.Is(err, errOrderNotFound) {
 			utils.Error(c, http.StatusBadRequest, "Unknown order", err.Error())
@@ -231,6 +251,183 @@ func TestActivateSubscription(c *gin.Context) {
 	}
 
 	utils.Success(c, http.StatusOK, "TEST payment marked paid — subscription active", status)
+}
+
+// ─── DEMO PAYMENT ────────────────────────────
+// POST /subscription/demo-pay  {"plan":"solo","billing_cycle":"monthly"}
+//
+// Real payment gateway integration is not available yet — CreateSubscriptionCheckout
+// above 503s without RAZORPAY_KEY_ID/SECRET configured, and TestActivateSubscription
+// is a dev-only bypass that 404s unless ALLOW_TEST_PAYMENT_BYPASS=true is set, so
+// neither gives an ordinary deployment any way to actually buy a plan. This is a
+// real, always-available DEMO payment: no card/UPI/bank details are collected or
+// asked for anywhere, no money moves, and every record this writes is explicitly
+// tagged payment_mode='demo' (never 'razorpay') so it can never be mistaken for a
+// real transaction in the payment/subscription history. Swapping in a real gateway
+// later only means adding another payment_mode value next to this one — it does
+// not touch activateFromOrder, the webhook, or this handler's callers.
+//
+// Unlike activateFromOrder (used by the real gateway path and already correct for
+// that use), this holds a single row lock across BOTH the "already active" check
+// and the activation write, so two demo-pay requests fired at the same instant for
+// the same firm cannot both activate: the second blocks on the lock, then re-reads
+// a state that already reflects the first's commit and is correctly rejected.
+func DemoActivateSubscription(c *gin.Context) {
+	firmID, ok := utils.RequireFirm(c)
+	if !ok {
+		return
+	}
+	if !utils.IsAdmin(c) {
+		utils.Error(c, http.StatusForbidden,
+			"Only a firm admin can change the subscription", "insufficient role")
+		return
+	}
+
+	var req struct {
+		Plan         string `json:"plan" binding:"required"`
+		BillingCycle string `json:"billing_cycle"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Error(c, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+	cycle := req.BillingCycle
+	if cycle == "" {
+		cycle = "monthly"
+	}
+	if cycle != "monthly" && cycle != "yearly" {
+		utils.Error(c, http.StatusBadRequest, "Invalid billing cycle",
+			"expected 'monthly' or 'yearly'")
+		return
+	}
+
+	// The price is read from the plans table, never trusted from the client,
+	// same rule CreateSubscriptionCheckout enforces for the real gateway path.
+	var planID, displayName string
+	var monthly, yearly float64
+	err := config.DB.QueryRow(`
+		SELECT id, display_name, price_monthly, price_yearly
+		FROM plans WHERE name = $1 AND is_active = true
+	`, req.Plan).Scan(&planID, &displayName, &monthly, &yearly)
+	if err == sql.ErrNoRows {
+		utils.Error(c, http.StatusBadRequest, "Unknown plan", "no such active plan")
+		return
+	}
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Failed to read plan", err.Error())
+		return
+	}
+	price := monthly
+	if cycle == "yearly" {
+		price = yearly
+	}
+	if price <= 0 {
+		utils.Error(c, http.StatusBadRequest,
+			"That plan is free — no payment is needed", "zero-price plan")
+		return
+	}
+	amountPaise := services.ToPaise(price)
+
+	tx, err := config.DB.Begin()
+	if err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not start payment", err.Error())
+		return
+	}
+	defer tx.Rollback()
+
+	var curStatus string
+	var curEnd sql.NullTime
+	var subID sql.NullString
+	_ = tx.QueryRow(`
+		SELECT id::text, status, current_period_end FROM subscriptions
+		WHERE firm_id = $1::uuid FOR UPDATE
+	`, firmID).Scan(&subID, &curStatus, &curEnd)
+
+	now := time.Now().UTC()
+	if curStatus == "active" && curEnd.Valid && curEnd.Time.After(now) {
+		utils.Error(c, http.StatusConflict,
+			"Your subscription is already active",
+			fmt.Sprintf("current plan is active until %s", curEnd.Time.Format("2 Jan 2006")))
+		return
+	}
+
+	period := 30 * 24 * time.Hour
+	if cycle == "yearly" {
+		period = 365 * 24 * time.Hour
+	}
+	start := now
+	periodEnd := start.Add(period)
+
+	orderID := "DEMO-ORDER-" + uuid.New().String()
+	paymentID := "DEMO-" + strings.ToUpper(strings.ReplaceAll(uuid.New().String(), "-", ""))[:10]
+
+	if _, err := tx.Exec(`
+		INSERT INTO payment_orders
+			(id, firm_id, kind, plan_id, billing_cycle, order_id, payment_id,
+			 amount_paise, currency, status, payment_mode, created_by)
+		VALUES (gen_random_uuid(), $1::uuid, 'subscription', $2::uuid, $3, $4, $5,
+			$6, 'INR', 'paid', 'demo', $7::uuid)
+	`, firmID, planID, cycle, orderID, paymentID, amountPaise, utils.UserID(c)); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not record demo order", err.Error())
+		return
+	}
+
+	if _, err := tx.Exec(`
+		INSERT INTO subscription_payments
+			(firm_id, subscription_id, plan_id, amount, billing_cycle,
+			 order_id, payment_id, status, period_start, period_end, payment_mode)
+		VALUES ($1::uuid, NULLIF($2,'')::uuid, $3::uuid, $4, $5, $6, $7, 'captured', $8, $9, 'demo')
+	`, firmID, subID.String, planID, price, cycle, orderID, paymentID, start, periodEnd); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not record demo payment", err.Error())
+		return
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE subscriptions SET
+			plan_id            = $1::uuid,
+			billing_cycle      = $2,
+			amount             = $3,
+			status             = 'active',
+			current_period_end = $4,
+			started_at         = COALESCE(started_at, $5),
+			last_payment_id    = $6,
+			last_payment_at    = NOW(),
+			grace_until        = NULL,
+			cancelled_at       = NULL,
+			updated_at         = NOW()
+		WHERE firm_id = $7::uuid
+	`, planID, cycle, price, periodEnd, now, paymentID, firmID); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not activate demo subscription", err.Error())
+		return
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE firms SET plan_id = $1::uuid, updated_at = NOW() WHERE id = $2::uuid
+	`, planID, firmID); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not activate demo subscription", err.Error())
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		utils.Error(c, http.StatusInternalServerError, "Could not activate demo subscription", err.Error())
+		return
+	}
+
+	log.Printf("[billing] firm %s DEMO-activated on %s until %s", firmID, cycle, periodEnd.Format(time.RFC3339))
+	notifyFirmAdmins(firmID, "Subscription active (demo)",
+		fmt.Sprintf("Your %s plan is active until %s. This was a demo payment.",
+			displayName, periodEnd.Format("2 Jan 2006")))
+
+	utils.Success(c, http.StatusCreated, "Subscription Activated Successfully!", gin.H{
+		"plan_name":      displayName,
+		"amount":         price,
+		"billing_cycle":  cycle,
+		"start_date":     start,
+		"expiry_date":    periodEnd,
+		"transaction_id": paymentID,
+		"payment_mode":   "demo",
+		"status":         "active",
+	})
 }
 
 // ─── WEBHOOK ─────────────────────────────────
@@ -311,7 +508,7 @@ func RazorpayWebhook(c *gin.Context) {
 		if p.OrderID != "" {
 			// firmID is empty: activateFromOrder resolves the tenant from the
 			// recorded order, never from the request.
-			_, handlerErr = activateFromOrder(p.OrderID, p.ID, "")
+			_, handlerErr = activateFromOrder(p.OrderID, p.ID, "", "razorpay")
 			if errors.Is(handlerErr, errAlreadyApplied) || errors.Is(handlerErr, errOrderNotFound) {
 				// Not-found covers invoice orders, which the invoice flow
 				// handles; neither is a delivery failure.
@@ -354,7 +551,7 @@ var (
 //
 // expectFirmID is checked when the caller is an authenticated user; the webhook
 // passes "" because it has no session and takes the tenant from the order row.
-func activateFromOrder(orderID, paymentID, expectFirmID string) (gin.H, error) {
+func activateFromOrder(orderID, paymentID, expectFirmID, paymentMode string) (gin.H, error) {
 	tx, err := config.DB.Begin()
 	if err != nil {
 		return nil, err
@@ -414,11 +611,11 @@ func activateFromOrder(orderID, paymentID, expectFirmID string) (gin.H, error) {
 	res, err := tx.Exec(`
 		INSERT INTO subscription_payments
 			(firm_id, subscription_id, plan_id, amount, billing_cycle,
-			 order_id, payment_id, status, period_start, period_end)
-		VALUES ($1::uuid, NULLIF($2,'')::uuid, $3::uuid, $4, $5, $6, $7, 'captured', $8, $9)
+			 order_id, payment_id, status, period_start, period_end, payment_mode)
+		VALUES ($1::uuid, NULLIF($2,'')::uuid, $3::uuid, $4, $5, $6, $7, 'captured', $8, $9, $10)
 		ON CONFLICT (payment_id) DO NOTHING
 	`, firmID, subID.String, planID, float64(amountPaise)/100, cycle,
-		orderID, paymentID, start, periodEnd)
+		orderID, paymentID, start, periodEnd, paymentMode)
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +761,8 @@ func GetSubscriptionPayments(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT sp.id, sp.amount, sp.currency, COALESCE(sp.billing_cycle,''),
 		       COALESCE(p.display_name,''), sp.payment_id,
-		       sp.period_start, sp.period_end, sp.created_at
+		       sp.period_start, sp.period_end, sp.created_at,
+		       sp.status, sp.payment_mode
 		FROM subscription_payments sp
 		LEFT JOIN plans p ON sp.plan_id = p.id
 		WHERE sp.firm_id = $1::uuid
@@ -587,13 +785,16 @@ func GetSubscriptionPayments(c *gin.Context) {
 		PeriodStart  time.Time `json:"period_start"`
 		PeriodEnd    time.Time `json:"period_end"`
 		CreatedAt    time.Time `json:"created_at"`
+		Status       string    `json:"status"`
+		PaymentMode  string    `json:"payment_mode"`
 	}
 
 	out := []Row{}
 	for rows.Next() {
 		var r Row
 		if err := rows.Scan(&r.ID, &r.Amount, &r.Currency, &r.BillingCycle,
-			&r.PlanName, &r.PaymentID, &r.PeriodStart, &r.PeriodEnd, &r.CreatedAt); err != nil {
+			&r.PlanName, &r.PaymentID, &r.PeriodStart, &r.PeriodEnd, &r.CreatedAt,
+			&r.Status, &r.PaymentMode); err != nil {
 			utils.Error(c, http.StatusInternalServerError, "Failed to read history", err.Error())
 			return
 		}
