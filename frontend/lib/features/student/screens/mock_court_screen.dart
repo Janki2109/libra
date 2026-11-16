@@ -196,9 +196,30 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
     super.dispose();
   }
 
+  // Mirrors the AppBar back arrow's own logic below exactly -- without this,
+  // the Android hardware/gesture back button skipped straight out of this
+  // multi-step flow instead of first stepping back one stage, like the
+  // AppBar arrow already does.
+  void _handleBack() {
+    if (_step > 0) {
+      setState(() {
+        _step = _step == 3 ? 0 : _step - 1;
+        _result = null;
+        _caseData = null;
+      });
+    } else {
+      context.pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       backgroundColor: _bg,
       body: Column(children: [
         Container(
@@ -216,16 +237,7 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
                   IconButton(
                       icon: const Icon(Icons.arrow_back_rounded,
                           color: Colors.white),
-                      onPressed: () {
-                        if (_step > 0)
-                          setState(() {
-                            _step = _step == 3 ? 0 : _step - 1;
-                            _result = null;
-                            _caseData = null;
-                          });
-                        else
-                          context.pop();
-                      }),
+                      onPressed: _handleBack),
                   const Expanded(
                       child: Column(children: [
                     Text('Mock Court',
@@ -267,6 +279,7 @@ class _MockCourtScreenState extends State<MockCourtScreen> {
                                 ? _buildArgue()
                                 : _buildResult()),
       ]),
+      ),
     );
   }
 

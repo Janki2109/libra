@@ -220,56 +220,65 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
     }
   }
 
+  // Mirrors the AppBar back arrow's own logic -- without this, the Android
+  // hardware/gesture back button skipped straight out of the challenge
+  // (or past this confirmation entirely) instead of showing the same
+  // "Quit Challenge?" warning the AppBar arrow already shows once a
+  // challenge is in progress.
+  void _handleBack() {
+    if (_step == 0) {
+      context.pop();
+      return;
+    }
+    showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+              backgroundColor: _bgCard,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('Quit Challenge?',
+                  style: TextStyle(color: _textPri, fontWeight: FontWeight.w700)),
+              content: const Text('Your progress will be lost.',
+                  style: TextStyle(color: _textMuted)),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child:
+                        const Text('Continue', style: TextStyle(color: _pink))),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    setState(() {
+                      _step = 0;
+                      _answers = {};
+                      _challenge = null;
+                      _result = null;
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      shape:
+                          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  child: const Text('Quit', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ));
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
         backgroundColor: _navy,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () {
-            if (_step == 0) {
-              context.pop();
-              return;
-            }
-            showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                      backgroundColor: _bgCard,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                      title: const Text('Quit Challenge?',
-                          style: TextStyle(
-                              color: _textPri, fontWeight: FontWeight.w700)),
-                      content: const Text('Your progress will be lost.',
-                          style: TextStyle(color: _textMuted)),
-                      actions: [
-                        TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Continue',
-                                style: TextStyle(color: _pink))),
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            setState(() {
-                              _step = 0;
-                              _answers = {};
-                              _challenge = null;
-                              _result = null;
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFDC2626),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10))),
-                          child: const Text('Quit',
-                              style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
-                    ));
-          },
+          onPressed: _handleBack,
         ),
         title: Text(
           _step == 0
@@ -310,6 +319,7 @@ class _LegalChallengeScreenState extends State<LegalChallengeScreen>
                   : _step == 2
                       ? _buildQuizView()
                       : _buildResultView(),
+      ),
     );
   }
 

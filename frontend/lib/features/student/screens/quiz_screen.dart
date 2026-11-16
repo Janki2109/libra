@@ -187,9 +187,31 @@ class _QuizScreenState extends State<QuizScreen> {
     } catch (_) {}
   }
 
+  // Mirrors the AppBar back arrow's own logic below exactly -- without this,
+  // the Android hardware/gesture back button skipped straight out of the
+  // quiz screen instead of first returning to subject selection like the
+  // AppBar arrow does, making the two back paths behave inconsistently.
+  void _handleBack() {
+    if (_questions.isNotEmpty) {
+      setState(() {
+        _questions = [];
+        _selectedSubject = null;
+        _selectedType = null;
+        _finished = false;
+      });
+    } else {
+      context.pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _questions.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       backgroundColor: _bg,
       body: Column(children: [
         // Header
@@ -208,17 +230,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   IconButton(
                       icon: const Icon(Icons.arrow_back_rounded,
                           color: Colors.white),
-                      onPressed: () {
-                        if (_questions.isNotEmpty)
-                          setState(() {
-                            _questions = [];
-                            _selectedSubject = null;
-                            _selectedType = null;
-                            _finished = false;
-                          });
-                        else
-                          context.pop();
-                      }),
+                      onPressed: _handleBack),
                   const Expanded(
                       child: Text('Legal Quiz',
                           textAlign: TextAlign.center,
@@ -252,6 +264,7 @@ class _QuizScreenState extends State<QuizScreen> {
                             ? _buildSetup()
                             : _buildQuestion()),
       ]),
+      ),
     );
   }
 
