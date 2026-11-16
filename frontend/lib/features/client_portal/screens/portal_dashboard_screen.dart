@@ -331,10 +331,7 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
         ),
         bottomNavigationBar: _BottomNav(
           selectedIndex: _selectedIndex,
-          onTap: (i) {
-            HapticFeedback.lightImpact();
-            setState(() => _selectedIndex = i);
-          },
+          onTap: _onBottomNavTap,
         ),
       ),
     );
@@ -344,6 +341,47 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
         color: _bg,
         child: const Center(child: CircularProgressIndicator(color: _green)),
       );
+
+  // Cases/Docs/Bills used to be a plain in-memory index swap into the
+  // simplified inline tabs below, with every bit of "go back to Home"
+  // logic faked by this screen's own PopScope. The Lawyer dashboard's
+  // equivalent tabs (Clients/Cases/Chat/Billing/Profile) are instead real
+  // go_router pushes onto a completely separate, already fully-featured
+  // screen -- Android back then just pops that pushed route back to this
+  // Scaffold through go_router's own default Navigator handling, with no
+  // custom interception needed at all, which is exactly why the Lawyer
+  // Portal's back button never needed a fix in the first place. Routing
+  // these three tabs through the same already-built, more fully-featured
+  // standalone screens (PortalCaseScreen/PortalDocumentsScreen/
+  // PortalInvoicesScreen -- the very screens this session's earlier fixes
+  // already hardened) removes the custom back-handling for them entirely
+  // instead of trying to make the fake-tab version of it more correct yet
+  // again. Chat/Profile have no equivalent standalone list screen to push
+  // to, so they stay as the existing in-memory tab swap, still covered by
+  // this Scaffold's own PopScope exactly as before.
+  void _onBottomNavTap(int i) {
+    HapticFeedback.lightImpact();
+    String? route;
+    switch (i) {
+      case 1:
+        route = '/portal/cases';
+        break;
+      case 2:
+        route = '/portal/documents';
+        break;
+      case 3:
+        route = '/portal/invoices';
+        break;
+    }
+    if (route != null) {
+      setState(() => _selectedIndex = i); // momentary tap highlight
+      context.push(route).then((_) {
+        if (mounted) setState(() => _selectedIndex = 0);
+      });
+      return;
+    }
+    setState(() => _selectedIndex = i);
+  }
 }
 
 // ── Bottom Nav ─────────────────────────────────────
