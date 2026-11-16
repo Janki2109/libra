@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/auto_refresh_service.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../notifications/providers/notification_provider.dart';
 import '../../student/screens/news_webview_screen.dart';
 
 // ── Blue/White Theme ──────────────────────────────
@@ -92,6 +93,15 @@ class _LawStudentDashboardScreenState extends State<LawStudentDashboardScreen>
     // without a manual pull.
     AutoRefreshService.instance
         .register('student_dashboard', () => _loadData(silent: true));
+    // NotificationProvider is a global singleton already polled every 3s
+    // regardless of role, but this dashboard never had a bell icon at all
+    // to show that count or open the notifications screen — students had
+    // no way to see their own notifications even though the backend
+    // already delivered and scoped them correctly per account. Explicit
+    // load here (same as the Lawyer dashboard) avoids waiting on the first
+    // auto-refresh tick for the badge to appear.
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => context.read<NotificationProvider>().loadNotifications());
   }
 
   @override
@@ -357,6 +367,56 @@ class _HomeTab extends StatelessWidget {
                                         fontSize: 20,
                                         fontWeight: FontWeight.w800)),
                               ])),
+                          // Previously missing entirely -- the Student
+                          // dashboard had no way to open the notifications
+                          // screen at all, even though the backend already
+                          // scoped and delivered each student's own
+                          // notifications correctly. Mirrors the bell +
+                          // unread badge already on the Lawyer/Client
+                          // dashboards.
+                          Builder(builder: (context) {
+                            final unread =
+                                context.watch<NotificationProvider>().unreadCount;
+                            return GestureDetector(
+                              onTap: () => context.push('/notifications'),
+                              child: Stack(clipBehavior: Clip.none, children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                      Icons.notifications_none_rounded,
+                                      color: Colors.white,
+                                      size: 20),
+                                ),
+                                if (unread > 0)
+                                  Positioned(
+                                    right: -2,
+                                    top: -2,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 5, vertical: 1),
+                                      constraints:
+                                          const BoxConstraints(minWidth: 18),
+                                      decoration: const BoxDecoration(
+                                          color: Color(0xFFD9534F),
+                                          shape: BoxShape.circle),
+                                      child: Text(
+                                          unread > 99 ? '99+' : '$unread',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w800)),
+                                    ),
+                                  ),
+                              ]),
+                            );
+                          }),
+                          const SizedBox(width: 10),
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 6),
