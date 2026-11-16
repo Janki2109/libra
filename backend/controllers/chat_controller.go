@@ -23,6 +23,16 @@ func GetChatRooms(c *gin.Context) {
 	uID := utils.UserID(c)
 	fID := utils.FirmID(c)
 
+	// other_last_active feeds the exact same online/last_seen computation
+	// GetRoomPresence uses below (same onlineWindow, same last_active_at
+	// column) -- previously this list had no presence of its own at all,
+	// and the Messages List screen's green dot was a hardcoded literal
+	// Color(0xFF2E8B57) on every single row regardless of who it was or
+	// whether they were actually online. That's the entire bug: opening the
+	// same person's Individual Chat then correctly computed real presence
+	// from GetRoomPresence and frequently disagreed with the list's fake
+	// permanent "online". Both now resolve from the identical column via
+	// the identical window, so they can't disagree.
 	if role == "client" {
 		// ✅ Client sees LAWYER name
 		rows, err = config.DB.Query(`
@@ -33,7 +43,8 @@ func GetChatRooms(c *gin.Context) {
 			       COALESCE(u.name,'Your Lawyer') as other_name,
 			       cr.created_at,
 			       (SELECT COUNT(*) FROM chat_messages cm
-			        WHERE cm.room_id = cr.id AND cm.sender_id != $1::uuid AND cm.is_read = false) as unread_count
+			        WHERE cm.room_id = cr.id AND cm.sender_id != $1::uuid AND cm.is_read = false) as unread_count,
+			       u.last_active_at
 			FROM chat_rooms cr
 			LEFT JOIN users u ON cr.lawyer_id = u.id
 			WHERE cr.client_id = (
@@ -53,7 +64,8 @@ func GetChatRooms(c *gin.Context) {
 			       COALESCE(u.name,'Lawyer') as other_name,
 			       cr.created_at,
 			       (SELECT COUNT(*) FROM chat_messages cm
-			        WHERE cm.room_id = cr.id AND cm.sender_id != $1::uuid AND cm.is_read = false) as unread_count
+			        WHERE cm.room_id = cr.id AND cm.sender_id != $1::uuid AND cm.is_read = false) as unread_count,
+			       u.last_active_at
 			FROM chat_rooms cr
 			LEFT JOIN users u ON cr.lawyer_id = u.id
 			WHERE cr.student_id = $1::uuid AND cr.is_active = true
@@ -69,6 +81,11 @@ func GetChatRooms(c *gin.Context) {
 		// no matching row in either previously fell back to the literal
 		// placeholder "Client", which is what a student's room always did
 		// since it only ever sets student_id, never client_id.
+		//
+		// clients.id has no last_active_at of its own (only `users` does) --
+		// a client's presence is resolved through their matching users row
+		// by email, the same join pattern used everywhere else a client's
+		// login identity is needed from a clients row.
 		rows, err = config.DB.Query(`
 			SELECT cr.id,
 			       COALESCE(NULLIF(cl.name,''), NULLIF(su.name,''), 'Client') as lawyer_name,
@@ -77,9 +94,11 @@ func GetChatRooms(c *gin.Context) {
 			       COALESCE(NULLIF(cl.name,''), NULLIF(su.name,''), 'Client') as other_name,
 			       cr.created_at,
 			       (SELECT COUNT(*) FROM chat_messages cm
-			        WHERE cm.room_id = cr.id AND cm.sender_id != $2::uuid AND cm.is_read = false) as unread_count
+			        WHERE cm.room_id = cr.id AND cm.sender_id != $2::uuid AND cm.is_read = false) as unread_count,
+			       COALESCE(su.last_active_at, cu.last_active_at)
 			FROM chat_rooms cr
 			LEFT JOIN clients cl ON cr.client_id = cl.id
+			LEFT JOIN users cu ON lower(cu.email) = lower(cl.email)
 			LEFT JOIN users su ON cr.student_id = su.id
 			WHERE cr.firm_id=$1::uuid AND cr.is_active=true
 			ORDER BY cr.last_message_at DESC NULLS LAST
@@ -93,19 +112,27 @@ func GetChatRooms(c *gin.Context) {
 	defer rows.Close()
 
 	type Room struct {
-		ID          string    `json:"id"`
-		LawyerName  string    `json:"lawyer_name"`
-		LastMessage string    `json:"last_message"`
-		LastMsgAt   string    `json:"last_message_at"`
-		OtherName   string    `json:"other_name"`
-		CreatedAt   time.Time `json:"created_at"`
-		UnreadCount int       `json:"unread_count"`
+		ID          string     `json:"id"`
+		LawyerName  string     `json:"lawyer_name"`
+		LastMessage string     `json:"last_message"`
+		LastMsgAt   string     `json:"last_message_at"`
+		OtherName   string     `json:"other_name"`
+		CreatedAt   time.Time  `json:"created_at"`
+		UnreadCount int        `json:"unread_count"`
+		Online      bool       `json:"online"`
+		LastSeen    *time.Time `json:"last_seen"`
 	}
 	rooms := []Room{}
 	for rows.Next() {
 		var r Room
+		var lastActive sql.NullTime
 		rows.Scan(&r.ID, &r.LawyerName, &r.LastMessage,
-			&r.LastMsgAt, &r.OtherName, &r.CreatedAt, &r.UnreadCount)
+			&r.LastMsgAt, &r.OtherName, &r.CreatedAt, &r.UnreadCount, &lastActive)
+		if lastActive.Valid {
+			seen := lastActive.Time
+			r.LastSeen = &seen
+			r.Online = time.Since(lastActive.Time) < onlineWindow
+		}
 		rooms = append(rooms, r)
 	}
 	utils.Success(c, http.StatusOK, "Rooms fetched", rooms)

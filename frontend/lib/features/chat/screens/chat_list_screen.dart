@@ -145,6 +145,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               final unread = room['unread_count'] ?? 0;
                               final initials =
                                   name.isNotEmpty ? name[0].toUpperCase() : 'C';
+                              // Real presence from GetChatRooms (same
+                              // last_active_at column and onlineWindow the
+                              // Individual Chat header's GetRoomPresence
+                              // uses) -- this dot used to be a hardcoded
+                              // literal green on every row, which is why it
+                              // could show "online" for someone the chat
+                              // header correctly showed as offline.
+                              final online = room['online'] == true;
 
                               return GestureDetector(
                                 onTap: () {
@@ -197,7 +205,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                             width: 12,
                                             height: 12,
                                             decoration: BoxDecoration(
-                                                color: const Color(0xFF2E8B57),
+                                                color: online
+                                                    ? const Color(0xFF2E8B57)
+                                                    : const Color(0xFF9E9E9E),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                     color: _bgCard, width: 2)),
