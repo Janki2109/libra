@@ -233,6 +233,20 @@ class AppRouter {
         GoRoute(
             path: '/student/dashboard',
             builder: (_, __) => const LawStudentDashboardScreen()),
+        // Bottom-nav Library/News/Lawyers/Profile pushed as real routes —
+        // see _onBottomNavTap in law_student_dashboard_screen.dart.
+        GoRoute(
+            path: '/student/tab/library',
+            builder: (_, __) => const StudentLibraryScreen()),
+        GoRoute(
+            path: '/student/tab/news',
+            builder: (_, __) => const StudentNewsTabScreen()),
+        GoRoute(
+            path: '/student/tab/lawyers',
+            builder: (_, __) => const StudentLawyersScreen()),
+        GoRoute(
+            path: '/student/tab/profile',
+            builder: (_, __) => const StudentProfileScreen()),
         GoRoute(
             path: '/challenge',
             builder: (_, __) => const LegalChallengeScreen()),
@@ -308,6 +322,14 @@ class AppRouter {
         GoRoute(
             path: '/portal/messages',
             builder: (_, __) => const PortalMessagesScreen()),
+        // Bottom-nav Chat/Profile pushed as real routes, same pattern as
+        // /portal/cases etc. above — see PortalChatScreen/PortalProfileScreen
+        // in portal_dashboard_screen.dart for why.
+        GoRoute(
+            path: '/portal/chat', builder: (_, __) => const PortalChatScreen()),
+        GoRoute(
+            path: '/portal/profile',
+            builder: (_, __) => const PortalProfileScreen()),
         GoRoute(
           // "Pay Now" opens the existing Razorpay integration now, not the
           // manual UPI/bank-transfer screen — that screen (PaymentScreen)

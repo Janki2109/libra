@@ -342,23 +342,25 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
         child: const Center(child: CircularProgressIndicator(color: _green)),
       );
 
-  // Cases/Docs/Bills used to be a plain in-memory index swap into the
-  // simplified inline tabs below, with every bit of "go back to Home"
-  // logic faked by this screen's own PopScope. The Lawyer dashboard's
-  // equivalent tabs (Clients/Cases/Chat/Billing/Profile) are instead real
-  // go_router pushes onto a completely separate, already fully-featured
-  // screen -- Android back then just pops that pushed route back to this
-  // Scaffold through go_router's own default Navigator handling, with no
-  // custom interception needed at all, which is exactly why the Lawyer
-  // Portal's back button never needed a fix in the first place. Routing
-  // these three tabs through the same already-built, more fully-featured
-  // standalone screens (PortalCaseScreen/PortalDocumentsScreen/
-  // PortalInvoicesScreen -- the very screens this session's earlier fixes
-  // already hardened) removes the custom back-handling for them entirely
-  // instead of trying to make the fake-tab version of it more correct yet
-  // again. Chat/Profile have no equivalent standalone list screen to push
-  // to, so they stay as the existing in-memory tab swap, still covered by
-  // this Scaffold's own PopScope exactly as before.
+  // Every non-Home tab used to be a plain in-memory index swap into the
+  // inline tabs below, with "back goes to Home" entirely faked by this
+  // screen's own PopScope. The Lawyer dashboard's equivalent tabs
+  // (Clients/Cases/Chat/Billing/Profile) are instead real go_router pushes
+  // onto a completely separate screen each -- Android back then just pops
+  // that pushed route back to this Scaffold through go_router's own
+  // default Navigator handling, with no custom interception needed at
+  // all, which is exactly why the Lawyer Portal's back button never
+  // needed a fix in the first place. Cases/Docs/Bills already push their
+  // own more fully-featured standalone screens (PortalCaseScreen/
+  // PortalDocumentsScreen/PortalInvoicesScreen). Chat and Profile now do
+  // the same -- PortalChatScreen/PortalProfileScreen below wrap the exact
+  // same _ChatTab/_ProfileTab content (nothing removed or redesigned),
+  // just reached via a real pushed route instead of an index swap, so
+  // every single non-Home tab now behaves identically to Lawyer's: back
+  // is handled by go_router's default pop, not by this PopScope. The
+  // PopScope below now only ever has to handle the Home tab itself (the
+  // true bottom of the stack), which is the one case Android truly has
+  // no previous route to return to.
   void _onBottomNavTap(int i) {
     HapticFeedback.lightImpact();
     String? route;
@@ -371,6 +373,12 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
         break;
       case 3:
         route = '/portal/invoices';
+        break;
+      case 4:
+        route = '/portal/chat';
+        break;
+      case 5:
+        route = '/portal/profile';
         break;
     }
     if (route != null) {
@@ -2254,6 +2262,89 @@ class _ProfileTab extends StatelessWidget {
           ),
         ]),
       );
+}
+
+// ── Chat and Profile as real pushed routes ─────────
+// Wraps the exact same _ChatTab/_ProfileTab content the bottom-nav index
+// swap used to show inline -- nothing redesigned, nothing removed -- but
+// reached via a real go_router push (/portal/chat, /portal/profile)
+// instead of an in-memory tab swap, so Android back on either is handled
+// by go_router's own default pop straight back to the dashboard, exactly
+// like every one of Lawyer's own bottom-nav pages already works.
+//
+// _ProfileTab only ever reads AuthProvider, a global singleton already
+// reactive anywhere it's watched, so this just watches it directly rather
+// than needing anything passed in at push time.
+class PortalProfileScreen extends StatelessWidget {
+  const PortalProfileScreen({super.key});
+  @override
+  Widget build(BuildContext context) =>
+      _ProfileTab(auth: context.watch<AuthProvider>());
+}
+
+// _ChatTab is stateless and was always fed pre-loaded data by the
+// dashboard's own _loadData -- as a standalone pushed page it has no
+// parent state to read, so this fetches /chat/rooms itself, registered
+// with the same AutoRefreshService + RealtimeEvents('chat_message')
+// pattern the dashboard's own chat tab (and every other list screen in
+// this app) already uses, so opening Chat from the bottom nav keeps
+// updating live exactly as it did as an inline tab.
+class PortalChatScreen extends StatefulWidget {
+  const PortalChatScreen({super.key});
+  @override
+  State<PortalChatScreen> createState() => _PortalChatScreenState();
+}
+
+class _PortalChatScreenState extends State<PortalChatScreen> {
+  List<dynamic> _chatRooms = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    RealtimeEvents.instance.addListener(_onRealtimeEvent);
+    AutoRefreshService.instance
+        .register('portal_chat_screen', () => _load(silent: true));
+  }
+
+  void _onRealtimeEvent() {
+    if (RealtimeEvents.instance.matches(['chat_message'])) {
+      _load(silent: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    RealtimeEvents.instance.removeListener(_onRealtimeEvent);
+    AutoRefreshService.instance.unregister('portal_chat_screen');
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
+    try {
+      final res = await DioClient.instance.get('/chat/rooms');
+      if (!mounted) return;
+      setState(() {
+        _chatRooms = res.data['data'] ?? [];
+        _loading = false;
+      });
+    } catch (e) {
+      if (!silent && mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: _bg,
+        body: const Center(child: CircularProgressIndicator(color: _green)),
+      );
+    }
+    return _ChatTab(chatRooms: _chatRooms, auth: context.watch<AuthProvider>());
+  }
 }
 
 class _CaseCard extends StatelessWidget {

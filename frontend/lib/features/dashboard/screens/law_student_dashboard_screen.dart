@@ -208,13 +208,152 @@ class _LawStudentDashboardScreenState extends State<LawStudentDashboardScreen>
             : screens[_selectedIndex],
         bottomNavigationBar: _BottomNav(
           selectedIndex: _selectedIndex,
-          onTap: (i) {
-            HapticFeedback.lightImpact();
-            setState(() => _selectedIndex = i);
-          },
+          onTap: _onBottomNavTap,
         ),
       ),
     );
+  }
+
+  // Library/News/Lawyers/Profile used to be a plain in-memory index swap,
+  // with "back goes to Home" entirely faked by this screen's own PopScope.
+  // The Lawyer dashboard's own bottom-nav tabs are instead real go_router
+  // pushes onto a separate screen each, so Android back is handled by
+  // go_router's default pop with no custom interception at all -- which is
+  // why Lawyer's back button never needed a fix in the first place. These
+  // four tabs now do the same: StudentLibraryScreen/StudentNewsTabScreen/
+  // StudentLawyersScreen/StudentProfileScreen (below) wrap the exact same
+  // _CasesTab/_NewsTab/_LawyersTab/_ProfileTab content, nothing redesigned
+  // or removed, just reached via a real pushed route instead of an index
+  // swap. The PopScope above now only ever has to handle the Home tab
+  // itself (the true bottom of the stack).
+  void _onBottomNavTap(int i) {
+    HapticFeedback.lightImpact();
+    String? route;
+    switch (i) {
+      case 1:
+        route = '/student/tab/library';
+        break;
+      case 2:
+        route = '/student/tab/news';
+        break;
+      case 3:
+        route = '/student/tab/lawyers';
+        break;
+      case 4:
+        route = '/student/tab/profile';
+        break;
+    }
+    if (route != null) {
+      setState(() => _selectedIndex = i); // momentary tap highlight
+      context.push(route).then((_) {
+        if (mounted) setState(() => _selectedIndex = 0);
+      });
+      return;
+    }
+    setState(() => _selectedIndex = i);
+  }
+}
+
+// ── Library/News/Lawyers/Profile as real pushed routes ────
+// See _onBottomNavTap above for why these exist instead of the old
+// in-memory tab swap.
+class StudentLibraryScreen extends StatelessWidget {
+  const StudentLibraryScreen({super.key});
+  @override
+  Widget build(BuildContext context) => const _CasesTab();
+}
+
+class StudentNewsTabScreen extends StatelessWidget {
+  const StudentNewsTabScreen({super.key});
+  @override
+  Widget build(BuildContext context) => const _NewsTab();
+}
+
+// _LawyersTab was always fed a pre-loaded list by the dashboard's own
+// _loadData -- as a standalone pushed page it has no parent state to read,
+// so this fetches /student/lawyers itself.
+class StudentLawyersScreen extends StatefulWidget {
+  const StudentLawyersScreen({super.key});
+  @override
+  State<StudentLawyersScreen> createState() => _StudentLawyersScreenState();
+}
+
+class _StudentLawyersScreenState extends State<StudentLawyersScreen> {
+  List<dynamic> _lawyers = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await DioClient.instance.get('/student/lawyers');
+      if (!mounted) return;
+      setState(() {
+        _lawyers = res.data['data'] ?? [];
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: _bg,
+        body: const Center(child: CircularProgressIndicator(color: _blue)),
+      );
+    }
+    return _LawyersTab(lawyers: _lawyers);
+  }
+}
+
+// _ProfileTab was always fed pre-loaded progress by the dashboard's own
+// _loadData -- fetches /student/progress itself for the same reason.
+class StudentProfileScreen extends StatefulWidget {
+  const StudentProfileScreen({super.key});
+  @override
+  State<StudentProfileScreen> createState() => _StudentProfileScreenState();
+}
+
+class _StudentProfileScreenState extends State<StudentProfileScreen> {
+  Map<String, dynamic> _progress = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await DioClient.instance.get('/student/progress');
+      if (!mounted) return;
+      setState(() {
+        _progress = res.data['data']?['progress'] ?? {};
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: _bg,
+        body: const Center(child: CircularProgressIndicator(color: _blue)),
+      );
+    }
+    return _ProfileTab(
+        auth: context.watch<AuthProvider>(), progress: _progress);
   }
 }
 
