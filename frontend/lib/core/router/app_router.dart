@@ -234,19 +234,29 @@ class AppRouter {
             path: '/student/dashboard',
             builder: (_, __) => const LawStudentDashboardScreen()),
         // Bottom-nav Library/News/Lawyers/Profile pushed as real routes —
-        // see _onBottomNavTap in law_student_dashboard_screen.dart.
+        // see _onBottomNavTap in law_student_dashboard_screen.dart. Each
+        // wrapped in StudentTabShell so the bottom nav bar stays visible
+        // on every one of them (see StudentTabShell for why).
         GoRoute(
-            path: '/student/tab/library',
-            builder: (_, __) => const StudentLibraryScreen()),
+          path: '/student/tab/library',
+          builder: (_, __) => const StudentTabShell(
+              selectedIndex: 1, child: StudentLibraryScreen()),
+        ),
         GoRoute(
-            path: '/student/tab/news',
-            builder: (_, __) => const StudentNewsTabScreen()),
+          path: '/student/tab/news',
+          builder: (_, __) => const StudentTabShell(
+              selectedIndex: 2, child: StudentNewsTabScreen()),
+        ),
         GoRoute(
-            path: '/student/tab/lawyers',
-            builder: (_, __) => const StudentLawyersScreen()),
+          path: '/student/tab/lawyers',
+          builder: (_, __) => const StudentTabShell(
+              selectedIndex: 3, child: StudentLawyersScreen()),
+        ),
         GoRoute(
-            path: '/student/tab/profile',
-            builder: (_, __) => const StudentProfileScreen()),
+          path: '/student/tab/profile',
+          builder: (_, __) => const StudentTabShell(
+              selectedIndex: 4, child: StudentProfileScreen()),
+        ),
         GoRoute(
             path: '/challenge',
             builder: (_, __) => const LegalChallengeScreen()),
@@ -301,20 +311,34 @@ class AppRouter {
         GoRoute(
             path: '/portal/consultation-history',
             builder: (_, __) => const ConsultationHistoryScreen()),
+        // Each of these five tab-root routes is wrapped in PortalTabShell,
+        // which supplies the exact same bottom nav bar every pushed tab
+        // screen was missing (see PortalTabShell in
+        // portal_dashboard_screen.dart) — without it, the bar visibly
+        // vanished the instant any tab other than Home opened. Subpages
+        // pushed on top (case/document detail, previews, messages) are
+        // deliberately left unwrapped — those are the "immersive" screens
+        // this request says to leave exactly as they already are.
         GoRoute(
-            path: '/portal/cases',
-            builder: (_, __) => const PortalCaseScreen()),
+          path: '/portal/cases',
+          builder: (_, __) =>
+              const PortalTabShell(selectedIndex: 1, child: PortalCaseScreen()),
+        ),
         GoRoute(
           path: '/portal/cases/detail',
           builder: (_, state) => CaseDetailScreen(
               caseData: (state.extra as Map<String, dynamic>?) ?? const {}),
         ),
         GoRoute(
-            path: '/portal/invoices',
-            builder: (_, __) => const PortalInvoicesScreen()),
+          path: '/portal/invoices',
+          builder: (_, __) => const PortalTabShell(
+              selectedIndex: 3, child: PortalInvoicesScreen()),
+        ),
         GoRoute(
-            path: '/portal/documents',
-            builder: (_, __) => const PortalDocumentsScreen()),
+          path: '/portal/documents',
+          builder: (_, __) => const PortalTabShell(
+              selectedIndex: 2, child: PortalDocumentsScreen()),
+        ),
         GoRoute(
             path: '/portal/documents/:id/preview',
             builder: (_, state) => PortalDocumentPreviewScreen(
@@ -326,10 +350,15 @@ class AppRouter {
         // /portal/cases etc. above — see PortalChatScreen/PortalProfileScreen
         // in portal_dashboard_screen.dart for why.
         GoRoute(
-            path: '/portal/chat', builder: (_, __) => const PortalChatScreen()),
+          path: '/portal/chat',
+          builder: (_, __) =>
+              const PortalTabShell(selectedIndex: 4, child: PortalChatScreen()),
+        ),
         GoRoute(
-            path: '/portal/profile',
-            builder: (_, __) => const PortalProfileScreen()),
+          path: '/portal/profile',
+          builder: (_, __) => const PortalTabShell(
+              selectedIndex: 5, child: PortalProfileScreen()),
+        ),
         GoRoute(
           // "Pay Now" opens the existing Razorpay integration now, not the
           // manual UPI/bank-transfer screen — that screen (PaymentScreen)

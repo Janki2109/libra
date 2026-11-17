@@ -206,7 +206,7 @@ class _LawStudentDashboardScreenState extends State<LawStudentDashboardScreen>
                 child: const Center(
                     child: CircularProgressIndicator(color: _blue)))
             : screens[_selectedIndex],
-        bottomNavigationBar: _BottomNav(
+        bottomNavigationBar: StudentBottomNav(
           selectedIndex: _selectedIndex,
           onTap: _onBottomNavTap,
         ),
@@ -358,10 +358,13 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 }
 
 // ── Bottom Nav ─────────────────────────────────────
-class _BottomNav extends StatelessWidget {
+// Public (StudentBottomNav, not _BottomNav) so StudentTabShell below --
+// used by every pushed tab screen -- can reference it from this file.
+class StudentBottomNav extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onTap;
-  const _BottomNav({required this.selectedIndex, required this.onTap});
+  const StudentBottomNav(
+      {super.key, required this.selectedIndex, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -419,6 +422,48 @@ class _BottomNav extends StatelessWidget {
       )),
     );
   }
+}
+
+// ── Persistent bottom nav for pushed tab screens ───
+// Library/News/Lawyers/Profile were converted to real go_router pushes so
+// Android back works correctly -- but a plain pushed route has no
+// bottomNavigationBar of its own, so the bar visibly disappeared the
+// moment any of those tabs opened. Wraps each tab screen's own Scaffold
+// (left untouched) in one more Scaffold supplying the same
+// StudentBottomNav. Tapping a tab from anywhere -- including a nested
+// subpage -- pops the stack back down to the Dashboard first, then pushes
+// the newly selected tab, so the Dashboard is never duplicated and Back
+// from whichever tab is open always lands on Home.
+class StudentTabShell extends StatelessWidget {
+  final int selectedIndex;
+  final Widget child;
+  const StudentTabShell(
+      {super.key, required this.selectedIndex, required this.child});
+
+  static const _tabRoutes = <int, String>{
+    1: '/student/tab/library',
+    2: '/student/tab/news',
+    3: '/student/tab/lawyers',
+    4: '/student/tab/profile',
+  };
+
+  void _switchTab(BuildContext context, int target) {
+    if (target == selectedIndex) return;
+    while (context.canPop()) {
+      context.pop();
+    }
+    final route = _tabRoutes[target];
+    if (route != null) context.push(route);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: child,
+        bottomNavigationBar: StudentBottomNav(
+          selectedIndex: selectedIndex,
+          onTap: (i) => _switchTab(context, i),
+        ),
+      );
 }
 
 // ── Home Tab ───────────────────────────────────────

@@ -329,7 +329,7 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
           duration: const Duration(milliseconds: 250),
           child: _loading ? _buildLoading() : screens[_selectedIndex],
         ),
-        bottomNavigationBar: _BottomNav(
+        bottomNavigationBar: PortalBottomNav(
           selectedIndex: _selectedIndex,
           onTap: _onBottomNavTap,
         ),
@@ -393,10 +393,13 @@ class _PortalDashboardScreenState extends State<PortalDashboardScreen>
 }
 
 // ── Bottom Nav ─────────────────────────────────────
-class _BottomNav extends StatelessWidget {
+// Public (PortalBottomNav, not _BottomNav) so PortalTabShell below -- used
+// by every pushed tab screen (Cases/Docs/Bills/Chat/Profile) to keep this
+// exact bar permanently visible -- can reference it from this same file.
+class PortalBottomNav extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onTap;
-  const _BottomNav({required this.selectedIndex, required this.onTap});
+  const PortalBottomNav({super.key, required this.selectedIndex, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -454,6 +457,58 @@ class _BottomNav extends StatelessWidget {
       )),
     );
   }
+}
+
+// ── Persistent bottom nav for pushed tab screens ───
+// Cases/Docs/Bills/Chat/Profile were converted to real go_router pushes so
+// Android back works exactly like Lawyer's (see portal_dashboard_screen.dart's
+// _onBottomNavTap for that history) -- but a plain pushed route has no
+// bottomNavigationBar of its own, so the bar visibly disappeared the moment
+// any of those tabs opened. This wraps each of those tab screens' own
+// Scaffold (left completely untouched -- nested Scaffolds render fine, the
+// inner one just never had a bottomNavigationBar to conflict with) in one
+// more Scaffold that supplies the exact same PortalBottomNav, so the bar is
+// visible on every one of them, identically styled and always in sync with
+// which tab is actually open.
+//
+// Tapping a bottom-nav item from inside one of these screens -- including a
+// nested subpage further on top (e.g. Case Details) -- pops the stack all
+// the way back down to the Dashboard first, then pushes the newly selected
+// tab fresh. The Dashboard is never removed from the stack and never pushed
+// again, so switching tabs can't create duplicate Dashboard routes, and
+// Back from whichever tab is now open still correctly lands on the
+// Dashboard/Home, never on a leftover previous tab.
+class PortalTabShell extends StatelessWidget {
+  final int selectedIndex;
+  final Widget child;
+  const PortalTabShell(
+      {super.key, required this.selectedIndex, required this.child});
+
+  static const _tabRoutes = <int, String>{
+    1: '/portal/cases',
+    2: '/portal/documents',
+    3: '/portal/invoices',
+    4: '/portal/chat',
+    5: '/portal/profile',
+  };
+
+  void _switchTab(BuildContext context, int target) {
+    if (target == selectedIndex) return;
+    while (context.canPop()) {
+      context.pop();
+    }
+    final route = _tabRoutes[target];
+    if (route != null) context.push(route);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: child,
+        bottomNavigationBar: PortalBottomNav(
+          selectedIndex: selectedIndex,
+          onTap: (i) => _switchTab(context, i),
+        ),
+      );
 }
 
 // ── Home Tab ───────────────────────────────────────
