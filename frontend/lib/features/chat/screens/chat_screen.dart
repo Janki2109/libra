@@ -503,6 +503,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   // Fetched attachment bytes, keyed by real message id — avoids re-fetching
   // an image every time the 3s poll rebuilds the message list.
   final Map<String, Uint8List> _fileCache = {};
+  // Keyed by message id, created once per message and reused across every
+  // rebuild -- this (not the byte cache above) is what actually stops the
+  // image flicker. _fetchAttachment already cached the decoded bytes, but
+  // the image bubble below was still calling it fresh on every build via
+  // `future: fetchImageBytes()`, handing FutureBuilder a brand-new Future
+  // object each time even when it resolved from cache instantly. FutureBuilder
+  // resets to its loading state the instant it sees a different Future
+  // *instance* (reference inequality in didUpdateWidget), regardless of
+  // whether the data inside it is already known -- so every poll tick,
+  // every realtime event, every unrelated setState (a new text message, a
+  // presence update, a read-receipt change) rebuilt this bubble, created a
+  // new Future, and flashed the loading placeholder for a frame before
+  // snapping back to the image. That one-frame flash on every rebuild is
+  // the "continuous blinking". Memoizing the Future itself here means the
+  // exact same Future instance is handed to FutureBuilder on every rebuild
+  // once a message has been fetched once, so it never resets.
+  final Map<String, Future<Uint8List?>> _imageFutures = {};
 
   Future<Uint8List?> _fetchAttachment(String messageId) async {
     if (_fileCache.containsKey(messageId)) return _fileCache[messageId];
@@ -512,6 +529,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final bytes = base64Decode(b64);
     _fileCache[messageId] = bytes;
     return bytes;
+  }
+
+  // One stable Future per message id, created exactly once and reused by
+  // every rebuild thereafter -- see the comment on _imageFutures above. A
+  // failed fetch (a transient network blip, not "this image doesn't
+  // exist") evicts itself from the cache so the next rebuild creates a
+  // fresh attempt instead of permanently pinning that message to the
+  // broken-image icon for the rest of the session.
+  Future<Uint8List?> _imageFutureFor(String messageId) {
+    return _imageFutures.putIfAbsent(messageId, () {
+      final future = _fetchAttachment(messageId);
+      future.catchError((Object _) {
+        _imageFutures.remove(messageId);
+        return null;
+      });
+      return future;
+    });
   }
 
   Future<void> _openAttachment(Map message) async {
@@ -801,7 +835,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                     ? () => _removeFailedText(msg['id'])
                                     : null,
                                 onOpenAttachment: () => _openAttachment(msg),
-                                fetchImageBytes: () => _fetchAttachment(msg['id'].toString()),
+                                fetchImageBytes: () => _imageFutureFor(msg['id'].toString()),
                               ),
                             ]);
                           },
