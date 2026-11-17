@@ -497,6 +497,19 @@ var certificateDefs = []certificateDef{
 	{"ai_study_partner", aiAdvisorCertCheck},
 }
 
+// certTitles is the "course name" that goes on the actual issued
+// certificate -- matches the display titles the Flutter certificate list
+// already shows for each key, so the PDF never says anything the student
+// didn't already see labeled as what they earned.
+var certTitles = map[string]string{
+	"constitutional_law":  "Constitutional Law Expert",
+	"criminal_law":        "Criminal Law Specialist",
+	"ai_study_partner":    "AI Study Partner",
+	"contract_law":        "Contract Law Expert",
+	"mock_court_champion": "Mock Court Champion",
+	"case_solver":         "Case Solver",
+}
+
 func quizCertCheck(subject string) func(string) (bool, int, int) {
 	return func(userID string) (bool, int, int) {
 		var best int
@@ -557,15 +570,127 @@ func GetCertificates(c *gin.Context) {
 	results := make([]gin.H, 0, len(certificateDefs))
 	for _, def := range certificateDefs {
 		earned, progress, target := def.Met(uid)
-		results = append(results, gin.H{
+		row := gin.H{
 			"key":      def.Key,
 			"earned":   earned,
 			"progress": progress,
 			"target":   target,
-		})
+		}
+		if earned {
+			cert, err := issueOrGetCertificate(uid, def.Key)
+			if err == nil {
+				row["certificate_id"] = cert.ID
+				row["certificate_number"] = cert.Number
+				row["issued_at"] = cert.IssuedAt
+			}
+		}
+		results = append(results, row)
 	}
 
 	utils.Success(c, http.StatusOK, "Certificates fetched", results)
+}
+
+type studentCertificate struct {
+	ID       string
+	Number   string
+	IssuedAt string
+}
+
+// issueOrGetCertificate writes the one-time student_certificates row the
+// first time a given student is found to have earned a given certificate,
+// and simply returns the existing row every time after -- a certificate,
+// once issued, is a fact about the past; it is never recomputed or
+// reissued, and the unique (student_id, certificate_key) index is what
+// actually prevents a duplicate even under a concurrent double-request.
+func issueOrGetCertificate(studentID, key string) (studentCertificate, error) {
+	var cert studentCertificate
+	err := config.DB.QueryRow(`
+		SELECT id::text, certificate_number, issued_at::text
+		FROM student_certificates WHERE student_id=$1::uuid AND certificate_key=$2
+	`, studentID, key).Scan(&cert.ID, &cert.Number, &cert.IssuedAt)
+	if err == nil {
+		return cert, nil
+	}
+
+	courseName := certTitles[key]
+	if courseName == "" {
+		courseName = key
+	}
+	var studentName string
+	config.DB.QueryRow(`SELECT name FROM users WHERE id=$1::uuid`, studentID).Scan(&studentName)
+	if studentName == "" {
+		studentName = "Student"
+	}
+
+	err = config.DB.QueryRow(`
+		INSERT INTO student_certificates
+			(certificate_number, student_id, certificate_key, course_name, student_name)
+		VALUES (
+			'OL-' || to_char(NOW(), 'YYYY') || '-' ||
+				lpad(nextval('student_certificate_number_seq')::text, 6, '0'),
+			$1::uuid, $2, $3, $4
+		)
+		ON CONFLICT (student_id, certificate_key) DO UPDATE SET certificate_key = EXCLUDED.certificate_key
+		RETURNING id::text, certificate_number, issued_at::text
+	`, studentID, key, courseName, studentName).Scan(&cert.ID, &cert.Number, &cert.IssuedAt)
+	return cert, err
+}
+
+// GetCertificateDetail returns everything the Flutter PDF generator needs
+// for one certificate -- scoped to the authenticated student's own
+// certificates only, never another student's.
+func GetCertificateDetail(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	id := c.Param("id")
+
+	var out struct {
+		ID             string `json:"id"`
+		CertificateNo  string `json:"certificate_number"`
+		StudentName    string `json:"student_name"`
+		CourseName     string `json:"course_name"`
+		InstructorName string `json:"instructor_name"`
+		DirectorName   string `json:"director_name"`
+		IssuedAt       string `json:"issued_at"`
+		Status         string `json:"status"`
+	}
+	err := config.DB.QueryRow(`
+		SELECT id::text, certificate_number, student_name, course_name,
+		       instructor_name, director_name, issued_at::text, status
+		FROM student_certificates WHERE id=$1::uuid AND student_id=$2::uuid
+	`, id, userID).Scan(&out.ID, &out.CertificateNo, &out.StudentName, &out.CourseName,
+		&out.InstructorName, &out.DirectorName, &out.IssuedAt, &out.Status)
+	if err != nil {
+		utils.Error(c, http.StatusNotFound, "Certificate not found", "")
+		return
+	}
+	utils.Success(c, http.StatusOK, "Certificate fetched", out)
+}
+
+// VerifyCertificate is intentionally unauthenticated (anyone holding a
+// printed/shared certificate must be able to check it against the issuer,
+// the entire point of a certificate ID) but only ever returns what's
+// already printed on the certificate itself -- no other student data, no
+// account info, nothing not already visible on the document.
+func VerifyCertificate(c *gin.Context) {
+	number := c.Param("number")
+	var out struct {
+		CertificateNo string `json:"certificate_number"`
+		StudentName   string `json:"student_name"`
+		CourseName    string `json:"course_name"`
+		IssuedAt      string `json:"issued_at"`
+		Status        string `json:"status"`
+		Valid         bool   `json:"valid"`
+	}
+	err := config.DB.QueryRow(`
+		SELECT certificate_number, student_name, course_name, issued_at::text, status
+		FROM student_certificates WHERE certificate_number=$1
+	`, number).Scan(&out.CertificateNo, &out.StudentName, &out.CourseName, &out.IssuedAt, &out.Status)
+	if err != nil {
+		utils.Success(c, http.StatusOK, "Not found", gin.H{"valid": false})
+		return
+	}
+	out.Valid = out.Status == "valid"
+	utils.Success(c, http.StatusOK, "Certificate verified", out)
 }
 
 // ─── LEADERBOARD ──────────────────────────────

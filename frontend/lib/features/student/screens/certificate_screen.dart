@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import '../../../core/services/dio_client.dart';
-import '../../auth/providers/auth_provider.dart';
 
 const _bg = Color(0xFFF0F4FF);
 const _bgCard = Color(0xFFFFFFFF);
@@ -343,8 +341,17 @@ class _CertificateScreenState extends State<CertificateScreen> {
                                           ? ElevatedButton.icon(
                                               onPressed: () {
                                                 HapticFeedback.lightImpact();
-                                                _showCertificate(
-                                                    context, cert, color);
+                                                final certId = status?['certificate_id'];
+                                                if (certId == null) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(const SnackBar(
+                                                          content: Text(
+                                                              'Certificate is being issued — pull to refresh in a moment.'),
+                                                          backgroundColor: _blue));
+                                                  return;
+                                                }
+                                                context.push(
+                                                    '/student/certificates/$certId');
                                               },
                                               icon: const Icon(Icons.download_rounded,
                                                   color: Colors.white,
@@ -385,81 +392,6 @@ class _CertificateScreenState extends State<CertificateScreen> {
     );
   }
 
-  void _showCertificate(
-      BuildContext context, Map<String, dynamic> cert, Color color) {
-    final studentName = context.read<AuthProvider>().user?.name ?? 'Student';
-    showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-              backgroundColor: _bgCard,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              content: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                            colors: [color.withValues(alpha: 0.8), color]),
-                        borderRadius: BorderRadius.circular(14)),
-                    child: Column(children: [
-                      const Text('🏅', style: TextStyle(fontSize: 40)),
-                      const SizedBox(height: 8),
-                      const Text('CERTIFICATE OF ACHIEVEMENT',
-                          style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                              letterSpacing: 2)),
-                      const SizedBox(height: 4),
-                      Text(cert['title'],
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 18)),
-                      const SizedBox(height: 14),
-                      const Text('AWARDED TO',
-                          style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 9,
-                              letterSpacing: 2)),
-                      const SizedBox(height: 2),
-                      Text(studentName,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 20,
-                              fontStyle: FontStyle.italic)),
-                      const SizedBox(height: 8),
-                      const Text('This certifies successful completion',
-                          style:
-                              TextStyle(color: Colors.white70, fontSize: 11)),
-                      Text('Libra Law Platform • 2025',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              fontSize: 10)),
-                    ])),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Clipboard.setData(const ClipboardData(
-                        text: 'I earned a certificate on Libra Law!'));
-                  },
-                  icon: const Icon(Icons.share_rounded,
-                      color: Colors.white, size: 16),
-                  label: const Text('Share',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: color,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10))),
-                ),
-              ]),
-            ));
-  }
 
   void _showHowToEarn(
       BuildContext context, Map<String, dynamic> cert, Color color) {

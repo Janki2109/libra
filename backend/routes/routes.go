@@ -62,6 +62,10 @@ func SetupRoutes() *gin.Engine {
 		auth.POST("/register", signupLimiter.Middleware(), controllers.Register)
 		// Terms & Privacy Policy must be readable before signup/login.
 		api.GET("/content/legal/:doc_type/current", controllers.GetCurrentLegalDocument)
+		// Certificate verification is deliberately public -- the whole point
+		// of a certificate number is that anyone holding one (an employer, a
+		// recruiter) can check it against the issuer without a Libra account.
+		api.GET("/certificates/verify/:number", controllers.VerifyCertificate)
 		auth.POST("/client/register", signupLimiter.Middleware(), controllers.ClientRegister)
 		auth.POST("/student/register", signupLimiter.Middleware(), controllers.StudentRegister)
 		auth.POST("/send-otp", otpLimiter.Middleware(), controllers.SendOTP)
@@ -382,6 +386,7 @@ func SetupRoutes() *gin.Engine {
 		protected.GET("/student/progress", controllers.GetStudentProgress)
 		protected.POST("/student/quiz/submit", controllers.SubmitQuizResult)
 		protected.GET("/student/certificates", controllers.GetCertificates)
+		protected.GET("/student/certificates/:id", controllers.GetCertificateDetail)
 		protected.GET("/student/leaderboard", controllers.GetLeaderboard)
 
 		// ── AI Legal Advisor (student panel) ───

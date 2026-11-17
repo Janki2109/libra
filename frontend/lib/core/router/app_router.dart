@@ -101,6 +101,7 @@ import '../../features/student/screens/legal_notes_screen.dart';
 import '../../features/student/screens/quiz_screen.dart';
 import '../../features/student/screens/mock_court_screen.dart';
 import '../../features/student/screens/certificate_screen.dart';
+import '../../features/student/screens/certificate_preview_screen.dart';
 import '../../features/legal/screens/legal_document_screen.dart';
 
 class AppRouter {
@@ -565,6 +566,11 @@ class AppRouter {
         GoRoute(
             path: '/student/certificates',
             builder: (_, __) => const CertificateScreen()),
+        GoRoute(
+          path: '/student/certificates/:id',
+          builder: (_, state) => CertificatePreviewScreen(
+              certificateId: state.pathParameters['id']!),
+        ),
 
         // ─── LAWYER AI TOOLS ─────────────────────────
         GoRoute(
